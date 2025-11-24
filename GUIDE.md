@@ -12,75 +12,31 @@ This guide provides a step-by-step walkthrough for building desktop applications
 1.  **Clone/Create Project**: Start with the Pytron project structure.
 2.  **Install Python Dependencies**:
     ```bash
-    pip install -r requirements.txt
+    pip install pytron-kit
     ```
 
 ## Step 2: Frontend Setup (React + Vite)
 
 We recommend using Vite for a fast and modern development experience.
 
-1.  **Initialize React App**:
+1.  **Initialize App**:
     Navigate to your examples or project folder and run:
     ```bash
-    npm create vite@latest my_app_ui -- --template react
-    cd my_app_ui
-    npm install
+    pytron init my_app
+    cd my_app/frontend
+
     ```
 
 2.  **Install Pytron Client**:
     Install the bridge library to communicate with Python.
     ```bash
-    npm install ../../js/pytron-client
-    ```
-    *(Adjust the path to point to the `js/pytron-client` folder in your Pytron repo)*
-
-3.  **Configure Vite**:
-    Edit `vite.config.js` to ensure assets load correctly in a local environment (relative paths).
-    ```javascript
-    import { defineConfig } from 'vite'
-    import react from '@vitejs/plugin-react'
-
-    export default defineConfig({
-      plugins: [react()],
-      base: './', // CRITICAL: Use relative paths for assets
-    })
+    npm install pytron-client
     ```
 
-4.  **Build the Frontend**:
-    ```bash
-    npm run build
-    ```
-    This creates a `dist` folder containing your compiled HTML/CSS/JS.
 
 ## Step 3: Backend Setup (Python)
 
-Create a Python script (e.g., `my_app.py`) to launch your application.
-
-1.  **Import Pytron**:
-    ```python
-    from pytron import App
-    import os
-    ```
-
-2.  **Initialize App and Window**:
-    ```python
-    def main():
-        app = App()
-        
-        # Point to your built React app
-        html_path = os.path.abspath("my_app_ui/dist/index.html")
-        
-        window = app.create_window(
-            title="My Pytron App",
-            url=html_path,
-            width=800,
-            height=600,
-            resizable=True,
-            frameless=False # Set to True for custom UI
-        )
-    ```
-
-3.  **Define and Expose Logic**:
+1.  **Define and Expose Logic**:
     Create functions you want to call from JavaScript and expose them.
     ```python
         def greet(name):
@@ -151,24 +107,15 @@ For a native app feel, use a frameless window and create a custom title bar.
     ```
 
 ## Step 6: Running the App
-
-1.  **Rebuild Frontend** (if changed):
-    ```bash
-    cd my_app_ui
-    npm run build
-    ```
-2.  **Run Python Script**:
+**Run Python Script**:
     ```bash
     cd ..
-    python my_app.py
+    pytron run --dev 
     ```
-
 ## Step 7: Packaging (Optional)
-
 To distribute your app as a standalone `.exe`:
-
 ```bash
-pyinstaller my_app.py --name MyApp --onefile --noconsole --add-data "my_app_ui/dist;my_app_ui/dist"
+pytron package
 ```
 
 ---

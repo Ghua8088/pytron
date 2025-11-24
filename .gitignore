@@ -1,14 +1,14 @@
 # Ignore build and dist folders
 build
 dist
-
+*.node_modules
 # Ignore virtual environment
 venv
-
+*.spec
 # Ignore IDE files
 .idea
 .vscode
 
 # Ignore Python cache
 __pycache__
-pytron.egg-info
+*.egg-info

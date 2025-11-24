@@ -1,94 +1,124 @@
-# Python Electron-like Library
 
-This project aims to provide an Electron-like experience for building desktop applications using Python.
-It wraps `pywebview` for the GUI and will eventually use `pyoxidizer` for packaging.
+# Pytron
 
-## Goals
-- Simple API for creating windows and handling events.
-- Bridge between Python and JavaScript.
-- Standalone executable packaging.
-## Features
-- **Easy Window Management**: Create and manage windows with a simple Python API.
-- **Two-way Communication**: Seamlessly call Python from JavaScript and evaluate JavaScript from Python.
-- **Native Menus**: Create native application menus with ease.
-- **Dialogs**: Native file open, save, and confirmation dialogs.
-- **Standalone Packaging**: Build single-file executables using PyInstaller.
+This guide provides a step-by-step walkthrough for building desktop applications using the Pytron framework. Pytron combines the power of Python's backend capabilities with the rich user interface of modern web frameworks like React.
 
-## Usage
+## Prerequisites
 
-### Creating a Window
+- **Python 3.7+**
+- **Node.js & npm** (for frontend development)
 
-```python
-from pytron import App
+## Step 1: Project Setup
 
-app = App()
-window = app.create_window("My App", "https://google.com")
-app.run()
-```
+1.  **Clone/Create Project**: Start with the Pytron project structure.
+2.  **Install Python Dependencies**:
+    ```bash
+    pip install pytron-kit
+    ```
 
-### JavaScript API
+## Step 2: Frontend Setup (React + Vite)
 
-```python
-class Api:
-    def say_hello(self):
-        return "Hello from Python!"
+We recommend using Vite for a fast and modern development experience.
 
-app = App()
-window = app.create_window("My App", html="...", js_api=Api())
-```
+1.  **Initialize App**:
+    Navigate to your examples or project folder and run:
+    ```bash
+    pytron init my_app
+    cd my_app/frontend
 
-In JavaScript:
-```javascript
-const response = await pywebview.api.say_hello();
-console.log(response);
-```
+    ```
 
-### Native Menus
+2.  **Install Pytron Client**:
+    Install the bridge library to communicate with Python.
+    ```bash
+    npm install pytron-client
+    ```
 
-```python
-from webview.menu import Menu, MenuAction
 
-menu_items = [
-    Menu('File', [
-        MenuAction('Open', open_file_callback),
-        MenuAction('Exit', app.quit)
-    ])
-]
+## Step 3: Backend Setup (Python)
 
-app.run(menu=menu_items)
-```
-1. Install dependencies: `pip install -r requirements.txt`
-2. Run the example: `python examples/hello_world.py`
+1.  **Define and Expose Logic**:
+    Create functions you want to call from JavaScript and expose them.
+    ```python
+        def greet(name):
+            return f"Hello, {name}! From Python."
+            
+        # Expose the function to the frontend
+        window.expose(greet)
+        
+        app.run(debug=True)
 
-## Using with React/Frontend Frameworks
+    if __name__ == '__main__':
+        main()
+    ```
 
-You can easily integrate modern frontend frameworks like React, Vue, or Svelte.
+## Step 4: Connecting Frontend & Backend
 
-1. Create your frontend project (e.g., using Vite).
-2. Configure your build tool to use relative paths (e.g., `base: './'` in `vite.config.js`).
-3. Build your frontend (`npm run build`).
-4. Point your Pytron app to the built `index.html`.
+Now, use the exposed Python functions in your React components.
 
-See `examples/react_app.py` for a complete example.
+1.  **Import Client**:
+    ```javascript
+    import pytron from 'pytron-client'
+    ```
 
-## Building for Distribution
+2.  **Call Python Functions**:
+    Pytron functions are asynchronous.
+    ```javascript
+    async function handleGreet() {
+      try {
+        const message = await pytron.greet("User");
+        console.log(message); // "Hello, User! From Python."
+      } catch (err) {
+        console.error("Error calling backend:", err);
+      }
+    }
+    ```
 
-We use PyInstaller to package the application into a standalone executable.
+## Step 5: Advanced UI (Frameless Window)
 
-### Using the Build Script
+For a native app feel, use a frameless window and create a custom title bar.
 
-A `build.py` helper script is provided to simplify the build process.
+1.  **Backend**: Set `frameless=True` in `create_window`.
+2.  **Frontend**: Create a TitleBar component.
+    ```jsx
+    function TitleBar() {
+      return (
+        <div className="titlebar">
+          <div className="drag-region">My App</div>
+          <button onClick={() => pytron.minimize()}>-</button>
+          <button onClick={() => pytron.close()}>x</button>
+        </div>
+      )
+    }
+    ```
+3.  **CSS**:
+    ```css
+    .titlebar {
+      display: flex;
+      justify-content: space-between;
+      background: #333;
+      color: white;
+      padding: 5px;
+      user-select: none;
+    }
+    .drag-region {
+      flex: 1;
+      /* This is handled by Pytron's easy_drag or custom implementation */
+    }
+    ```
 
+## Step 6: Running the App
+**Run Python Script**:
+    ```bash
+    cd ..
+    pytron run --dev 
+    ```
+## Step 7: Packaging (Optional)
+To distribute your app as a standalone `.exe`:
 ```bash
-python build.py examples/advanced_app.py --name AdvancedApp --add-data "examples/assets;assets"
+pytron package
 ```
 
-This will create a standalone executable in the `dist` folder.
+---
 
-### Manual PyInstaller Command
-
-You can also run PyInstaller directly:
-
-```bash
-pyinstaller examples/advanced_app.py --name AdvancedApp --onefile --noconsole --add-data "examples/assets;assets" --paths .
-```
+**Happy Coding with Pytron!**

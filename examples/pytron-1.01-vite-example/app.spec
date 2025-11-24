@@ -3,10 +3,10 @@
 
 a = Analysis(
     ['app.py'],
-    pathex=[],
+    pathex=['D:\\pytron\\pytron-package'],
     binaries=[],
     datas=[],
-    hiddenimports=[],
+    hiddenimports=['pytron'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

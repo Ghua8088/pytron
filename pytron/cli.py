@@ -45,6 +45,39 @@ TEMPLATE_SETTINGS = '''{
 '''
 
 
+def locate_frontend_dir(start_dir: Path | None = None) -> Path | None:
+    base = (start_dir or Path('.')).resolve()
+    if not base.exists():
+        return None
+    candidates = [base]
+    candidates.extend([p for p in base.iterdir() if p.is_dir()])
+    for candidate in candidates:
+        pkg = candidate / 'package.json'
+        if not pkg.exists():
+            continue
+        try:
+            data = json.loads(pkg.read_text())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data.get('scripts'), dict) and 'build' in data['scripts']:
+            return candidate.resolve()
+    return None
+
+
+def run_frontend_build(frontend_dir: Path) -> bool | None:
+    npm = shutil.which('npm')
+    if not npm:
+        print('[Pytron] npm not found, skipping frontend build.')
+        return None
+    print(f"[Pytron] Building frontend at: {frontend_dir}")
+    try:
+        subprocess.run(['npm', 'run', 'build'], cwd=str(frontend_dir), shell=True, check=True)
+        return True
+    except subprocess.CalledProcessError as exc:
+        print(f"[Pytron] Frontend build failed: {exc}")
+        return False
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     target = Path(args.target).resolve()
     if target.exists():
@@ -126,22 +159,7 @@ def run_dev_mode(script: Path, extra_args: list[str]) -> int:
         print("watchgod is required for --dev mode. Install it with: pip install watchgod")
         return 1
 
-    # Find frontend folder
-    frontend_dir = None
-    # Check current directory and subdirectories for package.json
-    candidates = [Path('.')] + [x for x in Path('.').iterdir() if x.is_dir()]
-    
-    for d in candidates:
-        pkg = d / 'package.json'
-        if pkg.exists():
-            try:
-                data = json.loads(pkg.read_text())
-                # Check if it has a build script
-                if 'scripts' in data and 'build' in data['scripts']:
-                    frontend_dir = d.resolve()
-                    break
-            except Exception:
-                pass
+    frontend_dir = locate_frontend_dir(Path('.'))
     
     npm_proc = None
     if frontend_dir:
@@ -227,6 +245,13 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"Script not found: {path}")
         return 1
 
+    if not args.dev and not getattr(args, 'no_build', False):
+        frontend_dir = locate_frontend_dir(path.parent)
+        if frontend_dir:
+            result = run_frontend_build(frontend_dir)
+            if result is False:
+                return 1
+
     if args.dev:
         return run_dev_mode(path, args.extra_args)
 
@@ -245,8 +270,41 @@ def cmd_package(args: argparse.Namespace) -> int:
         print(f"Script not found: {script}")
         return 1
 
-    out_name = args.name or script.stem
-    cmd = [sys.executable, '-m', 'PyInstaller', '--onefile', '--name', out_name, str(script)]
+    out_name = args.name
+    if not out_name:
+        # Try to get name from settings.json
+        try:
+            settings_path = script.parent / 'settings.json'
+            if settings_path.exists():
+                settings = json.loads(settings_path.read_text())
+                title = settings.get('title')
+                if title:
+                    # Sanitize title to be a valid filename
+                    # Replace non-alphanumeric (except - and _) with _
+                    out_name = "".join(c if c.isalnum() or c in ('-', '_') else '_' for c in title)
+                    # Remove duplicate underscores and strip
+                    while '__' in out_name:
+                        out_name = out_name.replace('__', '_')
+                    out_name = out_name.strip('_')
+        except Exception:
+            pass
+
+    if not out_name:
+        out_name = script.stem
+
+    # Ensure pytron is found by PyInstaller
+    import pytron
+    # Dynamically find where pytron is installed on the user's system
+    package_dir = Path(pytron.__file__).resolve().parent.parent
+    
+    cmd = [
+        sys.executable, '-m', 'PyInstaller', 
+        '--onefile', 
+        '--hidden-import=pytron',
+        '--paths', str(package_dir),
+        '--name', out_name, 
+        str(script)
+    ]
     if args.noconsole:
         cmd.append('--noconsole')
 
@@ -300,6 +358,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run = sub.add_parser('run', help='Run a Python entrypoint script')
     p_run.add_argument('script', nargs='?', help='Path to Python script to run (default: app.py)')
     p_run.add_argument('--dev', action='store_true', help='Enable dev mode (hot reload + frontend watch)')
+    p_run.add_argument('--no-build', action='store_true', help='Skip automatic frontend build before running')
     p_run.add_argument('extra_args', nargs=argparse.REMAINDER, help='Extra args to forward to script', default=[])
     p_run.set_defaults(func=cmd_run)
 
