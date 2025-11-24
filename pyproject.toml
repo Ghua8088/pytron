@@ -3,7 +3,7 @@ requires = ["setuptools>=65.5.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pytron"
+name = "pytron-kit"
 version = "0.1.0"
 description = "An Electron-like library for Python using pywebview"
 readme = "README.md"
