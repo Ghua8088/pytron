@@ -3,7 +3,7 @@ name: Publish to PyPI 🐍
 on:
   release:
     types: [published] # Triggers when you click "Publish Release" on GitHub
-
+  workflow_dispatch:
 jobs:
   build-and-publish:
     name: Build & Publish
