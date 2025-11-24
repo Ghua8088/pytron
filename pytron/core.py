@@ -11,6 +11,36 @@ def get_resource_path(relative_path):
     return os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), relative_path)
 
 
+class SystemAPI:
+    """
+    Built-in system capabilities exposed to every Pytron window.
+    """
+    def __init__(self, window_instance):
+        self.window = window_instance
+
+    def system_notification(self, title, message):
+        # Pywebview doesn't have a direct notification API, so we might need a library
+        # or just print for now / use OS specific command.
+        # For now, let's just print to console to show it works, 
+        # or use a simple ctypes message box on Windows if possible.
+        print(f"[System Notification] {title}: {message}")
+        # TODO: Implement native notifications
+        
+    def system_open_file(self, file_types=()):
+        """
+        Open a file dialog.
+        """
+        if self.window._window:
+            return self.window._window.create_file_dialog(webview.OPEN_DIALOG, file_types=file_types)
+            
+    def system_save_file(self, save_filename='', file_types=()):
+        """
+        Open a save file dialog.
+        """
+        if self.window._window:
+            return self.window._window.create_file_dialog(webview.SAVE_DIALOG, save_filename=save_filename, file_types=file_types)
+
+
 class Window:
     def __init__(self, title, url=None, html=None, js_api=None, width=800, height=600, 
                  resizable=True, fullscreen=False, min_size=(200, 100), hidden=False, 
@@ -49,6 +79,9 @@ class Window:
         Expose a Python function to JavaScript.
         If name is not provided, the function name is used.
         """
+        if self._window:
+             raise RuntimeError("Cannot expose functions after window creation. Call expose() before app.run() or window.create().")
+             
         if name is None:
             name = func.__name__
         self._exposed_functions[name] = func
@@ -99,6 +132,19 @@ class Window:
         if self._window:
             self._window.load_html(content, base_uri)
 
+    def emit(self, event, data=None):
+        """
+        Emit an event to the JavaScript frontend.
+        """
+        if self._window:
+            import json
+            # We use a safe serialization
+            try:
+                payload = json.dumps(data)
+                self._window.evaluate_js(f"window.__pytron_dispatch('{event}', {payload})")
+            except Exception as e:
+                print(f"[Pytron] Failed to emit event '{event}': {e}")
+
     def _build_api(self):
         # Create a dictionary of methods to expose
         methods = {}
@@ -137,6 +183,19 @@ class Window:
                 def wrapper(self, *args, _func=func, **kwargs):
                     return _func(*args, **kwargs)
                 methods[name] = wrapper
+        
+        # 4. Add System API methods automatically
+        # These provide "batteries included" features like dialogs, notifications, etc.
+        system_api = SystemAPI(self)
+        for attr_name in dir(system_api):
+            if not attr_name.startswith('_'):
+                attr = getattr(system_api, attr_name)
+                if callable(attr):
+                    # We prefix them with 'system_' if they aren't already, 
+                    # but SystemAPI methods should probably be named 'system_...' to avoid collisions
+                    # Let's assume SystemAPI methods are named correctly.
+                    if attr_name not in methods:
+                        methods[attr_name] = attr
             
         # Create the dynamic class
         DynamicApi = type('DynamicApi', (object,), methods)
