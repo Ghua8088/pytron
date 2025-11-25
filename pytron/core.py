@@ -40,6 +40,13 @@ class SystemAPI:
         if self.window._window:
             return self.window._window.create_file_dialog(webview.SAVE_DIALOG, save_filename=save_filename, file_types=file_types)
 
+    def system_message_box(self, title, message):
+        """
+        Open a message box (confirmation dialog).
+        """
+        if self.window._window:
+            return self.window._window.create_confirmation_dialog(title, message)
+
 
 class ReactiveState:
     """
@@ -99,6 +106,20 @@ class Window:
         
         self._window = None
         self._exposed_functions = {}
+        self.shortcuts = {}
+
+    def shortcut(self, key_combo, func=None):
+        """
+        Register a keyboard shortcut for this window.
+        Example: @window.shortcut('Ctrl+S')
+        """
+        if func is None:
+            def decorator(f):
+                self.shortcut(key_combo, f)
+                return f
+            return decorator
+        self.shortcuts[key_combo] = func
+        return func
 
     def expose(self, func=None, name=None):
         """
@@ -140,6 +161,11 @@ class Window:
     def resize(self, width, height):
         if self._window:
             self._window.resize(width, height)
+            
+    def get_size(self):
+        if self._window:
+            return {"width": self._window.width, "height": self._window.height}
+        return {"width": self.width, "height": self.height}
             
     def move(self, x, y):
         if self._window:
@@ -223,7 +249,10 @@ class Window:
             'restore': self.restore,
             'close': self.destroy,
             'toggle_fullscreen': self.toggle_fullscreen,
+            'resize': self.resize,
+            'get_size': self.get_size,
         }
+
 
         for name, func in window_methods.items():
             # Only add if not already defined by user
@@ -244,6 +273,26 @@ class Window:
                     # Let's assume SystemAPI methods are named correctly.
                     if attr_name not in methods:
                         methods[attr_name] = attr
+        
+        # 5. Add Shortcut Handling
+        def trigger_shortcut(api_self, combo):
+            # Check window shortcuts first
+            if combo in self.shortcuts:
+                self.shortcuts[combo]()
+                return True
+            # Check app shortcuts
+            if hasattr(self, '_app_ref') and self._app_ref and combo in self._app_ref.shortcuts:
+                self._app_ref.shortcuts[combo]()
+                return True
+            return False
+        methods['trigger_shortcut'] = trigger_shortcut
+
+        def get_registered_shortcuts(api_self):
+            keys = list(self.shortcuts.keys())
+            if hasattr(self, '_app_ref') and self._app_ref:
+                keys.extend(self._app_ref.shortcuts.keys())
+            return list(set(keys))
+        methods['get_registered_shortcuts'] = get_registered_shortcuts
             
         # Create the dynamic class
         DynamicApi = type('DynamicApi', (object,), methods)
@@ -298,6 +347,7 @@ class App:
         self.is_running = False
         self.config = {}
         self._exposed_functions = {} # Global functions for all windows
+        self.shortcuts = {} # Global shortcuts
         self.state = ReactiveState(self) # Magic state object
         
         # Load config
@@ -419,4 +469,17 @@ class App:
         if name is None:
             name = func.__name__
         self._exposed_functions[name] = func
+        return func
+
+    def shortcut(self, key_combo, func=None):
+        """
+        Register a global keyboard shortcut for all windows.
+        Example: @app.shortcut('Ctrl+Q')
+        """
+        if func is None:
+            def decorator(f):
+                self.shortcut(key_combo, f)
+                return f
+            return decorator
+        self.shortcuts[key_combo] = func
         return func
