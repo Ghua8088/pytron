@@ -8,7 +8,7 @@ venv
 # Ignore IDE files
 .idea
 .vscode
-
+*.pyc
 # Ignore Python cache
 __pycache__
 *.egg-info

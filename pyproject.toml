@@ -25,3 +25,6 @@ classifiers = [
 
 [project.scripts]
 pytron = "pytron.cli:main"
+
+[tool.setuptools.package-data]
+pytron = ["installer/*.nsi", "nsis-setup.exe"]

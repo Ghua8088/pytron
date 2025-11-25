@@ -374,7 +374,28 @@ class App:
         for window in self.windows:
             if window._window is None:
                 window.create()
+        
+        # Ensure we have a writable storage_path for WebView2 cache
+        # Default behavior tries to write to executable dir, which fails in Program Files
+        if 'storage_path' not in kwargs:
+            title = self.config.get('title', 'Pytron App')
+            # Sanitize title for folder name
+            safe_title = "".join(c if c.isalnum() or c in ('-', '_') else '_' for c in title).strip('_')
+            
+            if sys.platform == 'win32':
+                base_path = os.environ.get('LOCALAPPDATA', os.path.expanduser('~'))
+            else:
+                base_path = os.path.expanduser('~/.config')
                 
+            storage_path = os.path.join(base_path, safe_title)
+            kwargs['storage_path'] = storage_path
+            
+            # Ensure directory exists (pywebview might do this, but good to be safe)
+            try:
+                os.makedirs(storage_path, exist_ok=True)
+            except Exception:
+                pass # Let pywebview handle or fail if it can't write
+
         # pywebview.start() is a blocking call that runs the GUI loop
         # Menu is passed to start() in pywebview
         webview.start(debug=debug, menu=menu, **kwargs)

@@ -295,26 +295,165 @@ def cmd_package(args: argparse.Namespace) -> int:
     # Ensure pytron is found by PyInstaller
     import pytron
     # Dynamically find where pytron is installed on the user's system
+    if pytron.__file__ is None:
+        print("Error: Cannot determine pytron installation location.")
+        print("This may happen if pytron is installed as a namespace package.")
+        print("Try reinstalling pytron: pip install --force-reinstall pytron")
+        return 1
     package_dir = Path(pytron.__file__).resolve().parent.parent
     
     cmd = [
         sys.executable, '-m', 'PyInstaller', 
-        '--onefile', 
+        '--onedir', 
         '--hidden-import=pytron',
         '--paths', str(package_dir),
         '--name', out_name, 
         str(script)
     ]
-    if args.noconsole:
-        cmd.append('--noconsole')
+    cmd.append('--noconsole')
 
+    # Auto-detect and include assets
+    add_data = []
     if args.add_data:
-        # Expect add-data entries like src;dest (platform-specific). User must ensure correct separator.
-        for item in args.add_data:
-            cmd.extend(['--add-data', item])
+        add_data.extend(args.add_data)
+
+    script_dir = script.parent
+    
+    # 1. settings.json
+    settings_path = script_dir / 'settings.json'
+    if settings_path.exists():
+        # Format: source;dest (Windows) or source:dest (Unix)
+        # We want settings.json to be at the root of the bundle
+        add_data.append(f"{settings_path}{os.pathsep}.")
+        print(f"[Pytron] Auto-including settings.json")
+
+    # 2. Frontend assets
+    # Check for frontend/dist or frontend/build
+    frontend_dist = None
+    possible_dists = [
+        script_dir / 'frontend' / 'dist',
+        script_dir / 'frontend' / 'build'
+    ]
+    for d in possible_dists:
+        if d.exists() and d.is_dir():
+            frontend_dist = d
+            break
+            
+    if frontend_dist:
+        # We want the *contents* of dist to be in a folder named 'frontend/dist' or similar?
+        # Usually settings.json points to "frontend/dist/index.html"
+        # So we should preserve the structure "frontend/dist" inside the bundle.
+        # PyInstaller add-data "src;dest" puts src INSIDE dest.
+        # So "frontend/dist;frontend/dist"
+        
+        # Let's verify the relative path from script
+        rel_path = frontend_dist.relative_to(script_dir)
+        add_data.append(f"{frontend_dist}{os.pathsep}{rel_path}")
+        print(f"[Pytron] Auto-including frontend assets from {rel_path}")
+
+    for item in add_data:
+        cmd.extend(['--add-data', item])
 
     print(f"Packaging with: {' '.join(cmd)}")
-    return subprocess.call(cmd)
+    ret_code = subprocess.call(cmd)
+    if ret_code != 0:
+        return ret_code
+
+    if args.installer:
+        print("[Pytron] Building installer...")
+        makensis = find_makensis()
+        if not makensis:
+            print("[Pytron] NSIS (makensis) not found.")
+            # Try to find bundled installer
+            try:
+                import pytron
+                if pytron.__file__:
+                    pkg_root = Path(pytron.__file__).resolve().parent
+                    nsis_setup = pkg_root / 'nsis-setup.exe'
+                    
+                    if nsis_setup.exists():
+                        print(f"[Pytron] Found bundled NSIS installer at {nsis_setup}")
+                        print("[Pytron] Launching NSIS installer... Please complete the installation.")
+                        try:
+                            # Run the installer and wait
+                            subprocess.run([str(nsis_setup)], check=True)
+                            print("[Pytron] NSIS installer finished. Checking for makensis again...")
+                            makensis = find_makensis()
+                        except Exception as e:
+                            print(f"[Pytron] Error running NSIS installer: {e}")
+            except Exception as e:
+                print(f"[Pytron] Error checking for bundled installer: {e}")
+
+        if not makensis:
+            print("Error: makensis not found. Please install NSIS and add it to PATH.")
+            return 1
+            
+        # Locate the generated build directory and exe
+        dist_dir = Path('dist')
+        # In onedir mode, output is dist/AppName
+        build_dir = dist_dir / out_name
+        exe_file = build_dir / f"{out_name}.exe"
+        
+        if not build_dir.exists() or not exe_file.exists():
+             print(f"Error: Could not find generated build directory or executable in {dist_dir}")
+             return 1
+        
+        # Locate the NSIS script
+        nsi_script = Path('installer.nsi')
+        if not nsi_script.exists():
+             if Path('installer/Installation.nsi').exists():
+                 nsi_script = Path('installer/Installation.nsi')
+             else:
+                 # Check inside the pytron package
+                 if pytron.__file__ is not None:
+                     pkg_root = Path(pytron.__file__).resolve().parent
+                     pkg_nsi = pkg_root / 'installer' / 'Installation.nsi'
+                     if pkg_nsi.exists():
+                         nsi_script = pkg_nsi
+                 
+                 if not nsi_script.exists():
+                     print("Error: installer.nsi not found. Please create one or place it in the current directory.")
+                     return 1
+
+        build_dir_abs = build_dir.resolve()
+        
+        # Get version from settings if available, else default
+        version = "1.0"
+        try:
+            settings_path = script.parent / 'settings.json'
+            if settings_path.exists():
+                settings = json.loads(settings_path.read_text())
+                version = settings.get('version', "1.0")
+        except Exception:
+            pass
+
+        cmd_nsis = [
+            makensis,
+            f"/DNAME={out_name}",
+            f"/DVERSION={version}",
+            f"/DBUILD_DIR={build_dir_abs}",
+            f"/DMAIN_EXE_NAME={out_name}.exe",
+            f"/DOUT_DIR={script.parent.resolve()}",
+            str(nsi_script)
+        ]
+        print(f"Running NSIS: {' '.join(cmd_nsis)}")
+        return subprocess.call(cmd_nsis)
+
+    return 0
+
+
+def find_makensis() -> str | None:
+    path = shutil.which('makensis')
+    if path:
+        return path
+    common_paths = [
+        r"C:\Program Files (x86)\NSIS\makensis.exe",
+        r"C:\Program Files\NSIS\makensis.exe",
+    ]
+    for p in common_paths:
+        if os.path.exists(p):
+            return p
+    return None
 
 
 def cmd_build_frontend(args: argparse.Namespace) -> int:
@@ -367,6 +506,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_pkg.add_argument('--name', help='Output executable name')
     p_pkg.add_argument('--noconsole', action='store_true', help='Hide console window')
     p_pkg.add_argument('--add-data', nargs='*', help='Additional data to include (format: src;dest)')
+    p_pkg.add_argument('--installer', action='store_true', help='Build NSIS installer after packaging')
     p_pkg.set_defaults(func=cmd_package)
 
     p_build = sub.add_parser('build-frontend', help='Run npm build in a frontend folder')
