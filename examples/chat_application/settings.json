@@ -1,9 +1,0 @@
-{
-    "title": "Chat Application",
-    "width": 1000,
-    "height": 1000,
-    "resizable": true,
-    "frameless": false,
-    "easy_drag": true,
-    "url": "frontend/dist/index.html"
-}
