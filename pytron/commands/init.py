@@ -2,6 +2,7 @@ import argparse
 import subprocess
 import sys
 import os
+import json
 from pathlib import Path
 
 TEMPLATE_APP = '''from pytron import App
@@ -13,17 +14,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-'''
-
-TEMPLATE_SETTINGS = '''{
-    "title": "My Pytron App",
-    "width": 800,
-    "height": 600,
-    "resizable": true,
-    "frameless": false,
-    "easy_drag": true,
-    "url": "frontend/dist/index.html"
-}
 '''
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -41,7 +31,16 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     # Create settings.json
     settings_file = target / 'settings.json'
-    settings_file.write_text(TEMPLATE_SETTINGS)
+    settings_data = {
+        "title": target.name,
+        "width": 800,
+        "height": 600,
+        "resizable": True,
+        "frameless": False,
+        "easy_drag": True,
+        "url": "frontend/dist/index.html"
+    }
+    settings_file.write_text(json.dumps(settings_data, indent=4))
 
     # Initialize Vite React app in frontend folder
     print("Initializing Vite React app...")
@@ -87,10 +86,10 @@ def cmd_init(args: argparse.Namespace) -> int:
             
         print("Installing dependencies in virtual environment...")
         # Install pytron in the new env. 
-        subprocess.run([str(pip_exe), 'install', 'pytron'], check=True)
+        subprocess.run([str(pip_exe), 'install', 'pytron-kit'], check=True)
         
         # Create requirements.txt
-        (target / 'requirements.txt').write_text('pytron\n')
+        (target / 'requirements.txt').write_text('pytron-kit\n')
         
         # Create helper run scripts
         if sys.platform == 'win32':
