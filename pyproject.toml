@@ -16,7 +16,8 @@ authors = [
 dependencies = [
   "pywebview",
   "pyinstaller",
-  "watchgod"
+  "watchgod",
+  "pydantic"
 ]
 classifiers = [
   "Programming Language :: Python :: 3",

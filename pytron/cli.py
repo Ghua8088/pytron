@@ -23,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_init = sub.add_parser('init', help='Scaffold a minimal Pytron app')
     p_init.add_argument('target', help='Target directory for scaffold')
+    p_init.add_argument('--template', default='react', help='Frontend template (react, vue, svelte, vanilla, etc.)')
     p_init.set_defaults(func=cmd_init)
 
     p_run = sub.add_parser('run', help='Run a Python entrypoint script')

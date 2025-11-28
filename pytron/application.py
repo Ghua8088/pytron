@@ -35,6 +35,16 @@ class App:
                 with open(path, 'r') as f:
                     self.config = json.load(f)
                 # print(f"[Pytron] Loaded settings from {path}")
+
+                # Check version compatibility
+                config_version = self.config.get('pytron_version')
+                if config_version:
+                    try:
+                        from . import __version__
+                        if config_version != __version__:
+                            print(f"[Pytron] Warning: Project settings version ({config_version}) does not match installed Pytron version ({__version__}).")
+                    except ImportError:
+                        pass
             except Exception as e:
                 print(f"[Pytron] Failed to load settings: {e}")
 

@@ -3,123 +3,166 @@
 ![Pytron](pytron.png)
 # Pytron
 
-This guide provides a step-by-step walkthrough for building desktop applications using the Pytron framework. Pytron combines the power of Python's backend capabilities with the rich user interface of modern web frameworks like React.
+Pytron is a modern framework for building desktop applications using Python for the backend and web technologies (React, Vite) for the frontend. It combines the power of Python's ecosystem with the rich user interfaces of the web.
+
+## Features
+
+*   **Type-Safe Bridge**: Automatically generate TypeScript definitions (`.d.ts`) from your Python code.
+*   **Reactive State**: Synchronize state seamlessly between Python and JavaScript.
+*   **Advanced Serialization**: Built-in support for Pydantic models, PIL Images, UUIDs, and more.
+*   **System Integration**: Native file dialogs, notifications, and shortcuts.
+*   **Developer Experience**: Hot-reloading, automatic virtual environment management, and easy packaging.
 
 ## Prerequisites
 
 - **Python 3.7+**
 - **Node.js & npm** (for frontend development)
 
-## Step 1: Project Setup
+## Quick Start
 
-1.  **Clone/Create Project**: Start with the Pytron project structure.
-2.  **Install Python Dependencies**:
+1.  **Install Pytron**:
     ```bash
     pip install pytron-kit
     ```
 
-## Step 2: Frontend Setup (React + Vite)
-
-We recommend using Vite for a fast and modern development experience.
-
-1.  **Initialize App**:
-    Navigate to your examples or project folder and run:
+2.  **Initialize a New Project**:
+    This command scaffolds a new project, creates a virtual environment, installs dependencies, and sets up a frontend.
     ```bash
+    # Default (React + Vite)
     pytron init my_app
-    cd my_app/frontend
 
+    # Using a specific template (vue, svelte, next, etc.)
+    pytron init my_app --template next
     ```
+    Supported templates: `react` (default), `vue`, `svelte`, `next` (Next.js), `vanilla`, `preact`, `lit`, `solid`, `qwik`.
 
-2.  **Install Pytron Client**:
-    Install the bridge library to communicate with Python.
+3.  **Run the App**:
+    Start the app in development mode (hot-reloading enabled).
+    *   **Windows**: `run.bat`
+    *   **Linux/Mac**: `./run.sh`
+    
+    Or manually:
     ```bash
-    npm install pytron-client
+    pytron run --dev
     ```
 
+## Core Concepts
 
-## Step 3: Backend Setup (Python)
+### 1. Exposing Python Functions
+Use the `@app.expose` decorator to make Python functions available to the frontend.
 
-1.  **Define and Expose Logic**:
-    Create functions you want to call from JavaScript and expose them.
-    ```python
-        def greet(name):
-            return f"Hello, {name}! From Python."
-            
-        # Expose the function to the frontend
-        window.expose(greet)
-        
-        app.run(debug=True)
+```python
+from pytron import App
+from pydantic import BaseModel
 
-    if __name__ == '__main__':
-        main()
-    ```
+app = App()
 
-## Step 4: Connecting Frontend & Backend
+class User(BaseModel):
+    name: str
+    age: int
 
-Now, use the exposed Python functions in your React components.
+@app.expose
+def get_user(user_id: int) -> User:
+    return User(name="Alice", age=30)
 
-1.  **Import Client**:
-    ```javascript
-    import pytron from 'pytron-client'
-    ```
-
-2.  **Call Python Functions**:
-    Pytron functions are asynchronous.
-    ```javascript
-    async function handleGreet() {
-      try {
-        const message = await pytron.greet("User");
-        console.log(message); // "Hello, User! From Python."
-      } catch (err) {
-        console.error("Error calling backend:", err);
-      }
-    }
-    ```
-
-## Step 5: Advanced UI (Frameless Window)
-
-For a native app feel, use a frameless window and create a custom title bar.
-
-1.  **Backend**: Set `frameless=True` in `create_window`.
-2.  **Frontend**: Create a TitleBar component.
-    ```jsx
-    function TitleBar() {
-      return (
-        <div className="titlebar">
-          <div className="drag-region">My App</div>
-          <button onClick={() => pytron.minimize()}>-</button>
-          <button onClick={() => pytron.close()}>x</button>
-        </div>
-      )
-    }
-    ```
-3.  **CSS**:
-    ```css
-    .titlebar {
-      display: flex;
-      justify-content: space-between;
-      background: #333;
-      color: white;
-      padding: 5px;
-      user-select: none;
-    }
-    .drag-region {
-      flex: 1;
-      /* This is handled by Pytron's easy_drag or custom implementation */
-    }
-    ```
-
-## Step 6: Running the App
-**Run Python Script**:
-    ```bash
-    cd ..
-    pytron run --dev 
-    ```
-## Step 7: Packaging (Optional)
-To distribute your app as a standalone `.exe`:
-```bash
-pytron package
+app.generate_types() # Generates frontend/src/pytron.d.ts
+app.run()
 ```
+
+### 2. Calling from Frontend
+Import the client and call your functions with full TypeScript support.
+
+```typescript
+import pytron from 'pytron-client';
+
+async function loadUser() {
+    const user = await pytron.get_user(1);
+    console.log(user.name); // Typed as string
+}
+```
+
+### 3. Reactive State
+Sync data automatically.
+
+**Python:**
+```python
+app.state.counter = 0
+```
+
+**JavaScript:**
+```javascript
+console.log(pytron.state.counter); // 0
+
+// Listen for changes
+pytron.on('pytron:state-update', (change) => {
+    console.log(change.key, change.value);
+});
+```
+
+### 4. Window Management
+Control the window directly from JS.
+
+```javascript
+pytron.minimize();
+pytron.toggle_fullscreen();
+pytron.close();
+```
+
+## Configuration (settings.json)
+
+Pytron uses a `settings.json` file in your project root to manage application configuration. This keeps your code clean and separates config from logic.
+
+**Example `settings.json`:**
+```json
+{
+    "title": "My Awesome App",
+    "pytron_version": "0.1.5",
+    "frontend_framework": "react",
+    "width": 1024,
+    "height": 768,
+    "resizable": true,
+    "frameless": false,
+    "easy_drag": true,
+    "url": "frontend/dist/index.html",
+    "icon": "assets/icon.ico",
+    "version": "1.0.0"
+}
+```
+
+*   **title**: The window title and the name of your packaged executable.
+*   **pytron_version**: The version of Pytron used to create the project (used for compatibility checks).
+*   **frontend_framework**: The framework used (e.g., "react", "next").
+*   **icon**: Path to your application icon (relative to project root). Supports `.ico` (preferred) or `.png`.
+*   **url**: Entry point for the frontend (usually the built `index.html`).
+*   **width/height**: Initial window dimensions.
+
+## Packaging
+
+Distribute your app as a standalone executable. Pytron automatically reads your `settings.json` to determine the app name, version, and icon.
+
+1.  **Build**:
+    ```bash
+    pytron package
+    ```
+    This uses PyInstaller to bundle your app. It will:
+    *   Use the `title` from `settings.json` for the executable name.
+    *   Use the `icon` from `settings.json` for the app icon.
+    *   Automatically exclude `node_modules`.
+    *   Include your `settings.json` and frontend assets.
+
+2.  **Create Installer (NSIS)**:
+    ```bash
+    pytron package --installer
+    ```
+
+## CLI Reference
+
+*   `pytron init <name> [--template <name>]`: Create a new project.
+    *   `--template`: Frontend framework to use (default: `react`). Supports `next`, `vue`, `svelte`, etc.
+*   `pytron run [--dev]`: Run the application.
+*   `pytron package [--installer]`: Build for distribution (uses `settings.json`).
+*   `pytron info`: Show environment and project details.
+*   `pytron build-frontend <folder>`: Build the frontend app.
 
 ---
 

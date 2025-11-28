@@ -4,6 +4,7 @@ import sys
 import os
 import json
 from pathlib import Path
+from .. import __version__
 
 TEMPLATE_APP = '''from pytron import App
 
@@ -30,43 +31,75 @@ def cmd_init(args: argparse.Namespace) -> int:
     app_file.write_text(TEMPLATE_APP)
 
     # Create settings.json
+    is_next = args.template.lower() in ['next', 'nextjs']
+    dist_path = "frontend/out/index.html" if is_next else "frontend/dist/index.html"
+    
     settings_file = target / 'settings.json'
     settings_data = {
         "title": target.name,
+        "pytron_version": __version__,
+        "frontend_framework": args.template,
         "width": 800,
         "height": 600,
         "resizable": True,
         "frameless": False,
         "easy_drag": True,
-        "url": "frontend/dist/index.html"
+        "url": dist_path
     }
     settings_file.write_text(json.dumps(settings_data, indent=4))
 
-    # Initialize Vite React app in frontend folder
-    print("Initializing Vite React app...")
-    # Using npx to create vite app non-interactively
-    # We need to be inside the target directory or specify path
-    # npx create-vite frontend --template react
-    # On Windows, npx needs shell=True
-    try:
-        subprocess.run(['npx', '-y', 'create-vite', 'frontend', '--template', 'react'], cwd=str(target), shell=True, check=True)
-        
-        # Install dependencies including pytron-client
-        print("Installing dependencies...")
-        subprocess.run(['npm', 'install'], cwd=str(target / 'frontend'), shell=True, check=True)
-        # We should probably add pytron-client here if it was published, but for now user has to add it manually or we link it?
-        # Let's just leave it as standard vite app for now as per request "vite frontend by default"
-        
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to initialize Vite app: {e}")
-        # Fallback to creating directory if failed
-        frontend = target / 'frontend'
-        if not frontend.exists():
-            frontend.mkdir()
-            (frontend / 'index.html').write_text('<!doctype html><html><body><h1>Pytron App (Vite Init Failed)</h1></body></html>')
+    # Initialize Frontend
+    if is_next:
+        print("Initializing Next.js app...")
+        try:
+            # npx create-next-app@latest frontend --use-npm --no-git --ts --eslint --no-tailwind --src-dir --app --import-alias "@/*"
+            # Using defaults but forcing non-interactive
+            cmd = ['npx', '-y', 'create-next-app@latest', 'frontend', 
+                   '--use-npm', '--no-git', '--ts', '--eslint', '--no-tailwind', '--src-dir', '--app', '--import-alias', '@/*']
+            subprocess.run(cmd, cwd=str(target), shell=True, check=True)
+            
+            # Configure Next.js for static export
+            next_config_path = target / 'frontend' / 'next.config.mjs'
+            if not next_config_path.exists():
+                next_config_path = target / 'frontend' / 'next.config.js'
+            
+            if next_config_path.exists():
+                content = next_config_path.read_text()
+                # Simple injection for static export
+                if "const nextConfig = {" in content:
+                    new_content = content.replace(
+                        "const nextConfig = {", 
+                        "const nextConfig = {\n  output: 'export',\n  images: { unoptimized: true },"
+                    )
+                    next_config_path.write_text(new_content)
+                    print("Configured Next.js for static export (output: 'export')")
+                else:
+                    print("Warning: Could not automatically configure next.config.mjs for static export. Please add output: 'export' manually.")
+            
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to initialize Next.js app: {e}")
+            
+    else:
+        # Initialize Vite app in frontend folder
+        print(f"Initializing Vite {args.template} app...")
+        # Using npx to create vite app non-interactively
+        try:
+            subprocess.run(['npx', '-y', 'create-vite', 'frontend', '--template', args.template], cwd=str(target), shell=True, check=True)
+            
+            # Install dependencies including pytron-client
+            print("Installing dependencies...")
+            subprocess.run(['npm', 'install'], cwd=str(target / 'frontend'), shell=True, check=True)
+            
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to initialize Vite app: {e}")
+            # Fallback to creating directory if failed
+            frontend = target / 'frontend'
+            if not frontend.exists():
+                frontend.mkdir()
+                (frontend / 'index.html').write_text(f'<!doctype html><html><body><h1>Pytron App ({args.template} Init Failed)</h1></body></html>')
 
     # Create README
-    (target / 'README.md').write_text('# My Pytron App\n\nBuilt with Pytron CLI init template.\n\n## Structure\n- `app.py`: Main Python entrypoint\n- `settings.json`: Application configuration\n- `frontend/`: Vite React Frontend')
+    (target / 'README.md').write_text(f'# My Pytron App\n\nBuilt with Pytron CLI init template ({args.template}).\n\n## Structure\n- `app.py`: Main Python entrypoint\n- `settings.json`: Application configuration\n- `frontend/`: {args.template} Frontend')
 
     # Create virtual environment
     print("Creating virtual environment...")
