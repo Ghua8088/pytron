@@ -1,5 +1,5 @@
 import os
-import pkg_resources
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Iterable
 
@@ -28,8 +28,25 @@ def generate_nuclear_hooks(output_dir: Path, collect_all_mode: bool = True, blac
     bl = {n.lower() for n in blacklist}
 
     count = 0
-    for dist in pkg_resources.working_set:
-        name = dist.project_name
+    for dist in importlib_metadata.distributions():
+        # Try to obtain a project/distribution name comparable to pkg_resources' project_name
+        name = None
+        try:
+            # metadata is an email.message.Message mapping; 'Name' is the canonical key
+            name = dist.metadata.get('Name') or getattr(dist, 'name', None)
+        except Exception:
+            try:
+                name = getattr(dist, 'name', None)
+            except Exception:
+                name = None
+
+        if not name:
+            # fallback: try the package root name derived from the distribution path
+            try:
+                name = Path(dist.locate_file('')).name
+            except Exception:
+                continue
+
         if name.lower() in bl:
             continue
 
@@ -37,12 +54,17 @@ def generate_nuclear_hooks(output_dir: Path, collect_all_mode: bool = True, blac
 
         func = 'collect_all' if collect_all_mode else 'collect_submodules'
 
+        if collect_all_mode:
+            body = f"binaries, hiddenimports, datas = collect_all('{name}')"
+        else:
+            body = f"hiddenimports = collect_submodules('{name}')\n    binaries, datas = [], []"
+
         hook_content = f"""
 # Auto-generated nuclear hook for {name}
 from PyInstaller.utils.hooks import {func}
 
 try:
-    {"binaries, hiddenimports, datas = collect_all('{0}')".format(name) if collect_all_mode else "hiddenimports = collect_submodules('{0}')\n    binaries, datas = [], []"}
+    {body}
 except Exception:
     # Fallback on any error to keep build moving
     binaries, hiddenimports, datas = [], [], []
@@ -55,7 +77,7 @@ except Exception:
         except Exception as e:
             print(f"[Pytron] Warning: failed to write hook for {name}: {e}")
 
-    print(f"[Pytron]  Generated {count} complete hooks. PyInstaller can't miss anything now.")
+    print(f"[Pytron] Generated {count} complete hooks. PyInstaller can't miss anything now.")
 
 
 if __name__ == '__main__':

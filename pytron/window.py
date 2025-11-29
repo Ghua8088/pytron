@@ -157,12 +157,8 @@ class Window:
             try:
                 # Serialize the payload using our encoder
                 payload = json.dumps(data, cls=PytronJSONEncoder)
-
+                self._window.evaluate_js(f"window.__pytron_dispatch('{event}', {payload})")
                 # Serialize the call arguments (event name and payload string)
-                call_args = json.dumps([event, payload])
-
-                # Use spread operator to safely pass arguments into JS
-                self._window.evaluate_js(f"window.__pytron_dispatch(...{call_args})")
             except Exception as e:
                 print(f"[Pytron] Failed to emit event '{event}': {e}")
 
