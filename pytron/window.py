@@ -1,5 +1,7 @@
 import webview
 import json
+import os
+import sys
 from .system import SystemAPI
 from .serializer import pytron_serialize, PytronJSONEncoder
 
@@ -252,9 +254,34 @@ class Window:
         # Build the final API object
         final_api = self._build_api()
         
+        # Severe and important changes: Force file:// protocol and disable http_server
+        # 1. Get the absolute path to your index.html
+        # (Make sure this points to the DIST folder, not source)
+        try:
+            # Try to find the main script directory
+            if hasattr(sys.modules['__main__'], '__file__'):
+                main_dir = os.path.dirname(os.path.abspath(sys.modules['__main__'].__file__))
+            else:
+                main_dir = os.getcwd()
+        except Exception:
+            main_dir = os.getcwd()
+
+        dist_path = os.path.join(main_dir, "frontend", "dist", "index.html")
+        
+        # Default to provided url
+        target_url = self.url
+        use_http_server = True
+
+        if os.path.exists(dist_path):
+            real_path = os.path.abspath(dist_path)
+            # 2. Use file:// protocol
+            target_url = f"file://{real_path}"
+            # 3. Create window with NO server
+            use_http_server = False # <--- THE KILL SWITCH
+
         self._window = webview.create_window(
             self.title,
-            url=self.url,
+            url=target_url,
             html=self.html,
             js_api=final_api,
             width=self.width,
@@ -264,7 +291,7 @@ class Window:
             min_size=self.min_size,
             hidden=self.hidden,
             frameless=self.frameless,
-            easy_drag=self.easy_drag
+            easy_drag=self.easy_drag,
         )
         
         # Bind events
