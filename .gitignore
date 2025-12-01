@@ -12,3 +12,6 @@ venv
 # Ignore Python cache
 __pycache__
 *.egg-info
+/docs
+mkdocs.yml
+/site
