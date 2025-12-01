@@ -88,7 +88,31 @@ def cmd_init(args: argparse.Namespace) -> int:
             
             # Install dependencies including pytron-client
             print("Installing dependencies...")
+            package_json_path = target / 'frontend' / 'package.json'
+            if package_json_path.exists():
+                content = package_json_path.read_text()
+                new_content = content.replace (
+                    ' "dependencies": {',
+                    ' "dependencies": { \n "pytron-client":"latest" , ',
+                )
+                package_json_path.write_text( new_content )
+                print("Configured Vite for auto pytron-client installation")
             subprocess.run(['npm', 'install'], cwd=str(target / 'frontend'), shell=True, check=True)
+
+            # Configure Vite for relative paths (base: './')
+            vite_config_path = target / 'frontend' / 'vite.config.js'
+            if not vite_config_path.exists():
+                vite_config_path = target / 'frontend' / 'vite.config.ts'
+            
+            if vite_config_path.exists():
+                content = vite_config_path.read_text()
+                if "base:" not in content and "defineConfig({" in content:
+                    new_content = content.replace(
+                        "defineConfig({", 
+                        "defineConfig({\n  base: './',"
+                    )
+                    vite_config_path.write_text(new_content)
+                    print("Configured Vite for relative paths (base: './')")
             
         except subprocess.CalledProcessError as e:
             print(f"Failed to initialize Vite app: {e}")
