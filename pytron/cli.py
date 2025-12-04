@@ -15,6 +15,7 @@ from .commands.run import cmd_run
 from .commands.package import cmd_package
 from .commands.build import cmd_build_frontend
 from .commands.info import cmd_info
+from .commands.install import cmd_install
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,6 +26,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument('target', help='Target directory for scaffold')
     p_init.add_argument('--template', default='react', help='Frontend template (react, vue, svelte, vanilla, etc.)')
     p_init.set_defaults(func=cmd_init)
+
+    p_install = sub.add_parser('install', help='Install dependencies into project environment')
+    p_install.add_argument('packages', nargs='*', help='Packages to install (if empty, installs from requirements.json)')
+    p_install.set_defaults(func=cmd_install)
 
     p_run = sub.add_parser('run', help='Run a Python entrypoint script')
     p_run.add_argument('script', nargs='?', help='Path to Python script to run (default: app.py)')

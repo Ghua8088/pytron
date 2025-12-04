@@ -4,7 +4,7 @@ import shutil
 import subprocess
 import json
 from pathlib import Path
-from .helpers import locate_frontend_dir, run_frontend_build
+from .helpers import locate_frontend_dir, run_frontend_build, get_python_executable
 
 try:
     from watchgod import watch, DefaultWatcher
@@ -88,7 +88,8 @@ def run_dev_mode(script: Path, extra_args: list[str]) -> int:
         kill_app()
         print("[Pytron] Starting app...")
         # Start as a subprocess we control
-        app_proc = subprocess.Popen([sys.executable, str(script)] + extra_args)
+        python_exe = get_python_executable()
+        app_proc = subprocess.Popen([python_exe, str(script)] + extra_args)
 
     try:
         start_app()
@@ -132,6 +133,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.dev:
         return run_dev_mode(path, args.extra_args)
 
-    cmd = [sys.executable, str(path)] + (args.extra_args or [])
+    python_exe = get_python_executable()
+    cmd = [python_exe, str(path)] + (args.extra_args or [])
     print(f"Running: {' '.join(cmd)}")
     return subprocess.call(cmd)

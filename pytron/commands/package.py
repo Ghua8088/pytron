@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 from .harvest import generate_nuclear_hooks
+from .helpers import get_python_executable, get_venv_site_packages
 
 def find_makensis() -> str | None:
     path = shutil.which('makensis')
@@ -121,7 +122,7 @@ def build_mac_installer(out_name: str, script_dir: Path, app_icon: str | None) -
     if not shutil.which('dmgbuild'):
         print("[Pytron] 'dmgbuild' not found. Attempting to install it...")
         try:
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'dmgbuild'])
+            subprocess.check_call([get_python_executable(), '-m', 'pip', 'install', 'dmgbuild'])
             print("[Pytron] 'dmgbuild' installed successfully.")
         except subprocess.CalledProcessError:
             print("[Pytron] Failed to install 'dmgbuild'. Please install it manually: pip install dmgbuild")
@@ -232,16 +233,19 @@ def cmd_package(args: argparse.Namespace) -> int:
         # requested via CLI flags (`--collect-all` or `--force-hooks`).
         temp_hooks_dir = None
         try:
-            if getattr(args, 'collect_all', False):
+            if getattr(args, 'collect_all', False) or getattr(args, 'force_hooks', False):
                 temp_hooks_dir = script.parent / 'build' / 'nuclear_hooks'
-                generate_nuclear_hooks(temp_hooks_dir, collect_all_mode=True)
-            elif getattr(args, 'force_hooks', False):
-                temp_hooks_dir = script.parent / 'build' / 'nuclear_hooks'
-                generate_nuclear_hooks(temp_hooks_dir, collect_all_mode=False)
+                collect_mode = getattr(args, 'collect_all', False)
+                
+                # Get venv site-packages to ensure we harvest the correct environment
+                python_exe = get_python_executable()
+                site_packages = get_venv_site_packages(python_exe)
+                
+                generate_nuclear_hooks(temp_hooks_dir, collect_all_mode=collect_mode, search_path=site_packages)
         except Exception as e:
             print(f"[Pytron] Warning: failed to generate nuclear hooks: {e}")
 
-        cmd = [sys.executable, '-m', 'PyInstaller']
+        cmd = [get_python_executable(), '-m', 'PyInstaller']
         cmd.append(str(script))
         cmd.append('--noconfirm')
 
@@ -407,7 +411,7 @@ def cmd_package(args: argparse.Namespace) -> int:
         print("[Pytron] Generating spec file...")
 
         makespec_cmd = [
-            sys.executable, '-m', 'PyInstaller.utils.cliutils.makespec',
+            get_python_executable(), '-m', 'PyInstaller.utils.cliutils.makespec',
             '--name', out_name,
             '--onedir',
             '--noconsole',
@@ -442,16 +446,19 @@ def cmd_package(args: argparse.Namespace) -> int:
         # Generate nuclear hooks only when user requested them. Defaults to NO hooks.
         temp_hooks_dir = None
         try:
-            if getattr(args, 'collect_all', False):
+            if getattr(args, 'collect_all', False) or getattr(args, 'force_hooks', False):
                 temp_hooks_dir = script.parent / 'build' / 'nuclear_hooks'
-                generate_nuclear_hooks(temp_hooks_dir, collect_all_mode=True)
-            elif getattr(args, 'force_hooks', False):
-                temp_hooks_dir = script.parent / 'build' / 'nuclear_hooks'
-                generate_nuclear_hooks(temp_hooks_dir, collect_all_mode=False)
+                collect_mode = getattr(args, 'collect_all', False)
+                
+                # Get venv site-packages to ensure we harvest the correct environment
+                python_exe = get_python_executable()
+                site_packages = get_venv_site_packages(python_exe)
+                
+                generate_nuclear_hooks(temp_hooks_dir, collect_all_mode=collect_mode, search_path=site_packages)
         except Exception as e:
             print(f"[Pytron] Warning: failed to generate nuclear hooks: {e}")
 
-        build_cmd = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', str(spec_file)]
+        build_cmd = [get_python_executable(), '-m', 'PyInstaller', '--noconfirm', '--clean', str(spec_file)]
 
         # If hooks were generated, add the hooks dir to PYTHONPATH for this subprocess
         env = None

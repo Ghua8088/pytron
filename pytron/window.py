@@ -292,6 +292,7 @@ class Window:
             hidden=self.hidden,
             frameless=self.frameless,
             easy_drag=self.easy_drag,
+            http_server=use_http_server
         )
         
         # Bind events

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-def generate_nuclear_hooks(output_dir: Path, collect_all_mode: bool = True, blacklist: Iterable[str] | None = None) -> None:
+def generate_nuclear_hooks(output_dir: Path, collect_all_mode: bool = True, blacklist: Iterable[str] | None = None, search_path: list[str] | None = None) -> None:
     """
     Scans the current Python environment and writes PyInstaller hook files that
     call `collect_all` (or `collect_submodules` if `collect_all_mode` is False)
@@ -14,6 +14,7 @@ def generate_nuclear_hooks(output_dir: Path, collect_all_mode: bool = True, blac
     - output_dir: directory to place generated hook files
     - collect_all_mode: if True use `collect_all`, else use `collect_submodules`
     - blacklist: optional iterable of package names to skip (case-insensitive)
+    - search_path: optional list of paths to search for distributions (defaults to sys.path)
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -28,7 +29,10 @@ def generate_nuclear_hooks(output_dir: Path, collect_all_mode: bool = True, blac
     bl = {n.lower() for n in blacklist}
 
     count = 0
-    for dist in importlib_metadata.distributions():
+    # Use the provided search_path if available
+    dists = importlib_metadata.distributions(path=search_path) if search_path else importlib_metadata.distributions()
+    
+    for dist in dists:
         # Try to obtain a project/distribution name comparable to pkg_resources' project_name
         name = None
         try:

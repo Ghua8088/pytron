@@ -83,21 +83,17 @@ def cmd_init(args: argparse.Namespace) -> int:
         # Initialize Vite app in frontend folder
         print(f"Initializing Vite {args.template} app...")
         # Using npx to create vite app non-interactively
+        # We use a specific version (5.5.0) to avoid experimental prompts (like rolldown)
+        # that appear in newer versions (v6+).
         try:
-            subprocess.run(['npx', '-y', 'create-vite', 'frontend', '--template', args.template], cwd=str(target), shell=True, check=True)
+            subprocess.run(['npx', '-y', 'create-vite@5.5.0', 'frontend', '--template', args.template], cwd=str(target), shell=True, check=True)
             
             # Install dependencies including pytron-client
             print("Installing dependencies...")
-            package_json_path = target / 'frontend' / 'package.json'
-            if package_json_path.exists():
-                content = package_json_path.read_text()
-                new_content = content.replace (
-                    ' "dependencies": {',
-                    ' "dependencies": { \n "pytron-client":"latest" , ',
-                )
-                package_json_path.write_text( new_content )
-                print("Configured Vite for auto pytron-client installation")
             subprocess.run(['npm', 'install'], cwd=str(target / 'frontend'), shell=True, check=True)
+            
+            print("Installing pytron-client...")
+            subprocess.run(['npm', 'install', 'pytron-client'], cwd=str(target / 'frontend'), shell=True, check=True)
 
             # Configure Vite for relative paths (base: './')
             vite_config_path = target / 'frontend' / 'vite.config.js'
@@ -145,8 +141,9 @@ def cmd_init(args: argparse.Namespace) -> int:
         # Install pytron in the new env. 
         subprocess.run([str(pip_exe), 'install', 'pytron-kit'], check=True)
         
-        # Create requirements.txt
-        (target / 'requirements.txt').write_text('pytron-kit\n')
+        # Create requirements.json
+        req_data = {"dependencies": ["pytron-kit"]}
+        (target / 'requirements.json').write_text(json.dumps(req_data, indent=4))
         
         # Create helper run scripts
         if sys.platform == 'win32':
@@ -168,18 +165,13 @@ def cmd_init(args: argparse.Namespace) -> int:
     print(f' - {app_file}')
     print(f' - {settings_file}')
     print(f' - {target}/frontend')
-    print(f' - {target}/env (Virtual Environment)')
-    
-    if sys.platform == 'win32':
-        print('Run `run.bat` to start the app (automatically uses the virtual env).')
-    else:
-        print('Run `./run.sh` to start the app (automatically uses the virtual env).')
-        
-    print('Or activate manually:')
-    if sys.platform == 'win32':
-        print(f'  {target}\\env\\Scripts\\activate')
-    else:
-        print(f'  source {target}/env/bin/activate')
-        
-    print('Then run: pytron run')
+
+    # Do not print absolute env paths or activation commands here. Printing
+    # explicit env activation instructions can lead users to activate the
+    # environment and then run `pytron run` from inside the venv which may
+    # confuse the CLI env resolution. Provide a concise, platform-agnostic
+    # message instead.
+    print('A virtual environment was created at: env/ (project root).')
+    print('Install dependencies: pytron install')
+    print('Run the app via the CLI: pytron run (the CLI will prefer env/ when present)')
     return 0

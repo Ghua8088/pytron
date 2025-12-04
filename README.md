@@ -26,7 +26,7 @@ Pytron is a modern framework for building desktop applications using Python for 
     ```
 
 2.  **Initialize a New Project**:
-    This command scaffolds a new project, creates a virtual environment, installs dependencies, and sets up a frontend.
+    This command scaffolds a new project, creates a virtual environment (`env/`), installs initial dependencies, and sets up a frontend.
     ```bash
     # Default (React + Vite)
     pytron init my_app
@@ -36,12 +36,23 @@ Pytron is a modern framework for building desktop applications using Python for 
     ```
     Supported templates: `react` (default), `vue`, `svelte`, `next` (Next.js), `vanilla`, `preact`, `lit`, `solid`, `qwik`.
 
-3.  **Run the App**:
-    Start the app in development mode (hot-reloading enabled).
+3.  **Install project dependencies (recommended)**:
+    After cloning or when you need to install/update dependencies for the project, use the CLI-managed installer which will create/use the `env/` virtual environment automatically:
+    ```bash
+    # Creates env/ if missing and installs from requirements.txt
+    pytron install
+    ```
+
+    Notes:
+    - This creates an `env/` directory in the project root (if not already present) and runs `pip install -r requirements.txt` inside it.
+    - All subsequent `pytron` commands (`run`, `package`, etc.) will automatically prefer the project's `env/` Python when present.
+
+4.  **Run the App**:
+    Start the app in development mode (hot-reloading enabled). The CLI will use `env/` Python automatically if an `env/` exists in the project root.
     *   **Windows**: `run.bat`
     *   **Linux/Mac**: `./run.sh`
     
-    Or manually:
+    Or manually via the CLI:
     ```bash
     pytron run --dev
     ```
@@ -159,6 +170,7 @@ Distribute your app as a standalone executable. Pytron automatically reads your 
 
 *   `pytron init <name> [--template <name>]`: Create a new project.
     *   `--template`: Frontend framework to use (default: `react`). Supports `next`, `vue`, `svelte`, etc.
+*   `pytron install`: Create/use project `env/` and install dependencies from `requirements.txt`.
 *   `pytron run [--dev]`: Run the application.
 *   `pytron package [--installer]`: Build for distribution (uses `settings.json`).
 *   `pytron info`: Show environment and project details.
