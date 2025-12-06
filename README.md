@@ -1,6 +1,4 @@
-
-# Banner: pytron.png
-![Pytron](pytron.png)
+![Pytron](pytron-banner.png)
 # Pytron
 
 Pytron is a modern framework for building desktop applications using Python for the backend and web technologies (React, Vite) for the frontend. It combines the power of Python's ecosystem with the rich user interfaces of the web.
