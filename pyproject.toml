@@ -6,7 +6,7 @@ packages = ["pytron"]
 
 [project]
 name = "pytron-kit"
-version = "0.2.1"
+version = "0.2.2"
 description = "An Electron-like library for Python "
 readme = "README.md"
 requires-python = ">=3.6"
@@ -16,7 +16,6 @@ authors = [
   { name = "Ghua8088" }
 ]
 dependencies = [
-  "pyinstaller",
   "watchgod",
   "pydantic",
   "importlib",
