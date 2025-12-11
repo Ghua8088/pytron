@@ -15,11 +15,12 @@ keywords = ["electron", "app", "desktop"]
 authors = [
   { name = "Ghua8088" }
 ]
-dependencies = [
   "watchgod",
   "pydantic",
   "importlib",
-  "Pillow"
+  "Pillow",
+  "pyobjc-framework-Cocoa; sys_platform == 'darwin'",
+  "pyobjc-framework-WebKit; sys_platform == 'darwin'"
 ]
 classifiers = [
   "Programming Language :: Python :: 3",
