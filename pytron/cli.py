@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import argparse
 import sys
-
+import re
 from .commands.init import cmd_init
 from .commands.run import cmd_run
 from .commands.package import cmd_package
 from .commands.build import cmd_build_frontend
 from .commands.info import cmd_info
 from .commands.install import cmd_install
+from .commands.show import cmd_show
+from .commands.frontend import cmd_frontend_install
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,6 +32,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_install = sub.add_parser('install', help='Install dependencies into project environment')
     p_install.add_argument('packages', nargs='*', help='Packages to install (if empty, installs from requirements.json)')
     p_install.set_defaults(func=cmd_install)
+    
+    p_show = sub.add_parser('show', help='Show installed packages')
+    p_show.set_defaults(func=cmd_show)
+    
+    p_frontend = sub.add_parser('frontend', help='Frontend package management')
+    frontend_sub = p_frontend.add_subparsers(dest='frontend_command')
+    
+    pf_install = frontend_sub.add_parser('install', help='Install packages into the frontend')
+    pf_install.add_argument('packages', nargs='*', help='npm packages to install')
+    pf_install.set_defaults(func=cmd_frontend_install)
 
     p_run = sub.add_parser('run', help='Run a Python entrypoint script')
     p_run.add_argument('script', nargs='?', help='Path to Python script to run (default: app.py)')
@@ -60,6 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+from .exceptions import PytronError
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -70,6 +84,14 @@ def main(argv: list[str] | None = None) -> int:
         return args.func(args)
     except KeyboardInterrupt:
         print('\nCancelled')
+        return 1
+    except PytronError as e:
+        print(f"\n[Pytron Error] {e}")
+        return 1
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"\n[Pytron] Unexpected error: {e}")
         return 1
 
 

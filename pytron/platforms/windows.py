@@ -59,3 +59,11 @@ class WindowsImplementation(PlatformInterface):
         hwnd = self._get_hwnd(w)
         ctypes.windll.user32.ReleaseCapture()
         ctypes.windll.user32.SendMessageW(hwnd, self.WM_NCLBUTTONDOWN, self.HTCAPTION, 0)
+
+    def message_box(self, w, title, message, style=0):
+        # style 0 = OK
+        # style 1 = OK/Cancel
+        # style 4 = Yes/No
+        # Return: 1=OK, 2=Cancel, 6=Yes, 7=No
+        hwnd = self._get_hwnd(w)
+        return ctypes.windll.user32.MessageBoxW(hwnd, message, title, style)

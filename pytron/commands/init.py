@@ -40,7 +40,10 @@ def cmd_init(args: argparse.Namespace) -> int:
         "frontend_framework": args.template,
         "dimensions":[800, 600],
         "frameless": False,
-        "url": dist_path
+        "url": dist_path,
+        "author": "Your Name",
+        "description": "A brief description of your app",
+        "copyright": "Copyright © 2025 Your Name"
     }
     settings_file.write_text(json.dumps(settings_data, indent=4))
 
@@ -52,7 +55,7 @@ def cmd_init(args: argparse.Namespace) -> int:
             # Using defaults but forcing non-interactive
             cmd = ['npx', '-y', 'create-next-app@latest', 'frontend', 
                    '--use-npm', '--no-git', '--ts', '--eslint', '--no-tailwind', '--src-dir', '--app', '--import-alias', '@/*']
-            subprocess.run(cmd, cwd=str(target), shell=True, check=True)
+            subprocess.run(cmd, cwd=str(target), shell=(sys.platform == 'win32'), check=True)
             
             # Configure Next.js for static export
             next_config_path = target / 'frontend' / 'next.config.mjs'
@@ -82,14 +85,14 @@ def cmd_init(args: argparse.Namespace) -> int:
         # We use a specific version (5.5.0) to avoid experimental prompts (like rolldown)
         # that appear in newer versions (v6+).
         try:
-            subprocess.run(['npx', '-y', 'create-vite@5.5.0', 'frontend', '--template', args.template], cwd=str(target), shell=True, check=True)
+            subprocess.run(['npx', '-y', 'create-vite@5.5.0', 'frontend', '--template', args.template], cwd=str(target), shell=(sys.platform == 'win32'), check=True)
             
             # Install dependencies including pytron-client
             print("Installing dependencies...")
-            subprocess.run(['npm', 'install'], cwd=str(target / 'frontend'), shell=True, check=True)
+            subprocess.run(['npm', 'install'], cwd=str(target / 'frontend'), shell=(sys.platform == 'win32'), check=True)
             
             print("Installing pytron-client...")
-            subprocess.run(['npm', 'install', 'pytron-client'], cwd=str(target / 'frontend'), shell=True, check=True)
+            subprocess.run(['npm', 'install', 'pytron-client'], cwd=str(target / 'frontend'), shell=(sys.platform == 'win32'), check=True)
 
             # Configure Vite for relative paths (base: './')
             vite_config_path = target / 'frontend' / 'vite.config.js'

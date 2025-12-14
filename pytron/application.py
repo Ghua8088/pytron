@@ -3,11 +3,14 @@ import sys
 import json
 import inspect
 import typing
+import shutil
 from .utils import get_resource_path
 from .state import ReactiveState
 from .webview import Webview
 
 from .serializer import pydantic
+import logging
+from .exceptions import ConfigError, BridgeError
 
 class App:
     def __init__(self, config_file='settings.json'):
@@ -18,6 +21,15 @@ class App:
         self._exposed_ts_defs = {} # Store generated TS definitions
         self._pydantic_models = {} # Store pydantic models to generate interfaces for
         self.shortcuts = {} # Global shortcuts
+        
+        # Configure logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format='[Pytron] %(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%H:%M:%S'
+        )
+        self.logger = logging.getLogger("Pytron")
+
         self.state = ReactiveState(self) # Magic state object
         
         # Load config
@@ -33,17 +45,37 @@ class App:
                 import json
                 with open(path, 'r') as f:
                     self.config = json.load(f)
+                # Update logging level if debug is enabled
+                if self.config.get('debug', False):
+                    self.logger.setLevel(logging.DEBUG)
+                    # Ensure root handlers capture debug logs
+                    for handler in logging.root.handlers:
+                        handler.setLevel(logging.DEBUG)
+                    self.logger.debug("Debug mode enabled in settings.json. Verbose logging active.")
+                    
+                    # Check for Dev Server Override
+                    dev_url = os.environ.get('PYTRON_DEV_URL')
+                    if dev_url:
+                        self.config['url'] = dev_url
+                        self.logger.info(f"Dev mode: Overriding URL to {dev_url}")
+
                 # Check version compatibility
                 config_version = self.config.get('pytron_version')
                 if config_version:
                     try:
                         from . import __version__
                         if config_version != __version__:
-                            print(f"[Pytron] Warning: Project settings version ({config_version}) does not match installed Pytron version ({__version__}).")
+                            self.logger.warning(f"Project settings version ({config_version}) does not match installed Pytron version ({__version__}).")
                     except ImportError:
-                        pass
+                        self.logger.debug("Could not verify Pytron version compatibility.")
+            except json.JSONDecodeError as e:
+                self.logger.error(f"Failed to parse settings.json: {e}")
+                raise ConfigError(f"Invalid JSON in settings file: {path}") from e
             except Exception as e:
-                print(f"[Pytron] Failed to load settings: {e}")
+                self.logger.error(f"Failed to load settings: {e}")
+                raise ConfigError(f"Could not load settings from {path}") from e
+        else:
+            self.logger.warning(f"Settings file not found at {path}. Using default configuration.")
     def run(self, **kwargs):
         self.is_running = True
         if 'storage_path' not in kwargs:
@@ -66,7 +98,13 @@ class App:
             
             try:
                 os.makedirs(storage_path, exist_ok=True)
-            except Exception:
+                # FIX: If packaged (frozen), change CWD to storage_path to allow writing logs/dbs
+                # without PermissionError in Program Files.
+                if getattr(sys, 'frozen', False):
+                    os.chdir(storage_path)
+                    self.logger.info(f"Packaged app detected. Changed CWD to: {storage_path}")
+            except Exception as e:
+                self.logger.warning(f"Could not create storage directory at {storage_path}: {e}")
                 pass
         
         # Set WebView2 User Data Folder to avoid writing to exe dir
@@ -79,15 +117,21 @@ class App:
         self.windows = [window]
 
         # Bind exposed functions to the new window
-        for name, func in self._exposed_functions.items():
+        # Bind exposed functions to the new window
+        for name, data in self._exposed_functions.items():
+            # data is now {'func': f, 'secure': s}
+            func = data['func']
+            secure = data['secure']
+            
+            # Legacy check: if for some reason a raw class ended up here (unlikely with current expose logic)
             if isinstance(func, type):
                 try:
                     window.expose(func)
-                except Exception:
-                    # Fallback: bind the class itself as a callable
-                    window.bind(name, func)
+                except Exception as e:
+                    self.logger.debug(f"Failed to expose class {name} directly: {e}. Falling back to binding as callable.")
+                    window.bind(name, func, secure=secure)
             else:
-                window.bind(name, func)
+                window.bind(name, func, secure=secure)
 
         window.start()
         self.is_running = False
@@ -96,11 +140,11 @@ class App:
         if self.config.get('debug', False) and 'storage_path' in kwargs:
              path = kwargs['storage_path']
              if os.path.isdir(path) and f"_Dev_{os.getpid()}" in path:
-                 try:
-                     import shutil
-                     shutil.rmtree(path, ignore_errors=True)
-                 except Exception:
-                     pass
+                  try:
+                      shutil.rmtree(path, ignore_errors=True)
+                  except Exception as e:
+                      self.logger.debug(f"Failed to cleanup dev storage: {e}")
+                      pass
     def quit(self):
         for window in self.windows:
             window.close()
@@ -216,19 +260,22 @@ class App:
             return "\n".join(lines)
             
         except Exception as e:
-            print(f"[Pytron] Warning: Could not generate types for {name}: {e}")
+            self.logger.warning(f"Could not generate types for {name}: {e}")
             return f"    {name}(...args: any[]): Promise<any>;"
 
-    def expose(self, func=None, name=None):
+    def expose(self, func=None, name=None, secure=False):
         """
         Expose a function to ALL windows created by this App.
-        Can be used as a decorator: @app.expose
+        Can be used as a decorator: @app.expose or @app.expose(secure=True)
         """
+        # Case 1: Used as @app.expose(secure=True) - func is None
         if func is None:
             def decorator(f):
-                self.expose(f, name=name)
+                self.expose(f, name=name, secure=secure)
                 return f
             return decorator
+        
+        # Case 2: Used as @app.expose or app.expose(func)
         # If the user passed a class or an object (bridge), expose its public callables
         if isinstance(func, type) or (not callable(func) and hasattr(func, '__dict__')):
             # Try to instantiate the class if a class was provided, otherwise use the instance
@@ -251,16 +298,19 @@ class App:
                     continue
                 if callable(attr):
                     try:
-                        self._exposed_functions[attr_name] = attr
+                        # For classes, we assume default security unless specified? 
+                        # Or maybe we shouldn't support granular security on class-based expose yet for simplicity
+                        # just pass 'secure' to all methods.
+                        self._exposed_functions[attr_name] = {'func': attr, 'secure': secure}
                         self._exposed_ts_defs[attr_name] = self._get_ts_definition(attr_name, attr)
                     except Exception:
-                        # Best-effort: ignore methods that can't be exposed
                         pass
             return func
 
         if name is None:
             name = func.__name__
-        self._exposed_functions[name] = func
+        
+        self._exposed_functions[name] = {'func': func, 'secure': secure}
         self._exposed_ts_defs[name] = self._get_ts_definition(name, func)
         return func
 
@@ -371,12 +421,12 @@ class App:
         if dirname and not os.path.exists(dirname):
             try:
                 os.makedirs(dirname)
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.error(f"Failed to create directory for typescript definitions: {e}")
 
         try:
             with open(output_path, "w") as f:
                 f.write("\n".join(ts_lines))
-            print(f"[Pytron] ✅ Generated TypeScript definitions at {output_path}")
+            self.logger.info(f"Generated TypeScript definitions at {output_path}")
         except Exception as e:
-            print(f"[Pytron] Failed to write TypeScript definitions: {e}")
+            self.logger.error(f"Failed to write TypeScript definitions: {e}")

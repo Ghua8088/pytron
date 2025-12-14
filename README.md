@@ -1,5 +1,3 @@
-
-# Banner: pytron.png
 ![Pytron](pytron-banner.png)
 # Pytron
 
@@ -18,12 +16,29 @@ Pytron is a modern framework for building desktop applications using Python for 
 - **Python 3.7+**
 - **Node.js & npm** (for frontend development)
 
+### Linux (Ubuntu/Debian) Requirements
+Pytron relies on standard system libraries for the webview. You must install them using your package manager:
+```bash
+sudo apt install libwebkit2gtk-4.1-0 
+```
+If you encounter `ImportError` or `OSError` related to `gobject` or `glib` (especially on Ubuntu 24.04+), you may also need:
+```bash
+sudo apt install libcairo2-dev pkg-config python3-dev libgirepository1.0-dev libgirepository-2.0-dev
+```
+
 ## Quick Start
 
 1.  **Install Pytron**:
+**Windows**:
     ```bash
     pip install pytron-kit
     ```
+
+    **Linux / macOS (Recommended)**:
+    ```bash
+    pipx install pytron-kit
+    ```
+    *Note: On modern Linux distros (Ubuntu 23.04+), `pipx` involves less risk of breaking system packages (PEP 668).*
 
 2.  **Initialize a New Project**:
     This command scaffolds a new project, creates a virtual environment (`env/`), installs initial dependencies, and sets up a frontend.
@@ -120,9 +135,20 @@ pytron.toggle_fullscreen();
 pytron.close();
 ```
 
+### 5. Development Workflow (`--dev`)
+The development mode in Pytron is designed for modern web development workflows.
+```bash
+pytron run --dev
+```
+*   **Dual Hot Reloading**:
+    *   **Frontend**: Pytron detects your `npm run dev` script (Vite/Next/WebPack) and proxies the window to your local dev server (e.g., `localhost:5173`). This gives you **Hot Module Replacement (HMR)**—UI changes update instantly without a reload.
+    *   **Backend**: Pytron watches your Python files. If you change backend logic, the Python application performs a **Hot Restart** automatically.
+*   **Debug Logging**: If `debug: true` is set in `settings.json`, Pytron switches to verbose logging, showing bridge messages and binding invocations.
+*   **Non-Blocking UI**: Pytron automatically runs synchronous Python functions in a background thread pool, ensuring that heavy Python tasks never freeze the UI.
+
 ## Configuration (settings.json)
 
-Pytron uses a `settings.json` file in your project root to manage application configuration. This keeps your code clean and separates config from logic.
+Pytron uses a `settings.json` file in your project root to manage application configuration.
 
 **Example `settings.json`:**
 ```json
@@ -132,6 +158,7 @@ Pytron uses a `settings.json` file in your project root to manage application co
     "frontend_framework": "react",
     "dimensions":[800,600],
     "frameless": false,
+    "debug": true,
     "url": "frontend/dist/index.html",
     "icon": "assets/icon.ico",
     "version": "1.0.0"
@@ -139,16 +166,15 @@ Pytron uses a `settings.json` file in your project root to manage application co
 ```
 
 *   **title**: The window title and the name of your packaged executable.
-*   **pytron_version**: The version of Pytron used to create the project (used for compatibility checks).
-*   **frontend_framework**: The framework used (e.g., "react", "next").
-*   **icon**: Path to your application icon (relative to project root). Supports `.ico` (preferred) or `.png`.
-*   **url**: Entry point for the frontend (usually the built `index.html`).
-*   **width/height**: Initial window dimensions.
+*   **debug**: Set to `true` to enable verbose logging and dev tools.
+*   **url**: Entry point for the frontend (usually the built `index.html`). In `--dev` mode, this is overridden by the dev server URL.
+*   **icon**: Path to your application icon (relative to project root).
 
 ## UI Components
 
 Pytron provides a set of UI components to help you build a modern desktop application.
-They have preimplemented window controls and are ready to use.With many useful predefined functions its very simple to use just give it a try.
+They have preimplemented window controls and are ready to use.
+
 # Usage
 ```bash
 npm install pytron-ui
@@ -166,31 +192,24 @@ import { TitleBar } from "pytron-ui/react";
 ## Packaging
 
 Distribute your app as a standalone executable. Pytron automatically reads your `settings.json` to determine the app name, version, and icon.
+**Note on File Permissions**: When your app is installed in `Program Files`, it is read-only. If your app writes logs or databases using relative paths (e.g., `logging.basicConfig(filename='app.log')`), it will crash with `PermissionError`.
+**Pytron Solution**: When running as a packaged app, Pytron automatically changes the Current Working Directory (CWD) to a safe user-writable path (e.g., `%APPDATA%/MyApp`). Your relative writes will safely end up there.
 
 1.  **Build**:
     ```bash
     pytron package
     ```
-    This uses PyInstaller to bundle your app. It will:
-    *   Use the `title` from `settings.json` for the executable name.
-    *   Use the `icon` from `settings.json` for the app icon.
-    *   Automatically exclude `node_modules`.
-    *   Include your `settings.json` and frontend assets.
-
-2.  **Create Installer (NSIS)**:
-    ```bash
-    pytron package --installer
-    ```
 
 ## CLI Reference
 
 *   `pytron init <name> [--template <name>]`: Create a new project.
-    *   `--template`: Frontend framework to use (default: `react`). Supports `next`, `vue`, `svelte`, etc.
-*   `pytron install`: Create/use project `env/` and install dependencies from `requirements.txt`.
+*   `pytron install [package]`: Install dependencies.
+    *   Pin versions in `requirements.json`.
+    *   Smartly resolving local path installs to package names.
+*   `pytron frontend install [package]`: Install npm packages for the frontend (auto-detects directory).
 *   `pytron run [--dev]`: Run the application.
-*   `pytron package [--installer]`: Build for distribution (uses `settings.json`).
-*   `pytron info`: Show environment and project details.
-*   `pytron build-frontend <folder>`: Build the frontend app.
+*   `pytron show`: List installed Python packages and versions.
+*   `pytron package`: Build standalone executable.
 
 ---
 

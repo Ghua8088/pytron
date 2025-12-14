@@ -5,6 +5,7 @@
 !include "MUI2.nsh"
 
 ; ---------------------
+; ---------------------
 ; Configurable values
 ; ---------------------
 !ifndef NAME
@@ -12,6 +13,15 @@
 !endif
 !ifndef VERSION
   !define VERSION "1.0"
+!endif
+!ifndef COMPANY
+  !define COMPANY "Pytron User"
+!endif
+!ifndef DESCRIPTION
+  !define DESCRIPTION "${NAME} Installer"
+!endif
+!ifndef COPYRIGHT
+  !define COPYRIGHT "Copyright © 2025 ${COMPANY}"
 !endif
 !ifndef BUILD_DIR
   !error "BUILD_DIR must be defined"
@@ -28,6 +38,15 @@ OutFile "${OUT_DIR}\${NAME}_Installer_${VERSION}.exe"
 InstallDir "$PROGRAMFILES\\${NAME}"
 InstallDirRegKey HKLM "Software\\${NAME}" "Install_Dir"
 RequestExecutionLevel admin
+
+; Version Info for the Installer EXE
+VIProductVersion "${VERSION}.0.0"
+VIAddVersionKey "ProductName" "${NAME}"
+VIAddVersionKey "CompanyName" "${COMPANY}"
+VIAddVersionKey "LegalCopyright" "${COPYRIGHT}"
+VIAddVersionKey "FileDescription" "${DESCRIPTION}"
+VIAddVersionKey "FileVersion" "${VERSION}"
+VIAddVersionKey "ProductVersion" "${VERSION}"
 
 ; Use LZMA compression for smaller installers
 SetCompressor lzma
@@ -71,7 +90,7 @@ Section "Install"
     ; Write useful uninstall registry entries
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${NAME}" "DisplayName" "${NAME}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${NAME}" "DisplayVersion" "${VERSION}"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${NAME}" "Publisher" "Pytron"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${NAME}" "Publisher" "${COMPANY}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${NAME}" "InstallLocation" "$INSTDIR"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${NAME}" "UninstallString" "$INSTDIR\\uninstall.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${NAME}" "DisplayIcon" "$INSTDIR\${MAIN_EXE_NAME}"

@@ -29,7 +29,10 @@ def _early_reconfigure():
         except Exception:
             pass
 
-_early_reconfigure()
+
+# Skip reconfiguration if running under pytest to avoid conflict with capture
+if 'pytest' not in sys.modules and 'pytest' not in sys.argv[0]:
+    _early_reconfigure()
 
 # Fetch version from installed package metadata to avoid manual updates
 try:

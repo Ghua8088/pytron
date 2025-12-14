@@ -4,15 +4,12 @@ import sys
 import platform
 
 CURRENT_PLATFORM = platform.system()
-
-# CORS AVOIDANCE (Windows/WebView2 only)
-if CURRENT_PLATFORM == "Windows":
-    os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = "--allow-file-access-from-files"
-
+os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = "--allow-file-access-from-files"
+os.environ["WebKitWebProcessArguments"] = "--allow-file-access-from-files"# CORS AVOIDANCE (All platforms)
 # Load the DLL
 lib_name = 'webview.dll'
 if CURRENT_PLATFORM == "Linux":
-    lib_name = 'libwebview.so'
+    lib_name = 'libwebview.so'  
 elif CURRENT_PLATFORM == "Darwin":
     # Identify architecture: 'arm64' (Apple Silicon) vs 'x86_64' (Intel)
     if platform.machine() == 'arm64':

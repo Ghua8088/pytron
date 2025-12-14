@@ -3,6 +3,8 @@ import sys
 import shutil
 import subprocess
 import json
+import os
+import re
 
 from pathlib import Path
 from .helpers import locate_frontend_dir, run_frontend_build, get_python_executable, ensure_next_config
@@ -16,14 +18,19 @@ class DevWatcher(DefaultWatcher):
     frontend_dir = None
     
     def should_watch_dir(self, entry):
-        if 'node_modules' in entry.name:
+        # Robust ignores for common build artifacts and heavy directories
+        if entry.name in {'.git', '__pycache__', 'node_modules', 'dist', 'build', '.next', '.output', 'coverage'}:
             return False
+            
         if self.frontend_dir:
              try:
                  entry_path = Path(entry.path).resolve()
+                 # If we are inside the frontend directory
                  if self.frontend_dir in entry_path.parents or self.frontend_dir == entry_path:
                      rel = entry_path.relative_to(self.frontend_dir)
-                     if str(rel).startswith('src'):
+                     # Ignore source files in frontend to let HMR handle them
+                     # We also ignore public/assets as those presumably don't affect the backend logic
+                     if str(rel).startswith(('src', 'public', 'assets')):
                          return False
              except ValueError:
                  pass
@@ -40,37 +47,100 @@ def run_dev_mode(script: Path, extra_args: list[str]) -> int:
     frontend_dir = locate_frontend_dir(Path('.'))
     
     npm_proc = None
+    dev_server_url = None
+
     if frontend_dir:
         print(f"[Pytron] Found frontend in: {frontend_dir}")
         DevWatcher.frontend_dir = frontend_dir
         
         npm = shutil.which('npm')
         if npm:
-            # Check for watch script
-            pkg_data = json.loads((frontend_dir / 'package.json').read_text())
-            # If this looks like a Next.js app, ensure a next.config.js suitable for static export
-            try:
-                if 'next' in pkg_data.get('dependencies', {}) or 'next' in pkg_data.get('devDependencies', {}):
-                    ensure_next_config(frontend_dir)
-            except Exception:
-                pass
-            args = ['run', 'build']
-            
-            if 'watch' in pkg_data.get('scripts', {}):
-                print("[Pytron] Found 'watch' script, using it.")
-                args = ['run', 'watch']
-            else:
-                # We'll try to append --watch to build if it's vite
-                cmd_str = pkg_data.get('scripts', {}).get('build', '')
-                if 'vite' in cmd_str and '--watch' not in cmd_str:
-                     print("[Pytron] Adding --watch to build command.")
-                     args = ['run', 'build', '--', '--watch']
-                else:
-                     print("[Pytron] No 'watch' script found, running build once.")
+            pkg_path = frontend_dir / 'package.json'
+            pkg_data = json.loads(pkg_path.read_text())
+            scripts = pkg_data.get('scripts', {})
+
+            if 'dev' in scripts:
+                print(f"[Pytron] Found 'dev' script. Starting development server...")
+                # We need to capture output to find the port, so PIPE it.
+                # But we also want the user to see it.
+                # We'll use a thread to read stdout and look for the URL.
+                npm_proc = subprocess.Popen(
+                    ['npm', 'run', 'dev'], 
+                    cwd=str(frontend_dir), 
+                    shell=(sys.platform == 'win32'),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1
+                )
                 
-            print(f"[Pytron] Starting frontend watcher: npm {' '.join(args)}")
-            # Use shell=True for Windows compatibility with npm
-            npm_proc = subprocess.Popen(['npm'] + args, cwd=str(frontend_dir), shell=True)
+                # Scan for URL in a background thread
+                import threading
+                import re
+                
+                url_found_event = threading.Event()
+
+                def scan_output():
+                    nonlocal dev_server_url
+                    # Regex for Local: http://localhost:PORT
+                    url_regex = re.compile(r'http://localhost:\d+')
+                    # Regex to strip ANSI codes (colors)
+                    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+                    
+                    while npm_proc and npm_proc.poll() is None:
+                        try:
+                            line = npm_proc.stdout.readline()
+                            if not line:
+                                break
+                            print(f"[npm] {line.strip()}") # Echo to console
+                            
+                            if not dev_server_url:
+                                # Strip ANSI codes to ensure clean matching
+                                clean_line = ansi_escape.sub('', line)
+                                match = url_regex.search(clean_line)
+                                if match:
+                                    dev_server_url = match.group(0)
+                                    print(f"[Pytron] Detected Dev Server URL: {dev_server_url}")
+                                    url_found_event.set()
+                        except Exception as e:
+                            print(f"[Pytron] Error reading npm output: {e}")
+                            break
+                
+                t = threading.Thread(target=scan_output, daemon=True)
+                t.start()
+                
+                # Wait for a bit to find the URL
+                print("[Pytron] Waiting for dev server to start...")
+                url_found_event.wait(timeout=10)
+                
+                if not dev_server_url:
+                    print("[Pytron] Warning: Could not detect dev server URL. Python app might load old build.")
+                
+            else:
+                # Fallback to old behavior (build --watch)
+                 # Check for watch script
+                try:
+                    if 'next' in pkg_data.get('dependencies', {}) or 'next' in pkg_data.get('devDependencies', {}):
+                        ensure_next_config(frontend_dir)
+                except Exception:
+                    pass
+                args = ['run', 'build']
+                
+                if 'watch' in scripts:
+                    print("[Pytron] Found 'watch' script, using it.")
+                    args = ['run', 'watch']
+                else:
+                    # We'll try to append --watch to build if it's vite
+                    cmd_str = scripts.get('build', '')
+                    if 'vite' in cmd_str and '--watch' not in cmd_str:
+                         print("[Pytron] Adding --watch to build command.")
+                         args = ['run', 'build', '--', '--watch']
+                    else:
+                         print("[Pytron] No 'watch' script found, running build once.")
+                    
+                print(f"[Pytron] Starting frontend watcher: npm {' '.join(args)}")
+                # Use shell=True for Windows compatibility with npm
+                npm_proc = subprocess.Popen(['npm'] + args, cwd=str(frontend_dir), shell=(sys.platform == 'win32'))
         else:
             print("[Pytron] npm not found, skipping frontend watch.")
 
@@ -96,22 +166,31 @@ def run_dev_mode(script: Path, extra_args: list[str]) -> int:
         print("[Pytron] Starting app...")
         # Start as a subprocess we control
         python_exe = get_python_executable()
-        app_proc = subprocess.Popen([python_exe, str(script)] + extra_args)
+        
+        env = os.environ.copy()
+        if dev_server_url:
+            env['PYTRON_DEV_URL'] = dev_server_url
+            
+        app_proc = subprocess.Popen([python_exe, str(script)] + extra_args, env=env)
 
     try:
         start_app()
         print(f"[Pytron] Watching for changes in {Path.cwd()}...")
         for changes in watch(str(Path.cwd()), watcher_cls=DevWatcher):
             print(f"[Pytron] Detected changes: {changes}")
+            # Filter out non-code changes manually if needed, but DevWatcher handles most
             start_app()
             
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        print(f"[Pytron] Error in dev loop: {e}")
     finally:
         kill_app()
         if npm_proc:
             print("[Pytron] Stopping frontend watcher...")
             if sys.platform == 'win32':
+                # Need to be careful killing npm on windows, often it spawns node
                 subprocess.run(['taskkill', '/F', '/T', '/PID', str(npm_proc.pid)], capture_output=True)
             else:
                 npm_proc.terminate()

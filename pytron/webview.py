@@ -8,6 +8,8 @@ import inspect
 import pathlib
 import platform
 from collections import deque
+import logging
+from .exceptions import ResourceNotFoundError, BridgeError
 
 from .bindings import lib, dispatch_callback, BindCallback
 from .serializer import pytron_serialize
@@ -29,16 +31,18 @@ c_dispatch_handler = dispatch_callback(_dispatch_handler)
 # -------------------------------------------------------------------
 class Webview:
     def __init__(self, config):
+        self.logger = logging.getLogger("Pytron.Webview")
+        self.thread_pool = __import__('concurrent.futures').futures.ThreadPoolExecutor(max_workers=5)
         self.w = lib.webview_create(int(config.get("debug", False)), None)
         self._gc_protector = deque(maxlen=50)      
         self._cb = c_dispatch_handler
         self._bound_functions = {} 
         # Default Bindings
-        self.bind("pytron_drag", lambda: self.start_drag())
-        self.bind("pytron_minimize", lambda: self.minimize())
-        self.bind("pytron_close", lambda: self.close())
-        self.bind("pytron_toggle_maximize", lambda: self.toggle_maximize())
-        self.bind("pytron_set_bounds", self.set_bounds)
+        self.bind("pytron_drag", lambda: self.start_drag(), run_in_thread=False)
+        self.bind("pytron_minimize", lambda: self.minimize(), run_in_thread=False)
+        self.bind("pytron_close", lambda: self.close(), run_in_thread=False)
+        self.bind("pytron_toggle_maximize", lambda: self.toggle_maximize(), run_in_thread=False)
+        self.bind("pytron_set_bounds", self.set_bounds, run_in_thread=False)
         
         init_js = """
         
@@ -57,10 +61,13 @@ class Webview:
             self._platform = WindowsImplementation()
         elif CURRENT_PLATFORM == "Linux":
             self._platform = LinuxImplementation()
+            # Attempt to fix file:// access via native settings hack
+            self._platform.register_pytron_scheme(self.w, None) 
         elif CURRENT_PLATFORM == "Darwin":
             self._platform = DarwinImplementation()
+            self._platform.register_pytron_scheme(self.w, None)
         else:
-            print(f"[Pytron] Warning: Minimal support for {CURRENT_PLATFORM}. Window controls may not work.")
+            self.logger.warning(f"Minimal support for {CURRENT_PLATFORM}. Window controls may not work.")
             self._platform = PlatformInterface()
         self.normalize_path(config)    
 
@@ -115,7 +122,7 @@ class Webview:
     #-------------------------------------------------------------------
     # Safe JS -> Python Binding
     #-------------------------------------------------------------------
-    def bind(self, name, python_func):
+    def bind(self, name, python_func, run_in_thread=True, secure=False):
         """
         Exposes a Python function (Sync or Async) to JS.
         """
@@ -127,9 +134,31 @@ class Webview:
             # 1. Parse Args
             try:
                 args = json.loads(req) if req else []
-            except:
+            except json.JSONDecodeError:
+                self.logger.warning(f"Failed to parse arguments for {name}")
                 args = []
-            print(f"Binding {name} with args {args}")
+            except Exception as e:
+                self.logger.error(f"Unexpected error parsing arguments for {name}: {e}")
+                args = []
+            
+            self.logger.debug(f"Bound function : {name} invoked with args {args}")
+
+            # ------------------------------------------------
+            # SECURITY CHECK
+            # ------------------------------------------------
+            if secure:
+                # 4=MB_YESNO. 6=IDYES
+                confirm = self._platform.message_box(
+                    self.w, 
+                    "Security Alert", 
+                    f"The application is attempting to execute a restricted function: '{name}'.\n\nAllow execution?",
+                    4 
+                )
+                if confirm != 6: # User did not click Yes
+                     self.logger.warning(f"Security: User denied execution of {name}")
+                     lib.webview_return(self.w, seq, 1, json.dumps("User denied execution.").encode('utf-8'))
+                     return
+
             # ------------------------------------------------
             # CASE A: ASYNC FUNCTION (Run in Background Loop)
             # ------------------------------------------------
@@ -141,21 +170,31 @@ class Webview:
                         res_json = json.dumps(pytron_serialize(result))
                         lib.webview_return(self.w, seq, 0, res_json.encode('utf-8'))
                     except Exception as e:
+                        self.logger.error(f"Async execution error in {name}: {e}")
                         err_json = json.dumps(str(e))
                         lib.webview_return(self.w, seq, 1, err_json.encode('utf-8'))
                 asyncio.run_coroutine_threadsafe(_async_runner(), self.loop)
             # ------------------------------------------------
-            # CASE B: SYNC FUNCTION (Run Immediately)
+            # CASE B: SYNC FUNCTION
             # ------------------------------------------------
             else:
-                try:
-                    result = python_func(*args)
-                    # Ensure result is JSON-serializable using Pytron's encoder
-                    result_json = json.dumps(pytron_serialize(result))
-                    lib.webview_return(self.w, seq, 0, result_json.encode('utf-8'))
-                except Exception as e:
-                    error_msg = json.dumps(str(e))
-                    lib.webview_return(self.w, seq, 1, error_msg.encode('utf-8'))
+                def _sync_runner():
+                    try:
+                        result = python_func(*args)
+                        # Ensure result is JSON-serializable using Pytron's encoder
+                        result_json = json.dumps(pytron_serialize(result))
+                        lib.webview_return(self.w, seq, 0, result_json.encode('utf-8'))
+                    except Exception as e:
+                        self.logger.error(f"Execution error in {name}: {e}")
+                        error_msg = json.dumps(str(e))
+                        lib.webview_return(self.w, seq, 1, error_msg.encode('utf-8'))
+                
+                if run_in_thread:
+                     # Offload to thread pool (Default for user functions)
+                     self.thread_pool.submit(_sync_runner)
+                else:
+                     # Run immediately on Main Thread (Required for Window Controls like Drag)
+                     _sync_runner()
 
         c_func = BindCallback(_callback)
         self._bound_functions[name] = c_func
@@ -201,7 +240,7 @@ class Webview:
     def expose(self, entity):
         if callable(entity) and not isinstance(entity, type):
             self.bind(entity.__name__, entity)
-            print(f"Binding {entity.__name__}")
+            self.logger.debug(f"Binding {entity.__name__}")
             return entity
         if isinstance(entity, type):
             instance = entity()
@@ -209,7 +248,7 @@ class Webview:
                 if not name.startswith("_"):
                     attr = getattr(instance, name)
                     if callable(attr):
-                        print(f"Binding {name}")
+                        self.logger.debug(f"Binding {name}")
                         self.bind(name, attr)
             return entity
     def normalize_path(self, config):
@@ -235,5 +274,10 @@ class Webview:
         if not path_obj.is_absolute():
             path_obj = path_obj.resolve()
         if not path_obj.exists():
-            raise FileNotFoundError(f"Pytron Error: HTML file not found at: {path_obj}")
-        config["url"] = path_obj.as_uri()
+            self.logger.error(f"HTML file not found at: {path_obj}")
+            raise ResourceNotFoundError(f"Pytron Error: HTML file not found at: {path_obj}")
+
+        # Default fallback
+        uri = path_obj.as_uri()
+        config["url"] = uri
+        self.logger.debug(f"Normalized URL: {uri}")

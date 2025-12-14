@@ -76,11 +76,11 @@ def run_frontend_build(frontend_dir: Path) -> bool | None:
         if is_next:
             print('[Pytron] Detected Next.js project — running `npx next build`.')
             # Run build to create a static `out/` directory (Next.js 13.4+ with output: "export")
-            subprocess.run(['npx', 'next', 'build'], cwd=str(frontend_dir), shell=True, check=True)
+            subprocess.run(['npx', 'next', 'build'], cwd=str(frontend_dir), shell=(sys.platform == 'win32'), check=True)
             return True
 
         # Fallback to the project's npm build script
-        subprocess.run(['npm', 'run', 'build'], cwd=str(frontend_dir), shell=True, check=True)
+        subprocess.run(['npm', 'run', 'build'], cwd=str(frontend_dir), shell=(sys.platform == 'win32'), check=True)
         return True
     except subprocess.CalledProcessError as exc:
         print(f"[Pytron] Frontend build failed: {exc}")
