@@ -14,13 +14,16 @@ from .exceptions import ConfigError, BridgeError
 
 class App:
     def __init__(self, config_file='settings.json'):
-        self.windows = None
+        self.windows = []
         self.is_running = False
         self.config = {}
         self._exposed_functions = {} # Global functions for all windows
         self._exposed_ts_defs = {} # Store generated TS definitions
         self._pydantic_models = {} # Store pydantic models to generate interfaces for
         self.shortcuts = {} # Global shortcuts
+        self.storage_path = None # Initialize storage_path
+        self.plugins = [] # Store loaded plugins
+
         
         # Configure logging
         logging.basicConfig(
@@ -32,6 +35,14 @@ class App:
 
         self.state = ReactiveState(self) # Magic state object
         
+        # Check for Deep Link Startup
+        self.state.launch_url = None
+        if len(sys.argv) > 1:
+            possible_url = sys.argv[1]
+            if possible_url.startswith("pytron:") or "://" in possible_url: # Heuristic
+                self.logger.info(f"App launched via Deep Link: {possible_url}")
+                self.state.launch_url = possible_url
+
         # Load config
         # Try to find settings.json
         # 1. Using get_resource_path (handles PyInstaller)
@@ -76,50 +87,132 @@ class App:
                 raise ConfigError(f"Could not load settings from {path}") from e
         else:
             self.logger.warning(f"Settings file not found at {path}. Using default configuration.")
-    def run(self, **kwargs):
-        self.is_running = True
-        if 'storage_path' not in kwargs:
-            title = self.config.get('title', 'Pytron App')
-            # Sanitize title for folder name
-            safe_title = "".join(c if c.isalnum() or c in ('-', '_') else '_' for c in title).strip('_')
-            
-            if sys.platform == 'win32':
-                base_path = os.environ.get('LOCALAPPDATA', os.path.expanduser('~'))
-            else:
-                base_path = os.path.expanduser('~/.config')
-            
-            # If in debug mode, use a unique path to allow multiple instances
-            if self.config.get('debug', False):
-                storage_path = os.path.join(base_path, f"{safe_title}_Dev_{os.getpid()}")
-            else:
-                storage_path = os.path.join(base_path, safe_title)
 
-            kwargs['storage_path'] = storage_path
-            
-            try:
-                os.makedirs(storage_path, exist_ok=True)
-                # FIX: If packaged (frozen), change CWD to storage_path to allow writing logs/dbs
-                # without PermissionError in Program Files.
-                if getattr(sys, 'frozen', False):
-                    os.chdir(storage_path)
-                    self.logger.info(f"Packaged app detected. Changed CWD to: {storage_path}")
-            except Exception as e:
-                self.logger.warning(f"Could not create storage directory at {storage_path}: {e}")
-                pass
+        # --- Initialize Environment & Storage Path ---
+        # Calculate this immediately so the environment is sanitized before the user runs logic
+        title = self.config.get('title', 'Pytron App')
+        # Sanitize title for folder name
+        safe_title = "".join(c if c.isalnum() or c in ('-', '_') else '_' for c in title).strip('_')
         
-        # Set WebView2 User Data Folder to avoid writing to exe dir
-        if sys.platform == 'win32' and 'storage_path' in kwargs:
-             os.environ["WEBVIEW2_USER_DATA_FOLDER"] = kwargs['storage_path']
+        # Set Identity for Taskbar/System
+        self._register_app_id(title, safe_title)
+        
+        if sys.platform == 'win32':
+            base_path = os.environ.get('LOCALAPPDATA', os.path.expanduser('~'))
+        else:
+            base_path = os.path.expanduser('~/.config')
+        
+        # If in debug mode, use a unique path to allow multiple instances
+        if self.config.get('debug', False):
+            self.storage_path = os.path.join(base_path, f"{safe_title}_Dev_{os.getpid()}")
+        else:
+            self.storage_path = os.path.join(base_path, safe_title)
 
-        # Create the main window and keep windows as a list so ReactiveState
-        # can iterate over all windows uniformly.
-        window = Webview(config=self.config)
-        self.windows = [window]
+        # Save original CWD for resource resolution
+        self.app_root = os.getcwd()
 
-        # Bind exposed functions to the new window
+        # FIX: Resolve URL to absolute path before changing CWD (critical for Dev mode)
+        # Otherwise Webview attempts to find index.html in AppData
+        if not getattr(sys, 'frozen', False):
+             if 'url' in self.config and not self.config['url'].startswith(('http:', 'https:', 'file:')):
+                  self.config['url'] = os.path.join(self.app_root, self.config['url'])
+             if 'icon' in self.config and not os.path.isabs(self.config['icon']):
+                  self.config['icon'] = os.path.join(self.app_root, self.config['icon'])
+            
+        try:
+            os.makedirs(self.storage_path, exist_ok=True)
+            
+            # Change CWD to storage_path to allow writing logs/dbs
+            # consistently in both Dev and Frozen/Packaged modes.
+            # This redirects relative file actions to the AppData/Config directory.
+            os.chdir(self.storage_path)
+            self.logger.info(f"Changed Working Directory to: {self.storage_path}")
+        except Exception as e:
+            self.logger.warning(f"Could not create storage directory at {self.storage_path}: {e}")
+            pass
+
+    def load_plugin(self, manifest_path):
+        """
+        Loads a plugin from a manifest.json file.
+        """
+        from .plugin import Plugin, PluginError
+        try:
+            plugin = Plugin(manifest_path)
+            plugin.check_dependencies()
+            plugin.load(self)
+            self.plugins.append(plugin)
+            self.logger.info(f"Loaded plugin: {plugin.name} v{plugin.version}")
+        except PluginError as e:
+            self.logger.error(f"Failed to load plugin from {manifest_path}: {e}")
+        except Exception as e:
+            self.logger.error(f"Unexpected error loading plugin from {manifest_path}: {e}")
+
+    def _register_app_id(self, title, safe_title):
+        # Register App ID for process identity (Taskbar grouping/Notifications)
+        author = self.config.get('author', 'PytronUser')
+        # AUMID format: Company.Product.SubComponent.Version
+        app_id = f"{author}.{safe_title}.App"
+        try:
+             import platform
+             p = platform.system()
+             if p == "Windows":
+                 from .platforms.windows import WindowsImplementation
+                 WindowsImplementation().set_app_id(app_id)
+             elif p == "Linux":
+                 from .platforms.linux import LinuxImplementation
+                 LinuxImplementation().set_app_id(safe_title)
+             elif p == "Darwin":
+                 from .platforms.darwin import DarwinImplementation
+                 DarwinImplementation().set_app_id(title)
+        except Exception as e:
+             self.logger.debug(f"Failed to set App ID: {e}")
+
+    def register_protocol(self, scheme="pytron"):
+        """
+        Registers a custom URI scheme (e.g. 'pytron://') for the application.
+        On Windows, this modifies the Registry.
+        """
+        # We need an instance of platform specific impl.
+        # But Webview holds it. App doesn't directly hold platform unless we refactor.
+        # Temp workaround: Instantiate platform impl directly since it's just registry logic
+        try:
+             import platform
+             if platform.system() == "Windows":
+                 from .platforms.windows import WindowsImplementation
+                 impl = WindowsImplementation()
+                 if impl.register_protocol(scheme):
+                     self.logger.info(f"Successfully registered protocol: {scheme}://")
+                 else:
+                     self.logger.warning(f"Failed to register protocol: {scheme}://")
+             else:
+                 self.logger.warning(f"Protocol registration not implemented for {platform.system()}")
+        except Exception as e:
+             self.logger.error(f"Error registering protocol: {e}")
+
+    def create_window(self, **kwargs):
+        """
+        Creates a new window with the App's configuration, optionally overridden by kwargs.
+        Automatically binds any exposed functions to the new window.
+        """
+        # Resolve 'url' in kwargs if present (assuming relative to app_root)
+        if 'url' in kwargs and not getattr(sys, 'frozen', False):
+             if not kwargs['url'].startswith(('http:', 'https:', 'file:')):
+                  if not os.path.isabs(kwargs['url']):
+                        kwargs['url'] = os.path.join(self.app_root, kwargs['url'])
+
+        # Merge config
+        window_config = self.config.copy()
+        window_config.update(kwargs)
+        
+        # Defer navigation until after bindings are applied
+        original_url = window_config.get("url")
+        window_config["navigate_on_init"] = False
+        
+        window = Webview(config=window_config)
+        self.windows.append(window)
+        
         # Bind exposed functions to the new window
         for name, data in self._exposed_functions.items():
-            # data is now {'func': f, 'secure': s}
             func = data['func']
             secure = data['secure']
             
@@ -132,8 +225,45 @@ class App:
                     window.bind(name, func, secure=secure)
             else:
                 window.bind(name, func, secure=secure)
+        
+        # Now navigate, sending all bindings (scripts) in the payload
+        if original_url:
+            window.navigate(window_config.get("url", original_url))
+            
+        return window
 
-        window.start()
+    def run(self, **kwargs):
+        self.is_running = True
+        
+        # Respect override if provided
+        if 'storage_path' in kwargs:
+            pass 
+        else:
+            kwargs['storage_path'] = self.storage_path
+            
+        # Set WebView2 User Data Folder to avoid writing to exe dir
+        if sys.platform == 'win32' and 'storage_path' in kwargs:
+             os.environ["WEBVIEW2_USER_DATA_FOLDER"] = kwargs['storage_path']
+
+        # Ensure at least one window exists
+        if not self.windows:
+            self.create_window()
+
+        # Start the main window loop (usually blocks)
+        if len(self.windows) > 0:
+            # Check for PyInstaller Splash Screen and close it before showing UI
+            try:
+                import pyi_splash
+                if pyi_splash.is_alive():
+                    pyi_splash.close()
+                    self.logger.info("Closed splash screen.")
+            except ImportError:
+                pass
+            except Exception as e:
+                self.logger.debug(f"Error closing splash screen: {e}")
+                
+            self.windows[0].start()
+            
         self.is_running = False
         
         # Cleanup dev storage if needed
@@ -145,6 +275,91 @@ class App:
                   except Exception as e:
                       self.logger.debug(f"Failed to cleanup dev storage: {e}")
                       pass
+
+    def broadcast(self, event_name, data):
+        """
+        Emits an event to ALL active windows.
+        Useful for app-wide notifications or state updates.
+        Safe to call even if no windows are open (no-op).
+        """
+        if self.windows:
+            for window in self.windows:
+                try:
+                    window.emit(event_name, data)
+                except Exception as e:
+                    self.logger.warning(f"Failed to broadcast to window: {e}")
+
+    def emit(self, event_name, data):
+        """
+        Alias for broadcast. Emits to all windows.
+        """
+        self.broadcast(event_name, data)
+
+    def hide(self):
+        """Hides all application windows (Daemon mode)."""
+        if self.windows:
+            for window in self.windows:
+                try:
+                    window.hide()
+                except Exception:
+                    pass
+
+    def show(self):
+        """Shows all application windows."""
+        if self.windows:
+            for window in self.windows:
+                try:
+                    window.show()
+                except Exception:
+                    pass
+
+    def notify(self, title, message, type="info", duration=5000):
+        """Sends a notification command to the frontend UI of all windows."""
+        if self.windows:
+            for window in self.windows:
+                try:
+                    window.notify(title, message, type, duration)
+                except Exception:
+                    pass
+
+    def system_notification(self, title, message):
+        """Sends a system-level (tray/toast) notification via the OS."""
+        if self.windows:
+            for window in self.windows:
+                try:
+                    window.system_notification(title, message)
+                    break 
+                except Exception:
+                    pass
+
+    def dialog_open_file(self, title="Open File", default_path=None, file_types=None):
+        """Opens a native file selection dialog. Returns the selected path or None."""
+        if self.windows:
+            return self.windows[0].dialog_open_file(title, default_path, file_types)
+        return None
+
+    def dialog_save_file(self, title="Save File", default_path=None, default_name=None, file_types=None):
+        """Opens a native save file dialog. Returns the selected path or None."""
+        if self.windows:
+            return self.windows[0].dialog_save_file(title, default_path, default_name, file_types)
+        return None
+
+    def dialog_open_folder(self, title="Select Folder", default_path=None):
+        """Opens a native folder selection dialog. Returns the selected path or None."""
+        if self.windows:
+            return self.windows[0].dialog_open_folder(title, default_path)
+        return None
+
+    def message_box(self, title, message, style=0):
+        """
+        Shows a native message box.
+        Styles: 0=OK, 1=OK/Cancel, 2=Abort/Retry/Ignore, 3=Yes/No/Cancel, 4=Yes/No, 5=Retry/Cancel
+        Returns: 1=OK, 2=Cancel, 6=Yes, 7=No
+        """
+        if self.windows:
+            return self.windows[0].message_box(title, message, style)
+        return 0
+
     def quit(self):
         for window in self.windows:
             window.close()
@@ -183,6 +398,12 @@ class App:
             
         if origin is typing.Union:
             non_none = [t for t in args if t != type(None)]
+            # Check for pydantic models inside Union
+            if pydantic:
+                for t in non_none:
+                     if isinstance(t, type) and issubclass(t, pydantic.BaseModel):
+                          self._pydantic_models[t.__name__] = t
+
             if len(non_none) == len(args):
                 return " | ".join([self._python_type_to_ts(t) for t in args])
             else:

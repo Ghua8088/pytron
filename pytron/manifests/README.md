@@ -23,3 +23,7 @@ Notes:
 - If you embed the manifest with other tools (e.g. `mt.exe`, `rcedit`, or build systems), pass the manifest as the application's resource/manifest.
 
 If you want, I can also update `pytron` packaging helpers to automatically include this manifest when building Windows executables.
+
+Note on Installer Compression:
+
+- The Windows installer script (`pytron/installer/Installation.nsi`) has been updated to prefer ZLIB compression by default for better compatibility with some antivirus products. If you customize the NSIS script, be aware of the `SetCompressor` directive: newer builds may use `SetCompressor /SOLID zlib` instead of `SetCompressor lzma`.

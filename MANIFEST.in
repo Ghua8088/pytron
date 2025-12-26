@@ -1,6 +1,44 @@
-recursive-include pytron *.py
-recursive-include pytron *.json
-recursive-include pytron *.ico
-recursive-include pytron *.manifest
-recursive-include pytron *.nsi
-include pytron/nsis-setup.exe
+
+include README.md
+include pyproject.toml
+
+# 1. Include the core package
+recursive-include pytron *.py *.png *.ico *.exe *.md *.dll *.so *.dylib *.lib
+recursive-include pytron/dependancies *
+
+# 2. Android Shell - The "Allow List"
+# We match specifically to avoid dragging in temp files
+recursive-include pytron/platforms/android/shell/app/src/main/assets *
+recursive-include pytron/platforms/android/shell/app/src/main/cpp *
+recursive-include pytron/platforms/android/shell/app/src/main/java *
+recursive-include pytron/platforms/android/shell/app/src/main/res *
+recursive-include pytron/platforms/android/shell/app/src/main/jnilibs *
+
+include pytron/platforms/android/shell/app/src/main/AndroidManifest.xml
+include pytron/platforms/android/shell/app/build.gradle
+include pytron/platforms/android/shell/app/proguard-rules.pro
+include pytron/platforms/android/shell/build.gradle
+include pytron/platforms/android/shell/gradle.properties
+include pytron/platforms/android/shell/settings.gradle
+include pytron/platforms/android/shell/gradlew
+include pytron/platforms/android/shell/gradlew.bat
+recursive-include pytron/platforms/android/shell/gradle/wrapper *
+
+# 3. EXCLUDES - The "Block List"
+# Use 'prune' for directories to stop Python from even looking inside them
+prune pytron/platforms/android/shell/app/build
+prune pytron/platforms/android/shell/.gradle
+prune pytron/platforms/android/shell/app/.cxx
+prune */node_modules
+prune */__pycache__
+prune */.git
+prune */.idea
+prune */venv
+
+# Global exclude for stray files
+global-exclude *.py[cod]
+# global-exclude *.so (Removed to allow Pytron bridge binaries)
+global-exclude *.apk
+global-exclude *.aab
+global-exclude local.properties
+global-exclude .DS_Store

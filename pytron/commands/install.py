@@ -5,6 +5,7 @@ import venv
 import json
 import re
 from pathlib import Path
+from ..console import log, console, get_progress, print_rule, Rule, run_command_with_output
 from .helpers import get_venv_python_path
 
 REQUIREMENTS_JSON = Path('requirements.json')
@@ -14,7 +15,7 @@ def load_requirements() -> dict:
         try:
             return json.loads(REQUIREMENTS_JSON.read_text())
         except json.JSONDecodeError:
-            print(f"[Pytron] Warning: {REQUIREMENTS_JSON} is invalid JSON. Using empty defaults.")
+            log(f"Warning: {REQUIREMENTS_JSON} is invalid JSON. Using empty defaults.", style="warning")
     return {"dependencies": []}
 
 def save_requirements(data: dict):
@@ -54,7 +55,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     
     # 1. Create virtual environment if it doesn't exist
     if not venv_dir.exists():
-        print(f"[Pytron] Creating virtual environment in {venv_dir}...")
+        log(f"Creating virtual environment in {venv_dir}...", style="info")
         venv.create(venv_dir, with_pip=True)
     else:
         # Only print if we are doing a full install or explicit install to reassure user
@@ -62,7 +63,7 @@ def cmd_install(args: argparse.Namespace) -> int:
 
     venv_python = get_venv_python_path(venv_dir)
     if not venv_python.exists():
-        print(f"[Pytron] Error: Python executable not found at {venv_python}")
+        log(f"Error: Python executable not found at {venv_python}", style="error")
         return 1
 
     packages_to_install = args.packages
@@ -76,16 +77,26 @@ def cmd_install(args: argparse.Namespace) -> int:
             if Path(pkg).exists():
                 pass # Local path
             elif not any(op in pkg for op in ['==', '>=', '<=', '<', '>', '@']):
-                 print(f"[Pytron] Warning: No version specified for '{pkg}'. Installing latest version.")
+                 log(f"Warning: No version specified for '{pkg}'. Installing latest version.", style="warning")
 
-        print(f"[Pytron] Installing: {', '.join(packages_to_install)}")
+        log(f"Installing: {', '.join(packages_to_install)}")
         
         # Snapshot before
         before_state = get_installed_packages(venv_python)
         
         try:
             # Install packages
-            subprocess.check_call([str(venv_python), '-m', 'pip', 'install'] + packages_to_install)
+            progress = get_progress()
+            progress.start()
+            task = progress.add_task("Installing...", total=None) 
+            
+            # Use run_command_with_output to stream logs cleanly above the progress bar
+            ret = run_command_with_output([str(venv_python), '-m', 'pip', 'install'] + packages_to_install)
+            
+            progress.stop()
+            if ret != 0:
+                log("pip install failed", style="error")
+                return 1
             
             # Snapshot after
             after_state = get_installed_packages(venv_python)
@@ -156,29 +167,41 @@ def cmd_install(args: argparse.Namespace) -> int:
                     
                     current_deps = new_deps
                     updated = True
+                    updated = True
                 else:
-                    print(f"[Pytron] Warning: Could not resolve installed version for '{pkg_arg}'. Skipping requirement update.")
+                    log(f"Warning: Could not resolve installed version for '{pkg_arg}'. Skipping requirement update.", style="warning")
             
             if updated:
                 req_data["dependencies"] = sorted(list(set(current_deps)))
                 save_requirements(req_data)
-                print(f"[Pytron] Added to {REQUIREMENTS_JSON}")
+                log(f"Added to {REQUIREMENTS_JSON}", style="success")
                 
         except subprocess.CalledProcessError as e:
-            print(f"[Pytron] Error installing packages: {e}")
+            log(f"Error installing packages: {e}", style="error")
             return 1
     else:
         # Install from requirements.json
         if not current_deps:
-            print(f"[Pytron] No dependencies found in {REQUIREMENTS_JSON}.")
+            log(f"No dependencies found in {REQUIREMENTS_JSON}.", style="warning")
             return 0
             
-        print(f"[Pytron] Installing dependencies from {REQUIREMENTS_JSON}...")
+        log(f"Installing dependencies from {REQUIREMENTS_JSON}...")
         try:
-            subprocess.check_call([str(venv_python), '-m', 'pip', 'install'] + current_deps)
-            print("[Pytron] Dependencies installed successfully.")
-        except subprocess.CalledProcessError as e:
-            print(f"[Pytron] Error installing dependencies: {e}")
+            progress = get_progress()
+            progress.start()
+            task = progress.add_task("Syncing Dependencies...", total=None)
+            
+            ret = run_command_with_output([str(venv_python), '-m', 'pip', 'install'] + current_deps)
+            
+            progress.stop()
+            if ret == 0:
+                log("Dependencies installed successfully.", style="success")
+            else:
+                log("Failed to install dependencies.", style="error")
+                return 1
+        except Exception as e: # Catching a general exception here for safety, as CalledProcessError is handled by run_command_with_output
+            progress.stop()
+            log(f"Error installing dependencies: {e}", style="error")
             return 1
 
     return 0

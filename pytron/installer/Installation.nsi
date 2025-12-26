@@ -48,9 +48,9 @@ VIAddVersionKey "FileDescription" "${DESCRIPTION}"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 
-; Use LZMA compression for smaller installers
-SetCompressor lzma
-SetCompressorDictSize 32
+; Use ZLIB compression for better AV compatibility (LZMA often flagged)
+SetCompressor /SOLID zlib
+; SetCompressorDictSize 32 ; Not applicable for zlib usually, or default is fine
 
 ; Welcome/Finish Page Image (Left side)
 !define MUI_WELCOMEFINISHPAGE_BITMAP "sidebar.bmp"

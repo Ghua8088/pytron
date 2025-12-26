@@ -3,6 +3,38 @@
 
 Pytron is a modern framework for building desktop applications using Python for the backend and web technologies (React, Vite) for the frontend. It combines the power of Python's ecosystem with the rich user interfaces of the web.
 
+## Framework workings
+
+```mermaid
+graph TD
+    subgraph "Frontend Process (Web Technology)"
+        UI[<b>Pytron UI</b><br>React Components / Web Components]
+        Client[<b>Pytron Client</b><br>JavaScript Bridge & State Manager]
+        AppJS[<b>User Frontend App</b><br>React/Vite/Next.js]
+        
+        UI --> AppJS
+        AppJS --> Client
+    end
+
+    subgraph "IPC Bridge (Inter-Process Communication)"
+        Msg[JSON Message Passing]
+    end
+
+    subgraph "Backend Process (Python)"
+        Kit[<b>Pytron Kit</b><br>Window Manager & Server]
+        UserPy[<b>User Backend Code</b><br>@app.expose / Business Logic]
+        
+        Kit --> UserPy
+    end
+
+    Client <-->|RPC Calls & Events| Msg
+    Msg <-->|Bridge Interface| Kit
+
+    %% Data Flow
+    UserPy -.->|State Updates| Kit
+    Kit -.->|Sync State| Client
+    Client -.->|Update Signals| AppJS
+```
 ## Features
 
 *   **Type-Safe Bridge**: Automatically generate TypeScript definitions (`.d.ts`) from your Python code.
@@ -10,6 +42,17 @@ Pytron is a modern framework for building desktop applications using Python for 
 *   **Advanced Serialization**: Built-in support for Pydantic models, PIL Images, UUIDs, and more.
 *   **System Integration**: Native file dialogs, notifications, and shortcuts.
 *   **Developer Experience**: Hot-reloading, automatic virtual environment management, and easy packaging.
+
+## New / Notable Features (latest)
+
+- **Daemon & System Integration**: New `hide`/`show` APIs and `system_notification` support allow apps to run as daemons, show/hide windows programmatically, and emit native notifications across Windows/macOS/Linux.
+- **Taskbar / Dock Progress & Icons**: APIs to set taskbar progress and update the application icon at runtime (Windows taskbar, macOS Dock badge, basic Linux support).
+- **Native Dialogs**: Cross-platform native file dialogs (open/save/folder) using the OS tools (Windows common dialogs, macOS AppleScript, Linux `zenity`/`kdialog`) are exposed to the `Webview` layer.
+- **Message Boxes**: Unified `message_box` with cross-platform fallbacks (native MessageBox on Windows, `zenity`/`kdialog` on Linux, AppleScript on macOS).
+- **Packaging Improvements**: `pytron package` can now bundle a splash screen into PyInstaller builds (`--splash` support), and the Windows installer compression has been updated for better AV compatibility.
+- **Serializer Enhancements**: `PytronJSONEncoder` gained broader support (Pydantic models, PIL images -> data URIs, dataclasses, enums, timedeltas, complex numbers, __slots__, and iterable fallbacks) for safer frontend bridging.
+- **Platform Interface Expanded**: Platform backends now provide richer capabilities (notifications, dialogs, icon/app-id management, tray/daemon helpers).
+
 
 ## Prerequisites
 

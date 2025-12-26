@@ -147,3 +147,142 @@ class LinuxImplementation(PlatformInterface):
         except Exception as e:
             print(f"[Pytron] Error ensuring file access on Linux: {e}")
 
+    # --- Daemon Capabilities ---
+    def hide(self, w):
+        if not self.gtk: return
+        win = self._get_window(w)
+        # gtk_widget_hide
+        self.gtk.gtk_widget_hide(win)
+
+    def show(self, w):
+        if not self.gtk: return
+        win = self._get_window(w)
+        # gtk_widget_show_all
+        self.gtk.gtk_widget_show_all(win)
+        # gtk_window_present to bring to front
+        self.gtk.gtk_window_present(win)
+
+    def notification(self, w, title, message, icon=None):
+        import subprocess
+        # Try notify-send
+        try:
+            subprocess.Popen(['notify-send', title, message])
+        except Exception:
+             print("Pytron Warning: notify-send not found.")
+
+    
+    # --- File Dialogs Support ---
+    def _run_gtk_dialog(self, w, title, action, default_path, default_name):
+        if not self.gtk: return None
+        
+        # Actions: 0=OPEN, 1=SAVE, 2=SELECT_FOLDER, 3=CREATE_FOLDER
+        # Buttons: "Cancel" -> GTK_RESPONSE_CANCEL (-6), "Open"/"Save" -> GTK_RESPONSE_ACCEPT (-3)
+        
+        win = self._get_window(w)
+        
+        # Labels
+        accept_label = "Save" if action == 1 else "Open"
+        
+        # gtk_file_chooser_dialog_new(title, parent, action, first_button_text, first_button_id, ..., NULL)
+        # Using varargs in ctypes is tricky.
+        # Alternative: Create dialog, then add buttons.
+        # But 'new' is varargs.
+        # Fallback: create typical dialog window or use `zenity`?
+        # Trying `zenity` first as it's robust for 'simple' setups without complex ctypes varargs.
+        # Actually, let's just use zenity/kdialog for Linux file dialogs to act 'native' to the DE
+        # (KDE uses kdialog, Gnome uses zenity). Using GTK dialog inside a potentially non-GTK DE is less ideal.
+        # AND it avoids complex ctypes definitions for all the GtkFileChooser methods.
+        return self._run_subprocess_dialog(title, action, default_path, default_name)
+
+    def _run_subprocess_dialog(self, title, action, default_path, default_name):
+        # Action: 0=Open, 1=Save, 2=Folder
+        import subprocess
+        import os
+        
+        # Try ZENITY
+        try:
+            cmd = ["zenity", "--file-selection", "--title=" + title]
+            
+            if action == 1:
+                cmd.append("--save")
+                cmd.append("--confirm-overwrite")
+            elif action == 2:
+                cmd.append("--directory")
+                
+            if default_path:
+                # If save and default_name exists, append it
+                path = default_path
+                if action == 1 and default_name:
+                    path = os.path.join(path, default_name)
+                cmd.append(f"--filename={path}")
+                
+            # Filters? Zenity supports --file-filter="Name | *.ext"
+            # But we passed `file_types` to the public calls, need to handle that.
+            # Simplified for now.
+            
+            output = subprocess.check_output(cmd, text=True).strip()
+            return output
+        except Exception:
+            pass
+            
+        # Try KDIALOG
+        try:
+            cmd = ["kdialog", "--title", title]
+            if action == 0:
+                cmd += ["--getopenfilename"]
+            elif action == 1:
+                cmd += ["--getsavefilename"]
+            elif action == 2:
+                cmd += ["--getexistingdirectory"]
+                
+             # KDialog path argument
+            start_dir = default_path or "."
+            if action == 1 and default_name:
+                start_dir = os.path.join(start_dir, default_name)
+            cmd.append(start_dir)
+
+            output = subprocess.check_output(cmd, text=True).strip()
+            return output
+        except Exception:
+            pass
+        
+        print("Pytron Warning: No file dialog provider (zenity/kdialog) found on Linux.")
+        return None
+
+    def open_file_dialog(self, w, title, default_path=None, file_types=None):
+        return self._run_subprocess_dialog(title, 0, default_path, None)
+
+    def save_file_dialog(self, w, title, default_path=None, default_name=None, file_types=None):
+        return self._run_subprocess_dialog(title, 1, default_path, default_name)
+
+    def open_folder_dialog(self, w, title, default_path=None):
+        return self._run_subprocess_dialog(title, 2, default_path, None)
+
+    # --- Taskbar Progress ---
+    def set_taskbar_progress(self, w, state="normal", value=0, max_value=100):
+        # Linux DEs (Gnome/KDE) don't have a standardized Taskbar Progress API.
+        # Ubuntu Unity used to have a Launcher API. 
+        # Modern Gnome Shell might have extensions.
+        # For now, we no-op to prevent crashes.
+        pass
+
+    def set_window_icon(self, w, icon_path):
+        if not self.gtk or not icon_path: return
+        win = self._get_window(w)
+        err = ctypes.c_void_p(0)
+        # gtk_window_set_icon_from_file(GtkWindow *window, const gchar *filename, GError **err);
+        res = self.gtk.gtk_window_set_icon_from_file(win, icon_path.encode('utf-8'), ctypes.byref(err))
+        if not res:
+             print(f"[Pytron] Failed to set window icon from {icon_path}")
+
+    def set_app_id(self, app_id):
+        try:
+            glib = ctypes.CDLL("libglib-2.0.so.0")
+            glib.g_set_prgname.argtypes = [ctypes.c_char_p]
+            glib.g_set_prgname(app_id.encode('utf-8'))
+            # Also g_set_application_name often used by GTK
+            glib.g_set_application_name.argtypes = [ctypes.c_char_p]
+            glib.g_set_application_name(app_id.encode('utf-8'))
+        except Exception:
+            pass
+
