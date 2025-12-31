@@ -151,7 +151,70 @@ async function loadUser() {
 }
 ```
 
-### 3. Reactive State
+### 3. Global Shortcuts
+Register global keyboard shortcuts that work even when the window is not focused.
+
+**Python:**
+```python
+def toggle_visibility():
+    if app.is_visible:
+        app.hide()
+    else:
+        app.show()
+
+# Register shortcut (Ctrl+Shift+Space)
+app.shortcut("Ctrl+Shift+SPACE", toggle_visibility)
+app.shortcut("Alt+K", lambda: print("Shortcut triggered!"))
+```
+
+**JavaScript (Frontend Listener as Fallback/Manager):**
+Using `pytron-ui`'s `ShortcutHandler` allows you to manage these from React context if preferred, but the backend registration above is robust for global OS-level events.
+
+### 4. Lifecycle Hooks
+Run cleanup code when the application closes.
+
+```python
+@app.on_exit
+def cleanup():
+    # Close database connections, save state, or cleanup temp files
+    print("Application is shutting down...")
+    db.close()
+```
+
+### 5. System Integration
+Pytron gives you direct access to native OS features.
+
+**System Tray & Taskbar:**
+```python
+# Create a standard tray
+tray = app.setup_tray_standard()
+
+# Show progress in Taskbar (Windows) or Dock (macOS)
+# State: "normal", "indeterminate", "error", "paused", "none"
+window.set_taskbar_progress("normal", 45) 
+```
+
+**High-Performance Binary IPC:**
+```python
+# Serve large binary data (like images/buffers) via memory
+# Available at pytron://my-raw-frame
+window.serve_data("my-raw-frame", binary_content, "image/jpeg")
+```
+
+**Native Dialogs & Notifications:**
+```python
+@app.expose
+def export_data():
+    # Native File Save Dialog
+    path = app.dialog_save_file("Export Data", default_name="data.json")
+    if path:
+        # Show Native System Notification
+        app.system_notification("Export Success", f"Saved to {path}")
+        return True
+    return False
+```
+
+### 6. Reactive State
 Sync data automatically.
 
 **Python:**
@@ -189,6 +252,30 @@ pytron run --dev
 *   **Debug Logging**: If `debug: true` is set in `settings.json`, Pytron switches to verbose logging, showing bridge messages and binding invocations.
 *   **Non-Blocking UI**: Pytron automatically runs synchronous Python functions in a background thread pool, ensuring that heavy Python tasks never freeze the UI.
 
+### 7. Deep Linking
+Handle custom URI schemes (e.g., `pytron://my-action`).
+
+**Python:**
+```python
+# Check for link that launched the app
+if app.state.launch_url:
+    print(f"Launched with: {app.state.launch_url}")
+
+# Register a custom protocol on the OS
+app.register_protocol("my-app")
+```
+
+### 8. Start on Boot
+Easily allow your app to launch when the system starts.
+
+```python
+# Enable launching at startup
+app.set_start_on_boot(True)
+
+# Disable
+app.set_start_on_boot(False)
+```
+
 ## Configuration (settings.json)
 
 Pytron uses a `settings.json` file in your project root to manage application configuration.
@@ -196,22 +283,29 @@ Pytron uses a `settings.json` file in your project root to manage application co
 **Example `settings.json`:**
 ```json
 {
-    "title": "pytron app",
-    "pytron_version": "0.2.2",
-    "frontend_framework": "react",
-    "dimensions":[800,600],
-    "frameless": false,
-    "debug": true,
+    "title": "My App",
+    "dimensions": [1024, 768],
+    "frameless": true,
     "url": "frontend/dist/index.html",
-    "icon": "assets/icon.ico",
-    "version": "1.0.0"
+    "debug": false,
+    "icon": "icon.png",
+    "version": "1.0.6",
+    "splash_image": "splash.png",
+    "author": "YourName",
+    "description": "App Description",
+    "copyright": "Copyright © 2025",
+    "force-package": ["llama_cpp"],
+    "default_context_menu": false,
+    "close_to_tray": true
 }
 ```
 
-*   **title**: The window title and the name of your packaged executable.
-*   **debug**: Set to `true` to enable verbose logging and dev tools.
-*   **url**: Entry point for the frontend (usually the built `index.html`). In `--dev` mode, this is overridden by the dev server URL.
-*   **icon**: Path to your application icon (relative to project root).
+*   **title/author**: Used for the window title, application identity (AppUserModelID), and notification branding.
+*   **splash_image**: Path to a PNG/JPG shown during the boot process of a packaged app.
+*   **close_to_tray**: If `true`, clicking the 'X' button will hide the window to the system tray instead of exiting the process.
+*   **force-package**: A list of Python modules that should be explicitly collected during `pytron package`.
+*   **default_context_menu**: Set to `false` to disable the native browser right-click menu (highly recommended if using `pytron-ui` ContextMenu).
+*   **url**: Entry point for the frontend. In `--dev` mode, this is overridden by the dev server.
 
 ## UI Components
 

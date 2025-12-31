@@ -38,7 +38,14 @@
 Name "${NAME}"
 OutFile "${OUT_DIR}\${NAME}_Installer_${VERSION}.exe"
 InstallDir "$PROGRAMFILES\\${NAME}"
-InstallDirRegKey HKLM "Software\\${NAME}" "Install_Dir"
+InstallDirRegKey HKLM "Software\${NAME}" "Install_Dir"
+; Explicitly set the installer icon if defined
+!ifdef MUI_ICON
+  Icon "${MUI_ICON}"
+!endif
+!ifdef MUI_UNICON
+  UninstallIcon "${MUI_UNICON}"
+!endif
 RequestExecutionLevel admin
 
 ; Version Info for the Installer EXE

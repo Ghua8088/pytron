@@ -220,15 +220,13 @@ def cmd_run(args: argparse.Namespace) -> int:
                 return 1
 
     if args.dev:
-        engine = 'pyside6' if args.pyside6 else args.engine
+        engine = args.engine
         return run_dev_mode(path, args.extra_args, engine=engine)
 
     python_exe = get_python_executable()
     env = os.environ.copy()
     if args.engine:
         env['PYTRON_ENGINE'] = args.engine
-    if args.pyside6:
-        env['PYTRON_ENGINE'] = 'pyside6'
         
     cmd = [python_exe, str(path)] + (args.extra_args or [])
     log(f"Running: {' '.join(cmd)}", style="dim")

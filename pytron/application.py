@@ -52,6 +52,8 @@ class App:
         # Try to find settings.json
         # 1. Using get_resource_path (handles PyInstaller)
         path = get_resource_path(config_file)
+        self.logger.debug(f"Resolved settings path: {path}")
+
         if not os.path.exists(path):
             # 2. Try relative to the current working directory (useful during dev if running from root)
             path = os.path.abspath(config_file)

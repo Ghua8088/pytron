@@ -3,6 +3,7 @@ import ctypes.util
 from ..bindings import lib
 from .interface import PlatformInterface
 import os
+
 class DarwinImplementation(PlatformInterface):
     def __init__(self):
         try:
@@ -20,7 +21,6 @@ class DarwinImplementation(PlatformInterface):
             
             self.objc.objc_msgSend.restype = ctypes.c_void_p
             # Do NOT set argtypes for objc_msgSend as it is variadic
-            # self.objc.objc_msgSend.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
             
         except Exception as e:
             print(f"Pytron Warning: Cocoa/ObjC not found: {e}")
@@ -34,20 +34,11 @@ class DarwinImplementation(PlatformInterface):
         sel = self.objc.sel_registerName(selector.encode('utf-8'))
         return self.objc.objc_msgSend(obj, sel, *args)
     
-    # Helper for boolean args (True/False -> 1/0)
-    def _bool(self, val):
-        return 1 if val else 0
-        
     def minimize(self, w):
         win = self._get_window(w)
         self._call(win, "miniaturize:", None)
 
     def set_bounds(self, w, x, y, width, height):
-        win = self._get_window(w)
-        # Create NSRect (x, y, w, h) - Struct handling in ctypes is needed for SetFrame
-        # This is complex in pure ctypes without defining structures. 
-        # Simplified approach: many simple Cocoa calls take primitives, but setFrame:display: takes a struct.
-        # We might skip exact bounds setting for now or implement NSRect struct.
         pass 
 
     def close(self, w):
@@ -57,30 +48,30 @@ class DarwinImplementation(PlatformInterface):
     def toggle_maximize(self, w):
         win = self._get_window(w)
         self._call(win, "zoom:", None)
-        return True # Approximation
+        return True 
 
     def make_frameless(self, w):
         win = self._get_window(w)
-        # NSWindowStyleMaskBorderless = 0
-        # NSWindowStyleMaskResizable = 8
-        # setStyleMask: 8
-        self._call(win, "setStyleMask:", 8)
+        # setStyleMask: 8 (Resizable) | 0 (Borderless) -> But we usually want Titled | FullSizeContentView
+        # To mimic standardized frameless:
+        # NSWindowStyleMaskTitled = 1 << 0
+        # NSWindowStyleMaskClosable = 1 << 1
+        # NSWindowStyleMaskMiniaturizable = 1 << 2
+        # NSWindowStyleMaskResizable = 1 << 3
+        # NSWindowStyleMaskFullSizeContentView = 1 << 15
+        
+        # We want bits: 1|2|4|8|32768 = 32783
+        self._call(win, "setStyleMask:", 32783) # Standard macos "frameless but native controls"
         self._call(win, "setTitlebarAppearsTransparent:", 1)
         self._call(win, "setTitleVisibility:", 1) # NSWindowTitleHidden
 
     def start_drag(self, w):
         win = self._get_window(w)
-        # performWindowDragWithEvent: requires an event.
-        # movableByWindowBackground is cleaner
         self._call(win, "setMovableByWindowBackground:", 1)
 
     def message_box(self, w, title, message, style=0):
         # Use osascript for native-look dialogs
         import subprocess
-        # Styles handling for osascript:
-        # 0 (OK) -> display alert ... buttons {"OK"}
-        # 4 (Yes/No) -> display alert ... buttons {"No", "Yes"} default button "Yes"
-        
         script = ""
         if style == 4:
             script = f'display alert "{title}" message "{message}" buttons {{"No", "Yes"}} default button "Yes"'
@@ -91,18 +82,21 @@ class DarwinImplementation(PlatformInterface):
             
         try:
             output = subprocess.check_output(['osascript', '-e', script], text=True)
-            # Output format: "button returned:Yes\n"
             if "Yes" in output or "OK" in output:
                 return 6 if style == 4 else 1
             return 7 if style == 4 else 2
         except subprocess.CalledProcessError:
-            return 7 if style == 4 else 2 # User cancel usually raises error in some contexts or returns Cancel
+            return 7 if style == 4 else 2
         except Exception:
-            return 6 # Allow default if osascript fails?
+            return 6
 
-    def register_pytron_scheme(self, w, root_path):
+    def register_pytron_scheme(self, w, callback):
         """
-        Enables file access on macOS WKWebView to bypass CORS issues.
+        Setup handler for macOS.
+        Note: Registering custom URL schemes on WKWebView requires configuration injection
+        BEFORE instantiation, which the current C-bindings don't support.
+        
+        We fallback to enabling File Access so file:// works, and logging the limitation.
         """
         if not self.objc: return
 
@@ -114,23 +108,17 @@ class DarwinImplementation(PlatformInterface):
             def str_to_nsstring(s):
                 cls = get_class("NSString")
                 sel = self.objc.sel_registerName("stringWithUTF8String:".encode('utf-8'))
-                # Cast msgSend for (void_p, void_p, char_p) -> void_p
                 f = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_char_p)(self.objc.objc_msgSend)
                 return f(cls, sel, s.encode('utf-8'))
 
             def bool_to_nsnumber(b):
                 cls = get_class("NSNumber")
                 sel = self.objc.sel_registerName("numberWithBool:".encode('utf-8'))
-                # Cast msgSend for (void_p, void_p, bool) -> void_p
                 f = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool)(self.objc.objc_msgSend)
                 return f(cls, sel, b)
 
             # 2. Get the WebView
-            # Window -> ContentView (usually the WKWebView in zserge/webview implementation)
             win = self._get_window(w)
-            
-            # Need to invoke [win contentView]
-            # msgSend(win, sel)
             f_id = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(self.objc.objc_msgSend)
             sel_contentView = self.objc.sel_registerName("contentView".encode('utf-8'))
             webView = f_id(win, sel_contentView)
@@ -139,16 +127,15 @@ class DarwinImplementation(PlatformInterface):
                 print("[Pytron] Could not find WebView (contentView is null).")
                 return
 
-            # 3. Get Configuration: [webView configuration]
+            # 3. Get Configuration
             sel_config = self.objc.sel_registerName("configuration".encode('utf-8'))
             config = f_id(webView, sel_config)
 
-            # 4. Get Preferences: [config preferences]
+            # 4. Get Preferences
             sel_prefs = self.objc.sel_registerName("preferences".encode('utf-8'))
             prefs = f_id(config, sel_prefs)
 
-            # 5. Set Values using KVC: [prefs setValue:val forKey:key]
-            # setValue:forKey: signature: (id, SEL, id, NSString*)
+            # 5. Set Values using KVC
             f_kv = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(self.objc.objc_msgSend)
             sel_setValue = self.objc.sel_registerName("setValue:forKey:".encode('utf-8'))
 
@@ -157,18 +144,11 @@ class DarwinImplementation(PlatformInterface):
             # Allow File Access
             key_file = str_to_nsstring("allowFileAccessFromFileURLs")
             f_kv(prefs, sel_setValue, val_true, key_file)
-            print("[Pytron] macOS: Enabled allowFileAccessFromFileURLs")
+            print("[Pytron] macOS: Enabled allowFileAccessFromFileURLs (Scheme interception not available post-init)")
             
-            # Allow Universal Access (bonus) - might not exist on all versions but usually safe to set via KVC
-            # key_univ = str_to_nsstring("allowUniversalAccessFromFileURLs") # Often restricted?
-            # f_kv(prefs, sel_setValue, val_true, key_univ)
-
-            # Developer Extras (Inspector)
+            # Developer Extras
             key_dev = str_to_nsstring("developerExtrasEnabled")
             f_kv(prefs, sel_setValue, val_true, key_dev)
-            
-            # Also try setting on checking for 'setValue:forKey:' on the configuration object itself?
-            # Some older API might be different, but preferences object is standard for WKWebView.
 
         except Exception as e:
             print(f"[Pytron] Error enabling file access on macOS: {e}")
@@ -176,61 +156,49 @@ class DarwinImplementation(PlatformInterface):
     # --- Daemon Capabilities ---
     def hide(self, w):
         win = self._get_window(w)
-        # orderOut: (id)sender
         self._call(win, "orderOut:", None)
 
     def show(self, w):
         win = self._get_window(w)
-        # makeKeyAndOrderFront: (id)sender
         self._call(win, "makeKeyAndOrderFront:", None)
-        # NSApp activateIgnoringOtherApps:YES
-        # We need NSApp.
         try:
             cls_app = self.objc.objc_getClass("NSApplication".encode('utf-8'))
             sel_shared = self.objc.sel_registerName("sharedApplication".encode('utf-8'))
             ns_app = self.objc.objc_msgSend(cls_app, sel_shared)
             
             sel_activate = self.objc.sel_registerName("activateIgnoringOtherApps:".encode('utf-8'))
-            
-            # Signature: (void_p, void_p, bool)
             f_act = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool)(self.objc.objc_msgSend)
             f_act(ns_app, sel_activate, True)
-        except Exception as e:
-            print(f"Error activating macOS app: {e}")
+        except Exception:
+            pass
 
     def notification(self, w, title, message, icon=None):
         import subprocess
-        # Basic notification via AppleScript
         script = f'display notification "{message}" with title "{title}"'
         try:
             subprocess.Popen(['osascript', '-e', script])
         except Exception:
             pass
 
-    # --- File Dialogs Support via AppleScript (Simple & Robust) ---
+    # --- File Dialogs Support via AppleScript ---
     def _run_osascript_dialog(self, script):
         import subprocess
         try:
             proc = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
             if proc.returncode == 0:
-                # AppleScript returns POSIX path "Macintosh HD:Users:..." sometimes or standard path depending on modifier
-                # "POSIX path of (choose file ...)" returns /Users/...
                 return proc.stdout.strip()
             return None
         except Exception:
             return None
 
     def open_file_dialog(self, w, title, default_path=None, file_types=None):
-        # choose file with prompt "Title" default location alias "Path" of type {"txt"}
         script = f'POSIX path of (choose file with prompt "{title}"'
         if default_path:
             script += f' default location "{default_path}"'
-        # file_types handling skipped for brevity/complexity mapping, easy to add if needed: of type {"txt", "py"}
         script += ')'
         return self._run_osascript_dialog(script)
 
     def save_file_dialog(self, w, title, default_path=None, default_name=None, file_types=None):
-        # choose file name with prompt "Title" default location "Path" default name "Name"
         script = f'POSIX path of (choose file name with prompt "{title}"'
         if default_path:
              script += f' default location "{default_path}"'
@@ -240,7 +208,6 @@ class DarwinImplementation(PlatformInterface):
         return self._run_osascript_dialog(script)
 
     def open_folder_dialog(self, w, title, default_path=None):
-        # choose folder with prompt "Title"
         script = f'POSIX path of (choose folder with prompt "{title}"'
         if default_path:
             script += f' default location "{default_path}"'
@@ -249,9 +216,6 @@ class DarwinImplementation(PlatformInterface):
 
     # --- Taskbar/Dock Progress ---
     def set_taskbar_progress(self, w, state="normal", value=0, max_value=100):
-        """
-        macOS Dock doesn't support progress bars natively, but has Badge Labels.
-        """
         if not self.objc: return
         try:
              cls_app = self.objc.objc_getClass("NSApplication".encode('utf-8'))
@@ -259,16 +223,12 @@ class DarwinImplementation(PlatformInterface):
              ns_app = self.objc.objc_msgSend(cls_app, sel_shared)
              
              sel_dock = self.objc.sel_registerName("dockTile".encode('utf-8'))
-             # (id)dockTile
              f_dock = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(self.objc.objc_msgSend)
              dock_tile = f_dock(ns_app, sel_dock)
              
              sel_set_badge = self.objc.sel_registerName("setBadgeLabel:".encode('utf-8'))
-             
-             # setBadgeLabel:(NSString*)
              f_set = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(self.objc.objc_msgSend)
              
-             # Helpers from init (duplicated here for scope safety or move to class method)
              def get_class(name): return self.objc.objc_getClass(name.encode('utf-8'))
              def str_to_nsstring(s):
                 cls = get_class("NSString")
@@ -277,47 +237,34 @@ class DarwinImplementation(PlatformInterface):
                 return f(cls, sel, s.encode('utf-8'))
             
              badge_text = None
-             if state == "none":
-                 badge_text = None
+             if state in ("normal", "error", "paused") and max_value > 0:
+                 pct = int((value / max_value) * 100)
+                 badge_text = str_to_nsstring(f"{pct}%")
              elif state == "indeterminate":
                  badge_text = str_to_nsstring("...")
-             elif state in ("normal", "error", "paused"):
-                 pct = int((value / max_value) * 100) if max_value > 0 else 0
-                 badge_text = str_to_nsstring(f"{pct}%")
              
-             # If None, we pass 0/None to clear
              f_set(dock_tile, sel_set_badge, badge_text)
              
-             # [dockTile display]
              sel_display = self.objc.sel_registerName("display".encode('utf-8'))
              self.objc.objc_msgSend(dock_tile, sel_display)
              
-        except Exception as e:
-            # print(f"Error setting dock badge: {e}")
+        except Exception:
             pass
 
     def set_window_icon(self, w, icon_path):
-        """
-        Sets the application icon (Dock tile) on macOS.
-        """
         if not self.objc or not icon_path: return
         try:
-             # NSImage alloc initWithContentsOfFile
              cls_image = self.objc.objc_getClass("NSImage".encode('utf-8'))
              sel_alloc = self.objc.sel_registerName("alloc".encode('utf-8'))
              sel_init_file = self.objc.sel_registerName("initWithContentsOfFile:".encode('utf-8'))
              
-             # Helpers
              def str_to_nsstring(s):
                 cls = self.objc.objc_getClass("NSString".encode('utf-8'))
                 sel = self.objc.sel_registerName("stringWithUTF8String:".encode('utf-8'))
                 f = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_char_p)(self.objc.objc_msgSend)
                 return f(cls, sel, s.encode('utf-8'))
              
-             # img = [NSImage alloc]
              img_alloc = self.objc.objc_msgSend(cls_image, sel_alloc)
-             
-             # [img initWithContentsOfFile:path]
              ns_path = str_to_nsstring(icon_path)
              f_init = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(self.objc.objc_msgSend)
              ns_image = f_init(img_alloc, sel_init_file, ns_path)
@@ -330,22 +277,17 @@ class DarwinImplementation(PlatformInterface):
                  sel_set_icon = self.objc.sel_registerName("setApplicationIconImage:".encode('utf-8'))
                  f_set = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(self.objc.objc_msgSend)
                  f_set(ns_app, sel_set_icon, ns_image)
-                 
-        except Exception as e:
-             # print(f"Error setting macOS icon: {e}")
+        except Exception:
              pass
 
     def set_app_id(self, app_id):
-        # Best effort process naming
         if not self.objc: return
         try:
             cls_proc = self.objc.objc_getClass("NSProcessInfo".encode('utf-8'))
             sel_info = self.objc.sel_registerName("processInfo".encode('utf-8'))
             proc_info = self.objc.objc_msgSend(cls_proc, sel_info)
-            
             sel_set_name = self.objc.sel_registerName("setProcessName:".encode('utf-8'))
             
-            # Helper
             def str_to_nsstring(s):
                 cls = self.objc.objc_getClass("NSString".encode('utf-8'))
                 sel = self.objc.sel_registerName("stringWithUTF8String:".encode('utf-8'))
@@ -361,7 +303,6 @@ class DarwinImplementation(PlatformInterface):
     def set_launch_on_boot(self, app_name, exe_path, enable=True):
         import os
         import shlex
-        
         home = os.path.expanduser('~')
         launch_agents = os.path.join(home, 'Library/LaunchAgents')
         plist_file = os.path.join(launch_agents, f"com.{app_name.lower()}.startup.plist")
@@ -369,14 +310,8 @@ class DarwinImplementation(PlatformInterface):
         if enable:
             try:
                 os.makedirs(launch_agents, exist_ok=True)
-                
-                # Parse the command string to argument list
-                # Remove quotes if they wrap the whole path unnecessarily, but shlex handles it better.
                 args = shlex.split(exe_path)
-                
-                # Build XML Array
                 array_str = "\n".join([f"    <string>{a}</string>" for a in args])
-                
                 content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">

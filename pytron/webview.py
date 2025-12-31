@@ -34,29 +34,15 @@ class Webview:
         self.config = config
         self.logger = logging.getLogger("Pytron.Webview")
         
-        # ------------------------------------------------
-        # ENGINE SELECTION (Native or PySide6)
-        # ------------------------------------------------
-        engine_name = os.environ.get("PYTRON_ENGINE", "webview2")
-        
         self.thread_pool = __import__('concurrent.futures').futures.ThreadPoolExecutor(max_workers=5)
         self._gc_protector = deque(maxlen=50)      
         self._bound_functions = {} 
         
         # ------------------------------------------------
-        # ENGINE SELECTION
+        # NATIVE ENGINE INITIALIZATION
         # ------------------------------------------------
-        self.is_pyside = False
-        if engine_name == "pyside6":
-            from .pyside_engine import PySideEngine
-            self.logger.info("Using PySide6 Engine")
-            self.is_pyside = True
-            # Pass bound functions dict reference so it can be updated
-            self.pyside = PySideEngine(config, self._bound_functions)
-            self.w = None
-        else:
-            self.w = lib.webview_create(int(config.get("debug", False)), None)
-            self._cb = c_dispatch_handler
+        self.w = lib.webview_create(int(config.get("debug", False)), None)
+        self._cb = c_dispatch_handler
             
         # Default Bindings
         self.bind("pytron_minimize", lambda: self.minimize(), run_in_thread=False)
@@ -97,43 +83,48 @@ class Webview:
         if not config.get("default_context_menu", True):
             init_js += "\nwindow.addEventListener('contextmenu', e => e.preventDefault());"
         
-        # Init Only for Native
-        if not self.is_pyside:
-             lib.webview_init(self.w, init_js.encode('utf-8'))
-        else:
-             # PySide engine handles its own init in constructor/later
-             pass
+        lib.webview_init(self.w, init_js.encode('utf-8'))
         
         
         CURRENT_PLATFORM = platform.system()
         
-        # Initialize Platform Specifics (Only if not PySide, or if PySide needs them?)
-        # PySide handles most windowing things, but we might keep platform for specific utils
-        if not self.is_pyside:
-            if IS_ANDROID:
-                self._platform = PlatformInterface()
-            elif CURRENT_PLATFORM == "Windows":
+        # Initialize Platform Specifics
+        if IS_ANDROID:
+            self._platform = PlatformInterface()
+            # Android note: Custom schemes usually require Manifest modification or WebViewClient in Java.
+            # We skip this for now or need to send intent.
+            self._served_data = {} 
+        
+        else: # Desktop Platforms (Windows, Linux, macOS)
+            # Define Handler once
+            self._served_data = {}
+            def _scheme_request_handler(url):
+                if not url.startswith("pytron://"): return None, None
+                parts = url.replace("pytron://", "").split("/", 1)
+                key = parts[0]
+                if key in self._served_data:
+                    return self._served_data[key]
+                return None, None
+
+            if CURRENT_PLATFORM == "Windows":
                 self._platform = WindowsImplementation()
+                self._platform.register_pytron_scheme(self.w, _scheme_request_handler)
+                
             elif CURRENT_PLATFORM == "Linux":
                 self._platform = LinuxImplementation()
-                # Attempt to fix file:// access via native settings hack
-                self._platform.register_pytron_scheme(self.w, None) 
+                self._platform.register_pytron_scheme(self.w, _scheme_request_handler)
+                
             elif CURRENT_PLATFORM == "Darwin":
                 self._platform = DarwinImplementation()
-                self._platform.register_pytron_scheme(self.w, None)
+                self._platform.register_pytron_scheme(self.w, _scheme_request_handler)
             else:
-                self.logger.warning(f"Minimal support for {CURRENT_PLATFORM}. Window controls may not work.")
+                self.logger.warning(f"Minimal support for {CURRENT_PLATFORM}.")
                 self._platform = PlatformInterface()
-        else:
-             # Placeholder for pyside platform if needed
-             self._platform = PlatformInterface()
              
         self.normalize_path(config)    
         
         self.loop = asyncio.new_event_loop()
         self.frameless=config.get("frameless", False)
-        # Frameless logic for PySide is different (setWindowFlags)
-        # We will delegate later
         
         def start_loop():
             asyncio.set_event_loop(self.loop)
@@ -142,14 +133,12 @@ class Webview:
         t.start()
         
         # Setters
-        if not self.is_pyside:
-             self.set_title(config.get("title", "Pytron App"))
-             width, height = config.get("dimensions", [800, 600])
-             self.set_size(width, height)
-             if "icon" in config:
-                self.set_icon(config["icon"])
+        self.set_title(config.get("title", "Pytron App"))
+        width, height = config.get("dimensions", [800, 600])
+        self.set_size(width, height)
+        if "icon" in config:
+           self.set_icon(config["icon"])
         
-        # Apply frameless independent of engine (both support it now)
         if self.frameless:
              self.make_frameless()
         
@@ -157,23 +146,13 @@ class Webview:
             self.navigate(config["url"])
             
     def _return_result(self, seq, status, result_json_str):
-        if self.is_pyside:
-             self.pyside.resolve(seq, status, result_json_str) 
-        else:
-             lib.webview_return(self.w, seq, status, result_json_str.encode('utf-8'))
+        lib.webview_return(self.w, seq, status, result_json_str.encode('utf-8'))
     
     def minimize(self):
-        if self.is_pyside:
-            self.pyside.view.showMinimized()
-        else:
-            self._platform.minimize(self.w)
+        self._platform.minimize(self.w)
 
     def set_bounds(self, x, y, width, height):
-        if self.is_pyside:
-            self.pyside.view.move(int(x), int(y))
-            self.pyside.view.resize(int(width), int(height))
-        else:
-            self._platform.set_bounds(self.w, x, y, width, height)
+        self._platform.set_bounds(self.w, x, y, width, height)
 
     def close(self, force=False):
         # Check for 'close_to_tray' setting
@@ -181,57 +160,28 @@ class Webview:
             self.hide()
             return
 
-        if self.is_pyside:
-            self.pyside.view.close()
-        else:
-            self._platform.close(self.w)
+        self._platform.close(self.w)
 
     def toggle_maximize(self):
-        if self.is_pyside:
-            if self.pyside.view.isMaximized():
-                self.pyside.view.showNormal()
-                return False
-            else:
-                self.pyside.view.showMaximized()
-                return True
-        else:
-            return self._platform.toggle_maximize(self.w)
+        return self._platform.toggle_maximize(self.w)
 
     def make_frameless(self):
-        if self.is_pyside:
-             self.pyside.make_frameless()
-        else:
-             self._platform.make_frameless(self.w)
+        self._platform.make_frameless(self.w)
 
     def start_drag(self):
-        if self.is_pyside:
-             self.pyside.start_drag()
-        else:
-             self._platform.start_drag(self.w)
+        self._platform.start_drag(self.w)
 
     def set_title(self, title):
-        if self.is_pyside:
-            self.pyside.set_title(title)
-        else:
-            lib.webview_set_title(self.w, title.encode("utf-8"))
+        lib.webview_set_title(self.w, title.encode("utf-8"))
 
     def set_size(self, w, h):
-        if self.is_pyside:
-            self.pyside.set_size(w, h)
-        else:
-            lib.webview_set_size(self.w, w, h, 0)
+        lib.webview_set_size(self.w, w, h, 0)
     
     def hide(self):
-        if self.is_pyside:
-             self.pyside.view.hide()
-        else:
-             self._platform.hide(self.w)
+        self._platform.hide(self.w)
 
     def show(self):
-        if self.is_pyside:
-             self.pyside.view.show()
-        else:
-             self._platform.show(self.w)
+        self._platform.show(self.w)
 
     def system_notification(self, title, message, icon=None):
         if not icon and self.config:
@@ -266,17 +216,12 @@ class Webview:
         return self._platform.message_box(self.w, title, message, style)
 
     def navigate(self, url):
-        if self.is_pyside:
-            self.pyside.load_url(url)
-        else:
-            lib.webview_navigate(self.w, url.encode("utf-8"))
+        lib.webview_navigate(self.w, url.encode("utf-8"))
 
     def start(self):
-        if self.is_pyside:
-            self.pyside.run()
-        else:
-            lib.webview_run(self.w)
-            lib.webview_destroy(self.w)
+        lib.webview_run(self.w)
+        lib.webview_destroy(self.w)
+        
     #-------------------------------------------------------------------
     # Safe JS -> Python Binding
     #-------------------------------------------------------------------
@@ -347,29 +292,16 @@ class Webview:
                         error_msg = json.dumps(str(e))
                         self._return_result(seq, 1, error_msg)
                 
-                if run_in_thread and not self.is_pyside: # PySide requires thread safety logic? 
-                     # Actually pyside signal dispatching handles some, but running long tasks 
-                     # in main thread blocks UI. Using thread_pool is good.
+                if run_in_thread: 
+                     # Run in thread pool 
                      self.thread_pool.submit(_sync_runner)
-                elif self.is_pyside:
-                     # For PySide, if run_in_thread is True, use pool.
-                     if run_in_thread:
-                         self.thread_pool.submit(_sync_runner)
-                     else:
-                         _sync_runner()
                 else:
                      # Run immediately on Main Thread (Required for Window Controls like Drag)
                      _sync_runner()
 
-        if self.is_pyside:
-             # We just store the callback wrapper. PySideEngine will call it.
-             self._bound_functions[name] = _callback
-             # Register the JS wrapper
-             self.pyside.register_binding(name)
-        else:
-             c_func = BindCallback(_callback)
-             self._bound_functions[name] = c_func
-             lib.webview_bind(self.w, name.encode('utf-8'), c_func, None)
+        c_func = BindCallback(_callback)
+        self._bound_functions[name] = c_func
+        lib.webview_bind(self.w, name.encode('utf-8'), c_func, None)
 
     def _report_error(self, error_data):
         """
@@ -412,10 +344,6 @@ class Webview:
         })
 
     def eval(self, js_code):
-        if self.is_pyside:
-             self.pyside.eval_js(js_code)
-             return
-
         def _thread_send():
             js_buf = ctypes.create_string_buffer(js_code.encode("utf-8"))
             self._gc_protector.append(js_buf)
@@ -427,6 +355,18 @@ class Webview:
                 ctypes.cast(js_buf, ctypes.c_void_p)
             )
         threading.Thread(target=_thread_send, daemon=True).start()
+
+    def serve_data(self, key, data, mime_type="application/octet-stream"):
+        """
+        Serves binary data via pytron://<key> for high-performance IPC.
+        Data is stored in memory and served via the registered custom scheme handler (O(1)).
+        """
+        if hasattr(self, '_served_data'):
+            self._served_data[key] = (data, mime_type)
+            self.logger.debug(f"Serving data at pytron://{key} ({len(data)} bytes, {mime_type})")
+        else:
+            self.logger.warning("serve_data is not supported on this platform/engine configuration.")
+
     def expose(self, entity):
         if callable(entity) and not isinstance(entity, type):
             self.bind(entity.__name__, entity)
@@ -462,7 +402,7 @@ class Webview:
                  meipass_path = pathlib.Path(sys._MEIPASS) / path_obj
                  if meipass_path.exists():
                      path_obj = meipass_path
-
+ 
             # Check exe dir (onedir) - only if we haven't found it in MEIPASS
             if not path_obj.exists() or path_obj == pathlib.Path(raw_url):
                  exe_dir = pathlib.Path(sys.executable).parent
@@ -475,7 +415,7 @@ class Webview:
         if not path_obj.exists():
             self.logger.error(f"HTML file not found at: {path_obj}")
             raise ResourceNotFoundError(f"Pytron Error: HTML file not found at: {path_obj}")
-
+ 
         # Default fallback
         uri = path_obj.as_uri()
         config["url"] = uri

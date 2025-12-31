@@ -164,6 +164,7 @@ def build_windows_installer(out_name: str, script_dir: Path, app_icon: str | Non
     # Pass icon to NSIS if available
     if app_icon:
         abs_icon = Path(app_icon).resolve()
+        # Wrap in quotes in case of spaces
         cmd_nsis.append(f'/DMUI_ICON={abs_icon}')
         cmd_nsis.append(f'/DMUI_UNICON={abs_icon}')    
     # NSIS expects switches (like /V4) before the script filename; place verbosity
@@ -437,13 +438,15 @@ def cmd_package(args: argparse.Namespace) -> int:
         script_path = 'app.py'
 
     script = Path(script_path)
+    # Resolve script path early for reliable relative lookups
+    script = script.resolve()
     if not script.exists():
         log(f"Script not found: {script}", style="error")
         return 1
 
     console.print(Rule("[bold cyan]Pytron Builder"))
     
-    requested_engine = 'pyside6' if getattr(args, 'pyside6', False) else getattr(args, 'engine', None)
+    requested_engine = getattr(args, 'engine', None)
     dist_dir = 'dist'
     
     progress = get_progress()
@@ -503,6 +506,8 @@ def cmd_package(args: argparse.Namespace) -> int:
             console.print(Rule("[bold green]Success"))
             log(f"App packaged successfully: dist/{out_name}", style="bold green")
         return ret_code
+
+
 
     out_name = args.name
     if not out_name:
@@ -646,6 +651,154 @@ def cmd_package(args: argparse.Namespace) -> int:
         except Exception as e:
             log(f"Warning: failed to auto-include project assets: {e}", style="warning")
 
+    # --- Nuitka Compilation Logic ---
+    if getattr(args, 'nuitka', False):
+        log("Packaging using Nuitka (Native Compilation)...", style="info")
+        log(f"Debug: Nuitka block entered. Script: {script}", style="dim")
+        
+        # Check for Nuitka
+        if not shutil.which('nuitka') and not get_venv_site_packages(get_python_executable()).joinpath('nuitka').exists():
+             log("Nuitka not found. Installing...", style="warning")
+             subprocess.check_call([get_python_executable(), '-m', 'pip', 'install', 'nuitka', 'zstandard'])
+        
+        # NOTE: Using 'out_name' calculated earlier in the function (which is sanitized from settings.get('title'))
+        log(f"Debug: Resolving output name: {out_name}", style="dim")
+        
+        # Basic Nuitka Command
+        cmd = [
+            get_python_executable(), '-m', 'nuitka',
+            '--standalone',
+            '--onefile', 
+            '--assume-yes-for-downloads',
+            f'--output-filename={out_name}.exe' if sys.platform=='win32' else f'--output-filename={out_name}.bin',
+            '--output-dir=dist',
+        ]
+        
+        # Metadata & Versioning
+        # Nuitka allows embedding this info directly into the EXE
+        title = settings.get('title') or args.name or script.stem.capitalize()
+        version = settings.get('version', '1.0.0')
+        author = settings.get('author') or settings.get('company') or "Pytron User"
+        desc = settings.get('description', title)
+        copyright_text = settings.get('copyright', f'Copyright © {author}')
+        
+        cmd.extend([
+            f'--company-name={author}',
+            f'--product-name={title}',
+            f'--file-version={version}',
+            f'--product-version={version}',
+            f'--file-description={desc}',
+            f'--copyright={copyright_text}',
+        ])
+
+        # Add Icon
+        # Use app_icon (resolved) instead of args.icon (raw CLI arg)
+        if app_icon:
+             if sys.platform == 'win32':
+                 cmd.append(f'--windows-icon-from-ico={app_icon}')
+             elif sys.platform == 'linux':
+                 cmd.append(f'--linux-icon={app_icon}')
+        
+        # Hiding Console
+        # Nuitka defaults to visible console. We now default to HIDDEN.
+        # User must pass --console to see it.
+        if getattr(args, 'console', False):
+             if sys.platform == 'win32':
+                 cmd.append('--windows-console-mode=force')
+        else:
+            if sys.platform == 'win32':
+                cmd.append('--windows-console-mode=disable')
+        
+        # Include Webview DLLs (Critical for runtime)
+        dll_name = 'webview.dll'
+        if sys.platform == 'linux':
+             dll_name = 'libwebview.so'
+        elif sys.platform == 'darwin':
+             dll_name = 'libwebview_arm64.dylib' if platform.machine() == 'arm64' else 'libwebview_x64.dylib'
+             
+        dll_src = os.path.join(package_dir, "pytron", "dependancies", dll_name)
+        if os.path.exists(dll_src):
+             # Ensure it is placed where bindings.py expects it (pytron/dependancies/)
+             cmd.append(f'--include-data-file={dll_src}=pytron/dependancies/{dll_name}')
+             log(f"Debug: Inclusion of DLL: {dll_src}", style="dim")
+        else:
+             log(f"Warning: Could not find webview binary at {dll_src}", style="warning")
+        
+        # Process --add-data (gathered earlier)
+        # Format in add_data is "src;dest" (win) or "src:dest"
+        for item in add_data:
+             if os.pathsep in item:
+                 src, dst = item.split(os.pathsep, 1) # Split only on first occurrence
+                 # Nuitka expects src=dst
+                 # If src is dir, use --include-data-dir
+                 if os.path.isdir(src):
+                     cmd.append(f'--include-data-dir={src}={dst}')
+                 else:
+                     # Fix for Nuitka: dst cannot be just '.'
+                     if dst == '.':
+                         dst = os.path.basename(src)
+                     cmd.append(f'--include-data-file={src}={dst}')
+        
+        # Engine Plugins
+        requested_engine = getattr(args, 'engine', None)
+        # PySide6 plugin enablement removed.
+             
+        # Run It
+        cmd.append(str(script))
+        log(f"Running Nuitka: {' '.join(cmd)}", style="dim")
+        
+        ret_code = run_command_with_output(cmd, style="dim")
+        
+        if ret_code == 0:
+            if args.installer:
+                 # Move the onefile binary to a folder structure for Installer
+                 target_dir = Path('dist') / out_name
+                 target_dir.mkdir(exist_ok=True, parents=True)
+                 
+                 src_exe = Path('dist') / (f"{out_name}.exe" if sys.platform=='win32' else f"{out_name}.bin")
+                 dst_exe = target_dir / (f"{out_name}.exe" if sys.platform=='win32' else f"{out_name}.exe") 
+                 
+                 if src_exe.exists():
+                     if dst_exe.exists(): os.remove(dst_exe)
+                     shutil.move(str(src_exe), str(dst_exe))
+                 
+                 # Manual Side-Load: Copy settings.json to output dir
+                 # Nuitka bundling is tricky, side-loading is safer and allows user config.
+                 src_settings = script.parent / 'settings.json'
+                 if src_settings.exists():
+                     shutil.copy(str(src_settings), str(target_dir / 'settings.json'))
+                     shutil.copy(str(src_settings), str(target_dir / 'settings.json'))
+                     log("Side-loaded settings.json to output directory", style="dim")
+                 
+                 # Side-Load Icon
+                 if app_icon and os.path.exists(app_icon):
+                     try:
+                        shutil.copy(app_icon, str(target_dir / os.path.basename(app_icon)))
+                        log(f"Side-loaded icon: {os.path.basename(app_icon)}", style="dim")
+                     except Exception as e:
+                        log(f"Warning side-loading icon: {e}", style="warning")
+                 
+                 # Side-Load Frontend
+                 # We need to replicate the folder structure (e.g. frontend/dist)
+                 if frontend_dist and frontend_dist.exists():
+                     # We assume 'rel' path from earlier calculation is what we want (e.g. frontend/dist)
+                     # Or just mirror it clearly. Usually relative to script parent.
+                     rel_fe = frontend_dist.relative_to(script.parent)
+                     dest_fe = target_dir / rel_fe
+                     if dest_fe.exists(): shutil.rmtree(dest_fe)
+                     shutil.copytree(frontend_dist, dest_fe)
+                     log(f"Side-loaded frontend assets to {rel_fe}", style="dim")
+                 
+                 # Now run installer
+                 progress.update(task, description="Building Installer...", completed=80)
+                 ret_code = build_installer(out_name, script.parent, args.icon)
+
+        progress.stop()
+        if ret_code == 0:
+             console.print(Rule("[bold green]Success (Nuitka)"))
+             log(f"App packaged successfully (Nuitka)", style="bold green")
+        return ret_code
+
     # --------------------------------------------------
     # Create a .spec file with the UTF-8 bootloader option
     # --------------------------------------------------
@@ -662,49 +815,29 @@ def cmd_package(args: argparse.Namespace) -> int:
         dll_src = os.path.join(package_dir, "pytron", "dependancies", dll_name)
         dll_dest = os.path.join("pytron", "dependancies")
         
-        requested_engine = 'pyside6' if getattr(args, 'pyside6', False) else getattr(args, 'engine', 'webview2')
-        is_native = (requested_engine == 'webview2')
+        requested_engine = getattr(args, 'engine', None)
+        is_native = (requested_engine != 'webview2' and requested_engine != None) == False # i.e. default or webview2
+        
+        # Default to native if nothing specified
+        if not requested_engine: requested_engine = 'webview2'
+
         browser_data = []
         
         makespec_cmd = [
             get_python_executable(), '-m', 'PyInstaller.utils.cliutils.makespec',
             '--name', out_name,
             '--onedir',
-            '--noconsole',
         ]
         
+        if getattr(args, 'console', False):
+            makespec_cmd.append('--console')
+        else:
+            makespec_cmd.append('--noconsole')
+        
         hidden_imports = ['pytron']
-        if requested_engine == 'pyside6':
-             hidden_imports.extend([
-                 'PySide6', 'PySide6.QtCore', 'PySide6.QtGui', 
-                 'PySide6.QtWidgets', 'PySide6.QtWebEngineWidgets', 'PySide6.QtWebEngineCore',
-                 'PySide6.QtWebChannel', 'PySide6.QtNetwork', 'PySide6.QtPrintSupport',
-                 'PySide6.QtQuick', 'PySide6.QtQuickWidgets', 'PySide6.QtQml',
-                 'shiboken6'
-             ])
-             # Optimization: Aggressively exclude massive unused modules
-             # QML, Quick, 3D, Charts, DataVis, Designer, Help, Labs, Multimedia, Positioning, 
-             # RemoteObjects, Scxml, Sensors, SerialPort, Sql, Svg, Test, TextToSpeech, 
-             # UiTools, WebSockets, Xml
-             
-             excludes = [
-                 'PySide6.Qt3DCore', 'PySide6.Qt3DInput', 'PySide6.Qt3DLogic', 
-                 'PySide6.Qt3DRender', 'PySide6.Qt3DExtras', 'PySide6.Qt3DAnimation',
-                 'PySide6.QtCharts', 'PySide6.QtDataVisualization', 
-                 'PySide6.QtDesigner', 'PySide6.QtHelp', 'PySide6.QtLabs',
-                 'PySide6.QtMultimedia', 'PySide6.QtMultimediaWidgets',
-                 'PySide6.QtLocation', 'PySide6.QtPdf', 'PySide6.QtPdfWidgets',
-                 'PySide6.QtRemoteObjects', 'PySide6.QtScxml', 
-                 'PySide6.QtSensors', 'PySide6.QtSerialPort', 'PySide6.QtSerialBus',
-                 'PySide6.QtSql', 'PySide6.QtSvg', 'PySide6.QtSvgWidgets',
-                 'PySide6.QtTest', 'PySide6.QtTextToSpeech', 
-                 'PySide6.QtUiTools', 'PySide6.QtWebSockets', 'PySide6.QtXml',
-                 'PySide6.QtNfc', 'PySide6.QtBluetooth', 'PySide6.QtGamepad',
-                 'PySide6.QtVirtualKeyboard', 'PySide6.QtShaderTools',
-             ]
-             
-             for exc in excludes:
-                 makespec_cmd.append(f'--exclude-module={exc}')
+        
+        # PySide6 logic removed.
+        # If user really needs hidden imports, they can use spec files.
 
              # Force OS-specific libs if needed, but PyInstaller usually handles it via hooks
         
@@ -762,6 +895,24 @@ def cmd_package(args: argparse.Namespace) -> int:
         for item in add_data:
             makespec_cmd.extend(['--add-data', item])
 
+        # Force Package logic (apply --collect-all for libraries specified in settings.json)
+        force_pkgs = settings.get('force-package', [])
+        # Handle string input just in case user put "lib1,lib2" instead of list
+        if isinstance(force_pkgs, str): 
+            force_pkgs = [p.strip() for p in force_pkgs.split(',')]
+            
+        for pkg in force_pkgs:
+            if pkg:
+                if '-' in pkg:
+                    log(f"Warning: 'force-package' entry '{pkg}' contains hyphens.", style="error")
+                    log(f"PyInstaller expects the IMPORT name (e.g. 'llama_cpp' not 'llama-cpp-python').", style="error")
+                    log(f"Please update settings.json to avoid build errors.", style="error")
+                    log(f"Ignoring '{pkg}'", style="error")
+                    continue
+                
+                makespec_cmd.append(f'--collect-all={pkg}')
+                log(f"Forcing full collection of package: {pkg}", style="dim")
+
         log(f"Running makespec: {' '.join(makespec_cmd)}", style="dim")
         # subprocess.run(makespec_cmd, check=True) # Old way
         makespec_ret = run_command_with_output(makespec_cmd, style="dim")
@@ -818,95 +969,7 @@ def cmd_package(args: argparse.Namespace) -> int:
             progress.stop()
             return ret_code
 
-        # -------------------------------------------------------------------------
-        # POST-BUILD OPTIMIZATION (PySide6 Specific)
-        # -------------------------------------------------------------------------
-        if requested_engine == 'pyside6':
-            inner_dist = os.path.join(dist_dir, out_name, "_internal")
-            pyside_dir = os.path.join(inner_dist, "PySide6")
-            
-            log("Performing aggressive PySide6 cleanup...", style="dim")
-            
-            if os.path.exists(pyside_dir):
-                # 1. Remove Translations (Qt *.qm files) - huge savings
-                trans_dir = os.path.join(pyside_dir, "translations")
-                if os.path.exists(trans_dir):
-                    shutil.rmtree(trans_dir)
-                    console.print(f"  - Removed translations from {trans_dir}", style="dim")
 
-                # 2. Remove Unused Plugins
-                plugins_dir = os.path.join(pyside_dir, "plugins")
-                if os.path.exists(plugins_dir):
-                    # Keep only: platforms, styles, imageformats, tls
-                    # Remove: iconengines, generic, networkinformation, position, sensors, texttospeech, etc.
-                    
-                    keep = {'platforms', 'styles', 'imageformats', 'tls'}
-                    for p in os.listdir(plugins_dir):
-                        if p not in keep:
-                            p_path = os.path.join(plugins_dir, p)
-                            # 3. Remove QML folder bloat (keep only essentials)
-                qml_dir = os.path.join(pyside_dir, "qml")
-                if os.path.exists(qml_dir):
-                    log("Pruning QML modules...", style="dim")
-                    # We only need core QML engines for WebEngine
-                    keep_qml = {'QtQuick', 'Qt', 'QtCore'} # Minimal requirements
-                    for d in os.listdir(qml_dir):
-                        if d not in keep_qml:
-                            d_path = os.path.join(qml_dir, d)
-                            if os.path.isdir(d_path):
-                                shutil.rmtree(d_path)
-                                console.print(f"  - Removed QML module: {d}", style="dim")
-
-                # 4. Blacklist specific massive DLLs that PyInstaller often misses
-                blacklist = {
-                    'Qt6Pdf.dll', 'Qt6PdfWidgets.dll', 'Qt6VirtualKeyboard.dll',
-                    'Qt6ShaderTools.dll', 'Qt6Quick3D', 'Qt63D'
-                }
-                
-                if os.path.exists(inner_dist):
-                    for f in os.listdir(inner_dist):
-                        for b in blacklist:
-                            if f.startswith(b):
-                                try:
-                                    os.remove(os.path.join(inner_dist, f))
-                                    console.print(f"  - Blacklist Pruned: {f}", style="dim")
-                                except Exception:
-                                    pass
-                
-                # 5. Prune Resources folder (.debug and redundant .pak)
-                res_dir = os.path.join(pyside_dir, "resources")
-                if not os.path.exists(res_dir):
-                     # Sometimes it's in a different spot depending on PySide version
-                     res_dir = os.path.join(inner_dist, "resources")
-                
-                if os.path.exists(res_dir):
-                    log("Pruning Resources folder...", style="dim")
-                    for f in os.listdir(res_dir):
-                        # Always remove .debug files
-                        if f.endswith('.debug'):
-                            try:
-                                os.remove(os.path.join(res_dir, f))
-                                console.print(f"  - Removed debug file: {f}", style="dim")
-                            except Exception: pass
-                    
-                    # Handle locales folder inside resources (usually full of .pak files)
-                    locales_dir = os.path.join(res_dir, "qtwebengine_locales")
-                    if os.path.exists(locales_dir):
-                        log("Pruning locales (keeping en-US only)...", style="dim")
-                        for f in os.listdir(locales_dir):
-                            if f.endswith('.pak') and f != 'en-US.pak':
-                                try:
-                                    os.remove(os.path.join(locales_dir, f))
-                                except Exception: pass
-
-                # 6. Remove PySide6 .pyi and .py source files
-                for root, _, files in os.walk(pyside_dir):
-                    for f in files:
-                        if f.endswith(('.pyi', '.py')):
-                            try:
-                                os.remove(os.path.join(root, f))
-                            except Exception:
-                                pass
 
         # Cleanup
         cleanup_dist(Path('dist') / out_name)
