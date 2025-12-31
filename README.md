@@ -1,10 +1,12 @@
 ![Pytron](https://raw.githubusercontent.com/Ghua8088/pytron/main/pytron-banner.png)
-# Pytron
+# Pytron Kit
 
 [![PyPI Version](https://img.shields.io/pypi/v/pytron-kit.svg)](https://pypi.org/project/pytron-kit/)
 [![GitHub](https://img.shields.io/badge/github-repo-000000?logo=github)](https://github.com/Ghua8088/pytron)
+[![Website](https://img.shields.io/badge/official-website-blue)](https://pytron-kit.github.io/)
+[![Tests](https://github.com/Ghua8088/pytron/actions/workflows/tests.yml/badge.svg)](https://github.com/Ghua8088/pytron/actions)
 
-Pytron is a modern framework for building desktop applications using Python for the backend and web technologies (React, Vite) for the frontend. It combines the power of Python's ecosystem with the rich user interfaces of the web.
+Pytron-kit is a modern framework for building desktop applications using Python for the backend and web technologies (React, Vite) for the frontend. It combines the power of Python's ecosystem with the rich user interfaces of the web.
 
 ## Framework workings
 
@@ -357,6 +359,13 @@ PyInstaller doesn't support true cross-compilation. To build for other platforms
 *   `pytron package`: Build standalone executable.
 *   `pytron workflow init`: Generate GitHub Actions for multi-platform packaging (Windows/Linux/macOS).
 
----
-
 **Happy Coding with Pytron!**
+
+## Repository Health
+- [Roadmap](ROADMAP.md): Our vision and upcoming features.
+- [Contributing](CONTRIBUTING.md): How to get involved in development.
+- [Security Policy](SECURITY.md): How to report vulnerabilities.
+- [Code of Conduct](CODE_OF_CONDUCT.md): Standards for community behavior.
+
+## License
+Pytron is licensed under the [MIT License](LICENSE).
