@@ -105,20 +105,6 @@ def run_pyinstaller_build(args, script, out_name, settings, app_icon, package_di
             makespec_cmd.extend(["--icon", app_icon])
             log(f"Using icon: {app_icon}", style="dim")
 
-        # Splash Screen Support
-        splash_image = settings.get("splash_image")
-        if splash_image:
-            # Check relative to script dir
-            splash_path = script.parent / splash_image
-            if splash_path.exists():
-                makespec_cmd.append(f"--splash={splash_path.resolve()}")
-                log(f"Bundling splash screen: {splash_path}", style="dim")
-            else:
-                log(
-                    f"Warning: configured splash image not found at {splash_path}",
-                    style="warning",
-                )
-
         for item in add_data:
             makespec_cmd.extend(["--add-data", item])
 

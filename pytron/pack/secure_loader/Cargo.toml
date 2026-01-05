@@ -1,0 +1,20 @@
+[package]
+name = "pytron_rust_bootloader"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+libloading = "0.8"
+bsdiff = "0.1"
+aes-gcm = "0.10"
+rfd = "0.14"
+obfstr = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser", "debugapi", "consoleapi", "shellapi", "objbase", "libloaderapi"] }
+
+[build-dependencies]
+embed-resource = "2.4"

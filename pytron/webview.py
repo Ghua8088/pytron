@@ -46,7 +46,14 @@ class Webview:
         # ------------------------------------------------
         # NATIVE ENGINE INITIALIZATION
         # ------------------------------------------------
-        self.w = lib.webview_create(int(config.get("debug", False)), None)
+        shield_ptr = os.environ.get("PYTRON_SHIELD_WINDOW_PTR")
+        if shield_ptr:
+            # Use the window created by the Rust bootloader
+            self.w = ctypes.c_void_p(int(shield_ptr))
+            self.logger.debug(f"Shielded Mode: Attaching to native window {shield_ptr}")
+        else:
+            self.w = lib.webview_create(int(config.get("debug", False)), None)
+            
         self._cb = c_dispatch_handler
 
         # Default Bindings

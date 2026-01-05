@@ -47,6 +47,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     settings_file = target / "settings.json"
     settings_data = {
         "title": target.name,
+        "version": "1.0.0",
         "pytron_version": __version__,
         "frontend_framework": args.template,
         "dimensions": [800, 600],
@@ -56,7 +57,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         "url": dist_path,
         "author": "Your Name",
         "description": "A brief description of your app",
-        "copyright": "Copyright © 2025 Your Name",
+        "copyright": "Copyright © 2026 Your Name",
     }
     settings_file.write_text(json.dumps(settings_data, indent=4))
 

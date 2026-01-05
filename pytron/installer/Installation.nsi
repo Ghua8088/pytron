@@ -80,9 +80,21 @@ Function .onInit
     ReadRegStr $R0 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${NAME}" "UninstallString"
     ${If} $R0 != ""
         StrCpy $IS_UPDATE "1"
+        ReadRegStr $INSTDIR HKLM "Software\${NAME}" "Install_Dir"
+        
+        ; Check if the application is running
+        check_running:
+        ClearErrors
+        FileOpen $0 "$INSTDIR\${MAIN_EXE_NAME}" "a"
+        FileClose $0
+        IfErrors 0 not_running
+
+        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "${NAME} is still running. Please close it before updating." IDRETRY check_running
+        Quit
     ${Else}
         StrCpy $IS_UPDATE "0"
     ${EndIf}
+    not_running:
 FunctionEnd
 
 ; ---------------------
@@ -124,6 +136,23 @@ FunctionEnd
 !insertmacro MUI_UNPAGE_FINISH
 
 !insertmacro MUI_LANGUAGE "English"
+ 
+; ---------------------
+; Uninstaller Initialization
+; ---------------------
+Function un.onInit
+    ; Check if the application is running by trying to open the EXE for writing
+    un.check_running:
+    ClearErrors
+    FileOpen $0 "$INSTDIR\${MAIN_EXE_NAME}" "a"
+    FileClose $0
+    IfErrors 0 un.not_running
+
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "${NAME} is still running. Please close it before uninstalling." IDRETRY un.check_running
+    Quit
+
+    un.not_running:
+FunctionEnd
 
 ; ---------------------
 ; Installation section

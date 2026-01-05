@@ -26,6 +26,10 @@ recursive-include pytron/platforms/android/shell/gradle/wrapper *
 
 # 3. EXCLUDES - The "Block List"
 # Use 'prune' for directories to stop Python from even looking inside them
+prune pytron/pack/secure_loader/src
+exclude pytron/pack/secure_loader/Cargo.toml
+exclude pytron/pack/secure_loader/build_loader.py
+prune pytron/pack/secure_loader/target
 prune pytron/platforms/android/shell/app/build
 prune pytron/platforms/android/shell/.gradle
 prune pytron/platforms/android/shell/app/.cxx
@@ -34,6 +38,11 @@ prune */__pycache__
 prune */.git
 prune */.idea
 prune */venv
+prune */env
+prune pytron/pack/secure_loader/env
+prune build
+prune dist
+prune *.egg-info
 
 # Global exclude for stray files
 global-exclude *.py[cod]

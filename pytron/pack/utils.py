@@ -21,23 +21,12 @@ def cleanup_dist(dist_path: Path):
 
     # Items to remove (names)
     remove_names = {
-        "node_modules",
-        "node.exe",
-        "npm.cmd",
-        "npx.cmd",
-        ".git",
-        ".gitignore",
-        ".vscode",
-        ".idea",
-        "package.json",
-        "package-lock.json",
-        "yarn.lock",
-        "pnpm-lock.yaml",
-        "__pycache__",
-        ".env",
-        "venv",
-        ".venv",
-        "env",
+        "node_modules", "node.exe", "npm.cmd", "npx.cmd", ".git", ".gitignore",
+        ".vscode", ".idea", "package.json", "package-lock.json", "yarn.lock",
+        "pnpm-lock.yaml", "__pycache__", ".env", "venv", ".venv",
+        "python.exe", "pythonw.exe", "tcl86t.dll", "tk86t.dll",
+        "tcl", "tk", "lib2to3", "idle_test", "test", "tests", "unit_test",
+        "include", "tcl8.6", "tk8.6", "msvcrt.dll" # Nuclear Pruning
     }
 
     log(f"Optimizing build directory: {target_path}")

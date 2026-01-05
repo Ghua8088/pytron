@@ -21,6 +21,7 @@ from ..pack.installers import build_installer
 from ..pack.utils import cleanup_dist
 from ..pack.nuitka import run_nuitka_build
 from ..pack.pyinstaller import run_pyinstaller_build
+from ..pack.secure import run_secure_build
 
 def cmd_package(args: argparse.Namespace) -> int:
     script_path = args.script
@@ -256,9 +257,9 @@ def cmd_package(args: argparse.Namespace) -> int:
         add_data.append(f"{frontend_dist}{os.pathsep}{rel_path}")
         log(f"Auto-including frontend assets from {rel_path}", style="dim")
 
-    # 3. Auto-include non-Python files and directories at the project root
-    #    Only if --smart-assets is provided
-    if getattr(args, "smart_assets", False):
+    use_smart_assets = getattr(args, "smart_assets", False)
+
+    if use_smart_assets:
         try:
             smart_assets = get_smart_assets(script_dir, frontend_dist=frontend_dist)
             if smart_assets:
@@ -270,6 +271,12 @@ def cmd_package(args: argparse.Namespace) -> int:
     if getattr(args, "nuitka", False):
         return run_nuitka_build(
             args, script, out_name, settings, app_icon, package_dir, add_data, frontend_dist, progress, task
+        )
+
+    # --- Rust Bootloader (Secure) Logic ---
+    if getattr(args, "secure", False):
+        return run_secure_build(
+            args, script, out_name, settings, app_icon, package_dir, add_data, progress, task
         )
 
     # --- PyInstaller Compilation Logic ---

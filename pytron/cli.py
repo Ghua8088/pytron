@@ -161,6 +161,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use Nuitka compiler instead of PyInstaller (Advanced, secure)",
     )
+    p_pkg.add_argument(
+        "--secure",
+        action="store_true",
+        help="Enable Rust Bootloader (Protects source logic + Passive Evolution)",
+    )
+    p_pkg.add_argument(
+        "--patch-from",
+        help="Generate a binary patch against a previous app.pytron payload",
+    )
     p_pkg.set_defaults(func=cmd_package)
     p_build = sub.add_parser(
         "build-frontend",

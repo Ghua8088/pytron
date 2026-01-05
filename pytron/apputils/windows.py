@@ -12,6 +12,7 @@ class WindowMixin:
                     kwargs["url"] = os.path.join(self.app_root, kwargs["url"])
         window_config = self.config.copy()
         window_config.update(kwargs)
+        window_config["__app__"] = self
         original_url = window_config.get("url")
         window_config["navigate_on_init"] = False
         window = Webview(config=window_config)
@@ -48,15 +49,15 @@ class WindowMixin:
             self.create_window()
 
         if len(self.windows) > 0:
-            try:
-                import pyi_splash
-                if pyi_splash.is_alive():
-                    pyi_splash.close()
-                    self.logger.info("Closed splash screen.")
-            except ImportError:
-                pass
-            except Exception as e:
-                self.logger.debug(f"Error closing splash screen: {e}")
+            # Only attempt to close PyInstaller splash if we are in a PyInstaller-managed environment
+            if sys.platform == "win32" and os.environ.get("_PYI_SPLASH_IPC"):
+                try:
+                    import pyi_splash
+                    if pyi_splash.is_alive():
+                        pyi_splash.close()
+                        self.logger.info("Closed splash screen.")
+                except (ImportError, KeyError, Exception) as e:
+                    self.logger.debug(f"PyInstaller splash not found or failed to close: {e}")
 
             for combo, func in self.shortcuts.items():
                 self.shortcut_manager.register(combo, func)
@@ -83,7 +84,7 @@ class WindowMixin:
 
         if self.config.get("debug", False) and "storage_path" in kwargs:
             path = kwargs["storage_path"]
-            if os.path.isdir(path) and f"_Dev_{os.getpid()}" in path:
+            if os.path.isdir(path):
                 try:
                     shutil.rmtree(path, ignore_errors=True)
                 except Exception:

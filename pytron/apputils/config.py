@@ -2,9 +2,12 @@ import os
 import sys
 import json
 import logging
+import shutil
 from ..utils import get_resource_path
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from ..exceptions import ConfigError
-
+import binascii
+import ctypes
 class ConfigMixin:
     def _setup_logging(self):
         logging.basicConfig(
@@ -107,10 +110,7 @@ class ConfigMixin:
         else:
             base_path = os.path.expanduser("~/.config")
 
-        if self.config.get("debug", False):
-            self.storage_path = os.path.join(base_path, f"{safe_title}_Dev")
-        else:
-            self.storage_path = os.path.join(base_path, safe_title)
+        self.storage_path = os.path.join(base_path, safe_title)
 
         if getattr(sys, "frozen", False):
             self.app_root = os.path.dirname(sys.executable)
