@@ -9,19 +9,32 @@ from ..commands.harvest import generate_nuclear_hooks
 from .installers import build_installer
 from .utils import cleanup_dist
 
-def run_pyinstaller_build(args, script, out_name, settings, app_icon, package_dir, add_data, manifest_path, progress, task, package_context=None):
+
+def run_pyinstaller_build(
+    args,
+    script,
+    out_name,
+    settings,
+    app_icon,
+    package_dir,
+    add_data,
+    manifest_path,
+    progress,
+    task,
+    package_context=None,
+):
     # --------------------------------------------------
     # Create a .spec file with the UTF-8 bootloader option
     # --------------------------------------------------
     try:
         log("Generating spec file...", style="info")
         progress.update(task, description="Generating Spec...", completed=30)
-        
+
         # Merge context if provided
         hidden_imports = ["pytron"]
         binaries = []
         extra_makespec_args = []
-        
+
         if package_context:
             hidden_imports.extend(package_context.get("hidden_imports", []))
             binaries.extend(package_context.get("binaries", []))
@@ -87,18 +100,21 @@ def run_pyinstaller_build(args, script, out_name, settings, app_icon, package_di
                 makespec_cmd.extend(["--splash", str(possible_splash)])
                 if "pyi_splash" not in hidden_imports:
                     hidden_imports.append("pyi_splash")
-                
+
                 # IMPORTANT: PyInstaller splash requires Tcl/Tk DLLs.
                 # If they were excluded or not collected, the splash will fail with a DLL error.
                 makespec_cmd.append("--collect-all=tkinter")
-                
-                log(f"Injected splash screen: {splash_image} (Ensuring Tcl/Tk dependencies)", style="success")
+
+                log(
+                    f"Injected splash screen: {splash_image} (Ensuring Tcl/Tk dependencies)",
+                    style="success",
+                )
             else:
                 log(f"Warning: Splash image not found: {splash_image}", style="warning")
 
         for imp in hidden_imports:
             makespec_cmd.append(f"--hidden-import={imp}")
-        
+
         for bin_pair in binaries:
             makespec_cmd.append(f"--add-binary={bin_pair}")
 
@@ -108,11 +124,11 @@ def run_pyinstaller_build(args, script, out_name, settings, app_icon, package_di
         # Add browser engine to data if not native
         for item in browser_data:
             makespec_cmd.extend(["--add-data", item])
-            
+
         # Add plugin-requested data if any
         for item in add_data:
             makespec_cmd.extend(["--add-data", item])
-            
+
         # Add extra args from plugins
         makespec_cmd.extend(extra_makespec_args)
 

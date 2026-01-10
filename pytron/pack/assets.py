@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from ..console import log
 
+
 def get_smart_assets(script_dir: Path, frontend_dist: Path | None = None):
     """Recursively collect project assets to include with PyInstaller.
 

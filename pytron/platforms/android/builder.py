@@ -54,15 +54,15 @@ class AndroidBuilder:
     def _fetch_prebuilt_wheel(self, package, output_dir):
         """Attempts to download a pre-built binary wheel for Android."""
         print(f"[AndroidBuilder] Searching for pre-built wheels for {package}...")
-        
+
         # Common Android platform tags
         platforms = []
         if self.arch == "aarch64":
             platforms = [
-                "android_24_aarch64", 
-                "android_21_aarch64", 
-                "android_24_arm64_v8a", 
-                "android_21_arm64_v8a"
+                "android_24_aarch64",
+                "android_21_aarch64",
+                "android_24_arm64_v8a",
+                "android_21_arm64_v8a",
             ]
         elif self.arch == "x86_64":
             platforms = ["android_24_x86_64", "android_21_x86_64"]
@@ -75,27 +75,39 @@ class AndroidBuilder:
         for platform in platforms:
             try:
                 cmd = [
-                    sys.executable, "-m", "pip", "download",
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "download",
                     package,
-                    "--dest", output_dir,
-                    "--platform", platform,
-                    "--only-binary", ":all:",
+                    "--dest",
+                    output_dir,
+                    "--platform",
+                    platform,
+                    "--only-binary",
+                    ":all:",
                     "--no-deps",
                 ]
                 for url in extra_indexes:
                     cmd.extend(["--extra-index-url", url])
-                
+
                 # Run quietly
-                subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                
+                subprocess.check_call(
+                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+
                 # Check if we actually got a wheel
-                downloaded = [f for f in os.listdir(output_dir) if f.lower().startswith(package.lower()) and f.endswith(".whl")]
+                downloaded = [
+                    f
+                    for f in os.listdir(output_dir)
+                    if f.lower().startswith(package.lower()) and f.endswith(".whl")
+                ]
                 if downloaded:
                     print(f"[AndroidBuilder] Found pre-built wheel: {downloaded[0]}")
                     return True
             except subprocess.CalledProcessError:
                 continue
-        
+
         return False
 
     def _ensure_tools(self):
@@ -115,7 +127,9 @@ class AndroidBuilder:
         4. Patch the .so files to find dependencies in the flat namespace.
         """
         if lief is None:
-            print("[AndroidBuilder] Warning: LIEF not installed. Skipping dependency flattening/repair.")
+            print(
+                "[AndroidBuilder] Warning: LIEF not installed. Skipping dependency flattening/repair."
+            )
             return False
 
         import zipfile
@@ -329,8 +343,10 @@ class AndroidBuilder:
         # Using 3.11 as a safe default if 3.14 is not available, or let it fail gracefully
         # BeeWare usually has 3.8-3.12 support.
         if sys.version_info.minor > 12:
-             print(f"[AndroidBuilder] Warning: Python {py_ver} might not be supported by BeeWare yet. Trying 3.12...")
-             py_ver = "3.12"
+            print(
+                f"[AndroidBuilder] Warning: Python {py_ver} might not be supported by BeeWare yet. Trying 3.12..."
+            )
+            py_ver = "3.12"
 
         url = f"https://github.com/beeware/Python-Android-support/releases/download/{py_ver}-b1/Python-{py_ver}-Android-support.b1.zip"
         zip_path = os.path.join(cache_dir, "python-android-support.zip")

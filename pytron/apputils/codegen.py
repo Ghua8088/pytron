@@ -8,10 +8,12 @@ try:
 except ImportError:
     pydantic = None
 
+
 class CodegenMixin:
     """
     Mixin class to handle TypeScript generation.
     """
+
     def generate_types(self, output_path="frontend/src/pytron.d.ts"):
         """
         Generates TypeScript definitions for all exposed functions.

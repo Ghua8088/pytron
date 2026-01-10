@@ -4,6 +4,7 @@ import ctypes
 from . import libs
 from .utils import get_class, str_to_nsstring
 
+
 def message_box(w, title, message, style=0):
     # Use osascript for native-look dialogs
     script = ""
@@ -24,12 +25,14 @@ def message_box(w, title, message, style=0):
     except Exception:
         return 6
 
+
 def notification(w, title, message, icon=None):
     script = f'display notification "{message}" with title "{title}"'
     try:
         subprocess.Popen(["osascript", "-e", script])
     except Exception:
         pass
+
 
 def _run_osascript_dialog(script):
     try:
@@ -42,12 +45,14 @@ def _run_osascript_dialog(script):
     except Exception:
         return None
 
+
 def open_file_dialog(w, title, default_path=None, file_types=None):
     script = f'POSIX path of (choose file with prompt "{title}"'
     if default_path:
         script += f' default location "{default_path}"'
     script += ")"
     return _run_osascript_dialog(script)
+
 
 def save_file_dialog(w, title, default_path=None, default_name=None, file_types=None):
     script = f'POSIX path of (choose file name with prompt "{title}"'
@@ -58,12 +63,14 @@ def save_file_dialog(w, title, default_path=None, default_name=None, file_types=
     script += ")"
     return _run_osascript_dialog(script)
 
+
 def open_folder_dialog(w, title, default_path=None):
     script = f'POSIX path of (choose folder with prompt "{title}"'
     if default_path:
         script += f' default location "{default_path}"'
     script += ")"
     return _run_osascript_dialog(script)
+
 
 def set_app_id(app_id):
     if not libs.objc:
@@ -82,14 +89,13 @@ def set_app_id(app_id):
     except Exception:
         pass
 
+
 def set_launch_on_boot(app_name, exe_path, enable=True):
     import shlex
 
     home = os.path.expanduser("~")
     launch_agents = os.path.join(home, "Library/LaunchAgents")
-    plist_file = os.path.join(
-        launch_agents, f"com.{app_name.lower()}.startup.plist"
-    )
+    plist_file = os.path.join(launch_agents, f"com.{app_name.lower()}.startup.plist")
 
     if enable:
         try:
@@ -126,6 +132,7 @@ def set_launch_on_boot(app_name, exe_path, enable=True):
             print(f"[Pytron] Failed to disable launch agent on macOS: {e}")
             return False
 
+
 def set_taskbar_progress(w, state="normal", value=0, max_value=100):
     if not libs.objc:
         return
@@ -135,9 +142,9 @@ def set_taskbar_progress(w, state="normal", value=0, max_value=100):
         ns_app = libs.objc.objc_msgSend(cls_app, sel_shared)
 
         sel_dock = libs.objc.sel_registerName("dockTile".encode("utf-8"))
-        f_dock = ctypes.CFUNCTYPE(
-            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
-        )(libs.objc.objc_msgSend)
+        f_dock = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(
+            libs.objc.objc_msgSend
+        )
         dock_tile = f_dock(ns_app, sel_dock)
 
         sel_set_badge = libs.objc.sel_registerName("setBadgeLabel:".encode("utf-8"))
@@ -160,6 +167,7 @@ def set_taskbar_progress(w, state="normal", value=0, max_value=100):
     except Exception:
         pass
 
+
 def register_protocol(scheme):
     """
     Registers the application to handle a custom URI scheme on macOS.
@@ -168,7 +176,8 @@ def register_protocol(scheme):
     """
     try:
         import sys
-        if getattr(sys, 'frozen', False):
+
+        if getattr(sys, "frozen", False):
             # Try to find the .app bundle path
             exec_path = sys.executable
             if ".app/Contents/MacOS/" in exec_path:
@@ -176,11 +185,15 @@ def register_protocol(scheme):
                 # Use lsregister to refresh the registration
                 lsregister_path = "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
                 if os.path.exists(lsregister_path):
-                    subprocess.run([lsregister_path, "-f", app_path], capture_output=True)
+                    subprocess.run(
+                        [lsregister_path, "-f", app_path], capture_output=True
+                    )
                     return True
-        
+
         # If not bundled or lsregister failed
-        print(f"[Pytron] Warning: For {scheme}:// to work on macOS, the application should be bundled as a .app with the scheme defined in Info.plist.")
+        print(
+            f"[Pytron] Warning: For {scheme}:// to work on macOS, the application should be bundled as a .app with the scheme defined in Info.plist."
+        )
         return False
     except Exception as e:
         print(f"[Pytron] macOS Protocol Registration Error: {e}")

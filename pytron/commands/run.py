@@ -49,7 +49,10 @@ class PytronFilter(DefaultFilter):
         # 2. Frontend specific ignores
         if self.frontend_dir:
             try:
-                if self.frontend_dir in path_obj.parents or self.frontend_dir == path_obj:
+                if (
+                    self.frontend_dir in path_obj.parents
+                    or self.frontend_dir == path_obj
+                ):
                     rel = path_obj.relative_to(self.frontend_dir)
                     # Ignore source and assets to let HMR handle it
                     if any(
@@ -84,7 +87,7 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
         config = get_config()
         provider = config.get("frontend_provider", "npm")
         provider_bin = shutil.which(provider)
-        
+
         if provider_bin:
             pkg_path = frontend_dir / "package.json"
             pkg_data = json.loads(pkg_path.read_text())
@@ -185,7 +188,10 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
                             style="warning",
                         )
 
-                log(f"Starting frontend watcher: {provider} {' '.join(args)}", style="dim")
+                log(
+                    f"Starting frontend watcher: {provider} {' '.join(args)}",
+                    style="dim",
+                )
                 # Use shell=True for Windows compatibility
                 npm_proc = subprocess.Popen(
                     [provider_bin] + args,

@@ -7,6 +7,7 @@ from pathlib import Path
 from ..console import log, run_command_with_output
 from ..commands.helpers import get_python_executable
 
+
 def find_makensis() -> str | None:
     path = shutil.which("makensis")
     if path:
@@ -20,35 +21,40 @@ def find_makensis() -> str | None:
             return p
     return None
 
+
 def build_windows_installer(
     out_name: str, script_dir: Path, app_icon: str | None
 ) -> int:
     log("Building Windows installer (NSIS)...", style="info")
     makensis = find_makensis()
     if not makensis:
-        log("NSIS (makensis) not found. Checking for bundled installer...", style="warning")
-        
+        log(
+            "NSIS (makensis) not found. Checking for bundled installer...",
+            style="warning",
+        )
+
         # Try to find bundled installer in pytron root
         # We need to find package root. Assuming this file is in pytron/pack/
         # So parent.parent is pytron package dir.
         # But we need the root of the repo/install.
         # Let's use import to find package location
         import pytron
+
         if pytron.__file__:
             pkg_root = Path(pytron.__file__).resolve().parent.parent
         else:
-            pkg_root = Path.cwd() # Fallback
+            pkg_root = Path.cwd()  # Fallback
 
         possible_installers = [
             pkg_root / "nsis-setup.exe",
         ]
-        
+
         nsis_setup = None
         for installer in possible_installers:
             if installer.exists():
                 nsis_setup = installer
                 break
-        
+
         if nsis_setup:
             log(f"Found bundled NSIS installer at {nsis_setup}")
             log(
@@ -61,7 +67,10 @@ def build_windows_installer(
                 log("NSIS installer finished. Re-checking for makensis...")
                 makensis = find_makensis()
                 if makensis:
-                    log(f"NSIS successfully installed and found at: {makensis}", style="success")
+                    log(
+                        f"NSIS successfully installed and found at: {makensis}",
+                        style="success",
+                    )
             except Exception as e:
                 log(f"Error running NSIS installer: {e}", style="error")
         else:

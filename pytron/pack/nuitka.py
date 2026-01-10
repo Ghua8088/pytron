@@ -8,9 +8,22 @@ from ..console import log, run_command_with_output, console, Rule
 from ..commands.helpers import get_python_executable, get_venv_site_packages
 from .installers import build_installer
 
-def run_nuitka_build(args, script, out_name, settings, app_icon, package_dir, add_data, frontend_dist, progress, task, package_context=None):
+
+def run_nuitka_build(
+    args,
+    script,
+    out_name,
+    settings,
+    app_icon,
+    package_dir,
+    add_data,
+    frontend_dist,
+    progress,
+    task,
+    package_context=None,
+):
     log("Packaging using Nuitka (Native Compilation)...", style="info")
-    
+
     # Context handling
     extra_plugin_args = []
     if package_context:
@@ -172,9 +185,7 @@ def run_nuitka_build(args, script, out_name, settings, app_icon, package_dir, ad
             # Side-Load Icon
             if app_icon and os.path.exists(app_icon):
                 try:
-                    shutil.copy(
-                        app_icon, str(target_dir / os.path.basename(app_icon))
-                    )
+                    shutil.copy(app_icon, str(target_dir / os.path.basename(app_icon)))
                     log(
                         f"Side-loaded icon: {os.path.basename(app_icon)}",
                         style="dim",

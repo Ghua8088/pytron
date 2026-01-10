@@ -2,8 +2,10 @@ from ...bindings import lib
 from . import libs
 import ctypes
 
+
 def get_window(w):
     return lib.webview_get_window(w)
+
 
 def get_child_webview(win_ptr):
     if not libs.gtk:

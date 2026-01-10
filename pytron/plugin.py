@@ -8,11 +8,14 @@ import threading
 import traceback
 from typing import List, Dict, Any, Union
 
+
 class PluginError(Exception):
     pass
 
+
 class PluginStorage:
     """Provides a plugin with its own private JSON storage and data folder."""
+
     def __init__(self, app_instance, plugin_name):
         self._app = app_instance
         self._name = plugin_name
@@ -42,20 +45,24 @@ class PluginStorage:
         return path
 
     def _read(self):
-        if not os.path.exists(self._file): return {}
+        if not os.path.exists(self._file):
+            return {}
         try:
-            with open(self._file, 'r', encoding='utf-8') as f:
+            with open(self._file, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except: return {}
+        except:
+            return {}
 
     def _write(self, data):
-        with open(self._file, 'w', encoding='utf-8') as f:
+        with open(self._file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
+
 
 class SupervisedApp:
     """
     A proxy for the App instance that protects the main app from plugin crashes.
     """
+
     def __init__(self, app, plugin_name):
         self._app = app
         self._plugin_name = plugin_name
@@ -65,12 +72,14 @@ class SupervisedApp:
     def expose(self, func, name=None, secure=False):
         """Wraps the exposed function in an error handler."""
         func_name = name or func.__name__
-        
+
         def safe_wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                self.logger.error(f"Plugin '{self._plugin_name}' crashed in '{func_name}': {e}")
+                self.logger.error(
+                    f"Plugin '{self._plugin_name}' crashed in '{func_name}': {e}"
+                )
                 self.logger.debug(traceback.format_exc())
                 return {"error": "Plugin Execution Failed", "message": str(e)}
 
@@ -79,6 +88,7 @@ class SupervisedApp:
     def __getattr__(self, name):
         # Delegate everything else (state, broadcast, etc.) to the real app
         return getattr(self._app, name)
+
 
 class Plugin:
     """
@@ -153,7 +163,7 @@ class Plugin:
         if missing:
             self.logger.warning(f"Missing Python dependencies: {', '.join(missing)}")
             return False
-            
+
         return True
 
     def install_dependencies(self, frontend_dir: str = None):
@@ -163,9 +173,13 @@ class Plugin:
         # 1. Python Dependencies
         py_deps = self.python_dependencies
         if py_deps:
-            self.logger.info(f"Installing Python dependencies for {self.name}: {py_deps}")
+            self.logger.info(
+                f"Installing Python dependencies for {self.name}: {py_deps}"
+            )
             try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install"] + py_deps)
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install"] + py_deps
+                )
                 self.logger.info("Python dependencies installed successfully.")
             except subprocess.CalledProcessError as e:
                 self.logger.error(f"Failed to install Python dependencies: {e}")
@@ -175,21 +189,27 @@ class Plugin:
         npm_deps = self.npm_dependencies
         if npm_deps and frontend_dir:
             if not os.path.exists(frontend_dir):
-                self.logger.warning(f"Frontend directory not found at {frontend_dir}. Skipping NPM dependencies.")
+                self.logger.warning(
+                    f"Frontend directory not found at {frontend_dir}. Skipping NPM dependencies."
+                )
                 return
 
-            self.logger.info(f"Installing NPM dependencies for {self.name} in {frontend_dir}...")
+            self.logger.info(
+                f"Installing NPM dependencies for {self.name} in {frontend_dir}..."
+            )
             pkg_list = [f"{name}@{ver}" for name, ver in npm_deps.items()]
-            
+
             try:
                 npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
-                # Use --no-save to keep the main package.json clean if preferred, 
+                # Use --no-save to keep the main package.json clean if preferred,
                 # but usually plugins need them bundled.
                 subprocess.check_call([npm_cmd, "install"] + pkg_list, cwd=frontend_dir)
-                self.logger.info(f"NPM dependencies for {self.name} installed successfully.")
+                self.logger.info(
+                    f"NPM dependencies for {self.name} installed successfully."
+                )
             except Exception as e:
                 self.logger.error(f"Failed to install NPM dependencies: {e}")
-                # We don't necessarily want to crash the whole app if NPM is missing, 
+                # We don't necessarily want to crash the whole app if NPM is missing,
                 # but we should log it.
 
     def load(self, app_instance):
@@ -247,8 +267,12 @@ class Plugin:
                     self.logger.debug(traceback.format_exc())
 
             if self.isolated:
-                self.logger.info(f"Plugin '{self.name}' is isolated. Starting in worker thread...")
-                thread = threading.Thread(target=init_plugin, name=f"Plugin-{self.name}", daemon=True)
+                self.logger.info(
+                    f"Plugin '{self.name}' is isolated. Starting in worker thread..."
+                )
+                thread = threading.Thread(
+                    target=init_plugin, name=f"Plugin-{self.name}", daemon=True
+                )
                 thread.start()
             else:
                 init_plugin()
@@ -268,17 +292,17 @@ class Plugin:
                 except Exception as e:
                     self.logger.error(f"Error tearing down plugin '{self.name}': {e}")
             self.instance = None
-            
+
         if hasattr(self, "module") and self.module:
             # We can't really 'unimport' in Python reliably, but we can clean up references
             del self.module
-            
-        # Optional: Remove directory from sys.path? 
+
+        # Optional: Remove directory from sys.path?
         # Risky if other plugins share it or if user reloads.
 
     def invoke_package_hook(self, context: Dict[str, Any]):
         """
-        Invoked during 'pytron package'. Allows plugins to add extra data, 
+        Invoked during 'pytron package'. Allows plugins to add extra data,
         hidden imports, or run custom build scripts.
         """
         if hasattr(self, "instance") and hasattr(self.instance, "on_package"):
@@ -288,6 +312,7 @@ class Plugin:
             except Exception as e:
                 self.logger.error(f"Error in on_package hook for '{self.name}': {e}")
                 self.logger.debug(traceback.format_exc())
+
 
 def discover_plugins(plugins_dir: str) -> List[Plugin]:
     """

@@ -1,6 +1,7 @@
 from .interface import PlatformInterface
 from .linux_ops import window, system, webview, libs
 
+
 class LinuxImplementation(PlatformInterface):
     def __init__(self):
         # Libraries are loaded by linux_ops.libs on import
@@ -28,7 +29,6 @@ class LinuxImplementation(PlatformInterface):
     def message_box(self, w, title, message, style=0):
         return system.message_box(w, title, message, style)
 
-
     def hide(self, w):
         window.hide(w)
 
@@ -41,7 +41,9 @@ class LinuxImplementation(PlatformInterface):
     def open_file_dialog(self, w, title, default_path=None, file_types=None):
         return system.open_file_dialog(w, title, default_path, file_types)
 
-    def save_file_dialog(self, w, title, default_path=None, default_name=None, file_types=None):
+    def save_file_dialog(
+        self, w, title, default_path=None, default_name=None, file_types=None
+    ):
         return system.save_file_dialog(w, title, default_path, default_name, file_types)
 
     def open_folder_dialog(self, w, title, default_path=None):

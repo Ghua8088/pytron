@@ -3,33 +3,37 @@ import urllib.parse
 import inspect
 import logging
 
+
 class DeepLink:
     """
     Represents a parsed Deep Link.
     """
+
     def __init__(self, raw_url: str, params: dict = None):
         self.raw_url = raw_url
         self.parsed = urllib.parse.urlparse(raw_url)
         self.scheme = self.parsed.scheme
         self.netloc = self.parsed.netloc
         self.path = self.parsed.path
-        
+
         # Parse query params (returns dict of lists)
         self.query = urllib.parse.parse_qs(self.parsed.query)
-        
+
         # Flatten query params if single value (optional utility)
         self.args = {k: v[0] if len(v) == 1 else v for k, v in self.query.items()}
-        
+
         # Path parameters extracted from route
         self.params = params or {}
 
     def __repr__(self):
         return f"<DeepLink scheme='{self.scheme}' path='{self.netloc}{self.path}' params={self.params} args={self.args}>"
 
+
 class Router:
     """
     Handles matching Deep Links to registered callback functions.
     """
+
     def __init__(self, logger=None):
         self.routes = []
         self._default_handler = None
@@ -38,7 +42,7 @@ class Router:
     def add_route(self, pattern: str, func):
         """
         Registers a route pattern.
-        Pattern examples: 
+        Pattern examples:
           - "home" matches myapp://home
           - "document/{id}" matches myapp://document/123
           - "user/{name}/profile" matches myapp://user/alice/profile
@@ -50,31 +54,32 @@ class Router:
         # 2. Convert {param} to Regex Group (?P<param>[^/]+)
         # Escape special regex chars but leave our braces
         regex_pattern = re.escape(clean_pattern)
-        
+
         # Replace escaped braces \{param\} back to capture groups
         # We manually build the regex: replace \{([^}]+)\} with (?P<\1>[^/]+)
         # Note: re.escape escapes {, }, so we look for \\{ and \\}
-        regex_pattern = re.sub(r"\\{([a-zA-Z0-9_]+)\\}", r"(?P<\1>[^/]+)", regex_pattern)
-        
+        regex_pattern = re.sub(
+            r"\\{([a-zA-Z0-9_]+)\\}", r"(?P<\1>[^/]+)", regex_pattern
+        )
+
         # Anchor start/end
         regex_pattern = f"^{regex_pattern}$"
-        
-        self.routes.append({
-            "pattern": clean_pattern,
-            "regex": re.compile(regex_pattern),
-            "func": func
-        })
+
+        self.routes.append(
+            {"pattern": clean_pattern, "regex": re.compile(regex_pattern), "func": func}
+        )
         self.logger.debug(f"Registered deep link route: {clean_pattern}")
 
     def route(self, pattern: str):
         """
         Decorator to register a route.
         """
+
         def decorator(func):
             self.add_route(pattern, func)
             return func
-        return decorator
 
+        return decorator
 
     def set_default_handler(self, func):
         self._default_handler = func
@@ -102,7 +107,7 @@ class Router:
                     self._invoke_handler(route["func"], link)
                     matched = True
                     break
-            
+
             if not matched:
                 self.logger.debug(f"No route matched for: {routable_path}")
                 if self._default_handler:
@@ -119,23 +124,23 @@ class Router:
         try:
             sig = inspect.signature(func)
             kwargs = {}
-            
+
             # 1. Check if handler wants the full 'link' object
             if "link" in sig.parameters:
                 kwargs["link"] = link
-                
+
             # 2. Inject path params if they match argument names
             for name, value in link.params.items():
                 if name in sig.parameters:
                     kwargs[name] = value
-            
+
             # 3. Inject query args if they match argument names
             for name, value in link.args.items():
                 if name in sig.parameters:
-                     kwargs[name] = value
-            
+                    kwargs[name] = value
+
             # Invoke
             func(**kwargs)
-            
+
         except Exception as e:
             self.logger.error(f"Handler failed for deep link: {e}")

@@ -42,18 +42,21 @@ class Webview:
         # SECURITY/CORS: Fix for "origin 'null'" and CORS issues with file:// and ES Modules in WebView2.
         # This allows Vite builds (type="module") to load correctly over the file:// scheme.
         if not IS_ANDROID and platform.system() == "Windows":
-             # --allow-file-access-from-files: Allows file:// to fetch other file:// resources.
-             # --disable-web-security: Permissive mode for complex ESM module graphs over custom schemes/file.
-             args = os.environ.get("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "")
-             
-             # IMPROVEMENT: Only disable web security if requested, default to safer mode
-             if "--allow-file-access-from-files" not in args:
-                 args = f"{args} --allow-file-access-from-files"
-             
-             if config.get("disable_web_security", False) and "--disable-web-security" not in args:
-                 args = f"{args} --disable-web-security"
-                 
-             os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = args.strip()
+            # --allow-file-access-from-files: Allows file:// to fetch other file:// resources.
+            # --disable-web-security: Permissive mode for complex ESM module graphs over custom schemes/file.
+            args = os.environ.get("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "")
+
+            # IMPROVEMENT: Only disable web security if requested, default to safer mode
+            if "--allow-file-access-from-files" not in args:
+                args = f"{args} --allow-file-access-from-files"
+
+            if (
+                config.get("disable_web_security", False)
+                and "--disable-web-security" not in args
+            ):
+                args = f"{args} --disable-web-security"
+
+            os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = args.strip()
 
         # PERFORMANCE: Use shared thread pool from App if available
         self.app = config.get("__app__")
@@ -64,7 +67,7 @@ class Webview:
                 "concurrent.futures"
             ).futures.ThreadPoolExecutor(max_workers=5)
 
-        self._gc_protector = deque(maxlen=200) # Increased to handle bursts of updates
+        self._gc_protector = deque(maxlen=200)  # Increased to handle bursts of updates
         self._bound_functions = {}
         self._served_data = {}
 
@@ -80,7 +83,7 @@ class Webview:
             # Fix: Store as c_void_p object to ensure consistent pointer handling on 64-bit systems
             raw_ptr = lib.webview_create(int(config.get("debug", False)), None)
             self.w = ctypes.c_void_p(raw_ptr)
-            
+
         self._cb = c_dispatch_handler
 
         # ------------------------------------------------
@@ -92,12 +95,15 @@ class Webview:
         if not IS_ANDROID:
             if CURRENT_PLATFORM == "Windows":
                 from .platforms.windows import WindowsImplementation
+
                 self._platform = WindowsImplementation()
             elif CURRENT_PLATFORM == "Linux":
                 from .platforms.linux import LinuxImplementation
+
                 self._platform = LinuxImplementation()
             elif CURRENT_PLATFORM == "Darwin":
                 from .platforms.darwin import DarwinImplementation
+
                 self._platform = DarwinImplementation()
 
         # Default Bindings
@@ -138,52 +144,68 @@ class Webview:
 
         # State Sync Binding
         self.bind("pytron_sync_state", self._sync_state, run_in_thread=False)
-        self.bind("pytron_emit_to", lambda target_id, event, data: self.app.emit_to(target_id, event, data) if self.app else None, run_in_thread=False)
+        self.bind(
+            "pytron_emit_to",
+            lambda target_id, event, data: (
+                self.app.emit_to(target_id, event, data) if self.app else None
+            ),
+            run_in_thread=False,
+        )
 
         # Native Drag &amp; Drop (From JS Bridge as fallback/primary for WebView)
         def _handle_js_drop(files):
             print(f"[Pytron] Bridge received drop: {files}")
-            if self.app and hasattr(self.app, "_on_file_drop_callback") and self.app._on_file_drop_callback:
+            if (
+                self.app
+                and hasattr(self.app, "_on_file_drop_callback")
+                and self.app._on_file_drop_callback
+            ):
                 # Dispatch to the App's on_file_drop handler
                 # self is 'webview', but the callback expects 'window' (which is the webview instance in Pytron architecture usually)
                 self.app._on_file_drop_callback(self, files)
-        
+
         self.bind("pytron_native_drop", _handle_js_drop, run_in_thread=True)
 
         # Asset Provider (Performance Bridge)
         # This provides a port-less, high-performance O(1) binary bridge.
         # It handles pytron:// URLs via window.fetch and the Latin-1 trick.
         self._served_data = {}
-        
+
         def _get_binary_asset(key):
             """Returns (mime, raw_latin1_data) with Path Traversal Protection."""
             data, mime = None, "application/octet-stream"
-            
+
             # 1. Check Memory
             if key in self._served_data:
                 data, mime = self._served_data[key]
-            
+
             # 2. Check Disk (Virtual Mapping for the app)
             elif key.startswith("app/"):
                 rel_path = key[4:]
-                
+
                 # SPECIAL HANDLING: Allow access to plugins directory even if it's outside the dist folder
                 if rel_path.startswith("plugins/"):
                     # Use the main app root for plugins
                     app_dir = pathlib.Path(self._app_root)
                 else:
                     app_dir = getattr(self, "_vap_app_dir", self._app_root)
-                
+
                 try:
                     # SECURITY: Sanitize path to prevent directory traversal
                     # This ensures the final path is INSIDE the app_dir
-                    safe_path = os.path.normpath(rel_path).lstrip(os.path.sep).lstrip("/")
+                    safe_path = (
+                        os.path.normpath(rel_path).lstrip(os.path.sep).lstrip("/")
+                    )
                     path_obj = (app_dir / safe_path).resolve()
-                    
+
                     # Ensure it's still within the project root or the specifically allowed plugins dir
-                    if not str(path_obj).startswith(os.path.join(str(app_dir.resolve()), "")):
-                         self.logger.warning(f"Security blocked path traversal attempt: {key}")
-                         return None
+                    if not str(path_obj).startswith(
+                        os.path.join(str(app_dir.resolve()), "")
+                    ):
+                        self.logger.warning(
+                            f"Security blocked path traversal attempt: {key}"
+                        )
+                        return None
 
                     if path_obj.exists() and path_obj.is_file():
                         mime, _ = mimetypes.guess_type(str(path_obj))
@@ -194,7 +216,10 @@ class Webview:
                     return None
 
             if data:
-                return {"mime": mime or "application/octet-stream", "raw": data.decode('latin-1')}
+                return {
+                    "mime": mime or "application/octet-stream",
+                    "raw": data.decode("latin-1"),
+                }
             return None
 
         self.bind("__pytron_vap_get", _get_binary_asset, run_in_thread=True)
@@ -204,9 +229,12 @@ class Webview:
             asset = _get_binary_asset(key)
             if asset:
                 # Convert back to Base64 for legacy clients
-                data_b64 = base64.b64encode(asset["raw"].encode("latin-1")).decode("utf-8")
+                data_b64 = base64.b64encode(asset["raw"].encode("latin-1")).decode(
+                    "utf-8"
+                )
                 return {"data": f"data:{asset['mime']};base64,{data_b64}"}
             return None
+
         self.bind("pytron_get_asset", _legacy_get_asset, run_in_thread=True)
 
         # Inject Virtual Fetch Interceptor
@@ -327,7 +355,7 @@ class Webview:
             }
         })();
         """
-        
+
         init_js += f"""
         console.log("[Pytron] Core Initialized");
         window.pytron = window.pytron || {{}};
@@ -336,11 +364,13 @@ class Webview:
         """
 
         # Disable default context menu if requested in config, but allow it in debug mode
-        if not config.get("default_context_menu", True) and not config.get("debug", False):
+        if not config.get("default_context_menu", True) and not config.get(
+            "debug", False
+        ):
             init_js += (
                 "\nwindow.addEventListener('contextmenu', e => e.preventDefault());"
             )
-            
+
         # Prevent default file drop behavior (stops opening files in browser)
         # Drag & Drop is now handled exclusively by pytron-client.
         # No injected JS listeners here to avoid conflicts.
@@ -381,14 +411,19 @@ class Webview:
         lib.webview_init(self.w, init_js.encode("utf-8"))
 
         # self._served_data = {} # Removed: initialized earlier
-        
+
         # Resolve App Root for reliable relative pathing
         if getattr(sys, "frozen", False):
             self._app_root = pathlib.Path(sys.executable).parent
             if hasattr(sys, "_MEIPASS"):
                 self._app_root = pathlib.Path(sys._MEIPASS)
         else:
-            main_script = sys.modules['__main__'].__file__ if '__main__' in sys.modules and hasattr(sys.modules['__main__'], '__file__') else None
+            main_script = (
+                sys.modules["__main__"].__file__
+                if "__main__" in sys.modules
+                and hasattr(sys.modules["__main__"], "__file__")
+                else None
+            )
             if main_script:
                 self._app_root = pathlib.Path(main_script).parent
             else:
@@ -417,7 +452,9 @@ class Webview:
             self.make_frameless()
 
         if config.get("debug", False):
-            self.logger.debug(f"Debug mode active. Native webview_debug available: {hasattr(lib, 'webview_debug')}")
+            self.logger.debug(
+                f"Debug mode active. Native webview_debug available: {hasattr(lib, 'webview_debug')}"
+            )
             if hasattr(lib, "webview_debug"):
                 try:
                     lib.webview_debug(self.w)
@@ -453,7 +490,9 @@ class Webview:
             self.logger.debug(f"Opening DevTools for window: {self.w.value}")
             lib.webview_debug(self.w)
         else:
-            self.logger.warning("Native DevTools (webview_debug) not supported by the current engine.")
+            self.logger.warning(
+                "Native DevTools (webview_debug) not supported by the current engine."
+            )
 
     def make_frameless(self):
         self._platform.make_frameless(self.w)
@@ -583,6 +622,7 @@ class Webview:
                         self._return_result(seq, 0, res_json)
                     except Exception as e:
                         import traceback
+
                         self.logger.error(f"Async execution error in {name}: {e}")
                         if self.config.get("debug", False):
                             self.logger.error(traceback.format_exc())
@@ -603,6 +643,7 @@ class Webview:
                         self._return_result(seq, 0, result_json)
                     except Exception as e:
                         import traceback
+
                         self.logger.error(f"Execution error in {name}: {e}")
                         if self.config.get("debug", False):
                             self.logger.error(traceback.format_exc())
@@ -756,7 +797,7 @@ class Webview:
                 path_obj = app_rel_path
             else:
                 path_obj = path_obj.resolve()
-        
+
         if not path_obj.exists():
             self.logger.error(f"HTML file not found at: {path_obj}")
             raise ResourceNotFoundError(

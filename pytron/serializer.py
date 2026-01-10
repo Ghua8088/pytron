@@ -37,7 +37,7 @@ class PytronJSONEncoder(json.JSONEncoder):
             asset_id = f"gen_img_{uuid.uuid4().hex[:8]}"
             buffered = io.BytesIO()
             obj.save(buffered, format="PNG")
-            
+
             # Note: We need a reference to the app to call serve_data.
             # Since this is a static encoder, we check if it's attached elsewhere
             # or fallback to base64 if no asset provider is found.
@@ -55,7 +55,7 @@ class PytronJSONEncoder(json.JSONEncoder):
                 self.vap_provider(asset_id, obj, "application/octet-stream")
                 return f"pytron://{asset_id}"
             return base64.b64encode(obj).decode("utf-8")
-        
+
         if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
             return obj.isoformat()
         if isinstance(obj, datetime.timedelta):
@@ -188,6 +188,7 @@ def pytron_serialize(obj, vap_provider=None):
     # Dataclasses
     try:
         import dataclasses
+
         if dataclasses.is_dataclass(obj):
             return pytron_serialize(dataclasses.asdict(obj), vap_provider)
     except ImportError:
@@ -196,6 +197,7 @@ def pytron_serialize(obj, vap_provider=None):
     # Enums
     try:
         import enum
+
         if isinstance(obj, enum.Enum):
             return obj.value
     except ImportError:
@@ -211,7 +213,11 @@ def pytron_serialize(obj, vap_provider=None):
 
     # Universal Fallback: Try __dict__
     if hasattr(obj, "__dict__"):
-        return {k: pytron_serialize(v, vap_provider) for k, v in vars(obj).items() if not k.startswith("_")}
+        return {
+            k: pytron_serialize(v, vap_provider)
+            for k, v in vars(obj).items()
+            if not k.startswith("_")
+        }
 
     # Slots Fallback
     if hasattr(obj, "__slots__"):

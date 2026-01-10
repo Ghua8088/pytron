@@ -8,6 +8,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from ..exceptions import ConfigError
 import binascii
 import ctypes
+
+
 class ConfigMixin:
     def _setup_logging(self):
         logging.basicConfig(
@@ -24,10 +26,10 @@ class ConfigMixin:
             if possible_url.startswith("pytron:") or "://" in possible_url:
                 self.logger.info(f"App launched via Deep Link: {possible_url}")
                 self.state.launch_url = possible_url
-                # Defer dispatch to run-time if needed, but since plugins/handlers 
+                # Defer dispatch to run-time if needed, but since plugins/handlers
                 # might be registered AFTER init, we might need to handle this carefully.
                 # However, for now, we'll store it. The handlers usually aren't registered
-                # until the user script runs. 
+                # until the user script runs.
                 # So we should probably dispatch in app.run().
 
     def _load_config(self, config_file):
@@ -42,13 +44,13 @@ class ConfigMixin:
             try:
                 with open(path, "r") as f:
                     self.config = json.load(f)
-                
+
                 if self.config.get("debug", False):
                     self.logger.setLevel(logging.DEBUG)
                     for handler in logging.root.handlers:
                         handler.setLevel(logging.DEBUG)
                     self.logger.debug("Debug mode enabled.")
-                    
+
                     dev_url = os.environ.get("PYTRON_DEV_URL")
                     if dev_url:
                         self.config["url"] = dev_url
@@ -58,8 +60,11 @@ class ConfigMixin:
                 if config_version:
                     try:
                         from .. import __version__
+
                         if config_version != __version__:
-                            self.logger.warning(f"Version mismatch: Settings({config_version}) vs Installed({__version__})")
+                            self.logger.warning(
+                                f"Version mismatch: Settings({config_version}) vs Installed({__version__})"
+                            )
                     except ImportError:
                         pass
             except json.JSONDecodeError as e:
@@ -69,28 +74,35 @@ class ConfigMixin:
                 self.logger.error(f"Failed to load settings: {e}")
                 raise ConfigError(f"Could not load settings from {path}") from e
         else:
-            self.logger.warning(f"Settings file not found at {path}. Using default configuration.")
+            self.logger.warning(
+                f"Settings file not found at {path}. Using default configuration."
+            )
 
     def _setup_identity(self):
         title = self.config.get("title", "Pytron App")
-        safe_title = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in title).strip("_")
+        safe_title = "".join(
+            c if c.isalnum() or c in ("-", "_") else "_" for c in title
+        ).strip("_")
         app_id = self._register_app_id(title, safe_title)
-        
+
         # Single Instance Guard
         if self.config.get("single_instance", True):
             self._setup_single_instance(app_id)
-            
+
         return title, safe_title
 
     def _register_app_id(self, title, safe_title):
         author = self.config.get("author", "PytronUser")
         if not safe_title:
-            safe_title = "".join([c for c in (title or "Pytron") if c.isalnum()]) or "PytronApp"
+            safe_title = (
+                "".join([c for c in (title or "Pytron") if c.isalnum()]) or "PytronApp"
+            )
         app_id = f"{author}.{safe_title}.App"
 
         if sys.platform == "win32":
             try:
                 from ..platforms.windows import WindowsImplementation
+
                 WindowsImplementation().set_app_id(app_id)
                 self.logger.debug(f"Set Windows AppUserModelID: {app_id}")
             except Exception as e:
@@ -98,12 +110,14 @@ class ConfigMixin:
         elif sys.platform == "linux":
             try:
                 from ..platforms.linux import LinuxImplementation
+
                 LinuxImplementation().set_app_id(safe_title)
             except Exception:
                 pass
         elif sys.platform == "darwin":
             try:
                 from ..platforms.darwin import DarwinImplementation
+
                 DarwinImplementation().set_app_id(title)
             except Exception:
                 pass
@@ -122,21 +136,23 @@ class ConfigMixin:
         # Generate a stable port between 10000-60000 based on app_id
         port = 10000 + (int(hashlib.md5(app_id.encode()).hexdigest(), 16) % 50000)
         self._instance_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        
+
         try:
-            self._instance_socket.bind(('127.0.0.1', port))
+            self._instance_socket.bind(("127.0.0.1", port))
             self._instance_socket.listen(1)
-            
+
             def _listen_for_other_instances():
                 while True:
                     try:
                         conn, _ = self._instance_socket.accept()
-                        data = conn.recv(1024).decode('utf-8')
+                        data = conn.recv(1024).decode("utf-8")
                         if data:
                             msg = json.loads(data)
                             url = msg.get("url")
                             if url:
-                                self.logger.info(f"Received deep link from another instance: {url}")
+                                self.logger.info(
+                                    f"Received deep link from another instance: {url}"
+                                )
                                 # Update launch URL and show windows
                                 self.state.launch_url = url
                                 self.router.dispatch(url)
@@ -146,24 +162,26 @@ class ConfigMixin:
                         conn.close()
                     except Exception:
                         break
-            
+
             t = threading.Thread(target=_listen_for_other_instances, daemon=True)
             t.start()
-            
+
             @self.on_exit
             def _close_instance_socket():
                 try:
                     self._instance_socket.close()
                 except Exception:
                     pass
-                    
+
         except socket.error:
             # Instance already running!
-            self.logger.info("Another instance is already running. Forwarding launch URL and exiting.")
+            self.logger.info(
+                "Another instance is already running. Forwarding launch URL and exiting."
+            )
             try:
                 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                client.connect(('127.0.0.1', port))
-                client.send(json.dumps({"url": self.state.launch_url}).encode('utf-8'))
+                client.connect(("127.0.0.1", port))
+                client.send(json.dumps({"url": self.state.launch_url}).encode("utf-8"))
                 client.close()
             except Exception:
                 pass
@@ -191,20 +209,28 @@ class ConfigMixin:
             if main_module and hasattr(main_module, "__file__"):
                 self.app_root = os.path.dirname(os.path.abspath(main_module.__file__))
             else:
-                self.app_root = os.path.abspath(sys.path[0] if sys.path and sys.path[0] else os.getcwd())
+                self.app_root = os.path.abspath(
+                    sys.path[0] if sys.path and sys.path[0] else os.getcwd()
+                )
 
         try:
             os.makedirs(self.storage_path, exist_ok=True)
             os.chdir(self.storage_path)
             self.logger.info(f"Changed Working Directory to: {self.storage_path}")
         except Exception as e:
-            self.logger.warning(f"Could not create storage directory at {self.storage_path}: {e}")
+            self.logger.warning(
+                f"Could not create storage directory at {self.storage_path}: {e}"
+            )
 
     def _resolve_resources(self):
         def resolve_resource(path):
-            if not path or path.startswith(("http:", "https:", "file:")) or os.path.isabs(path):
+            if (
+                not path
+                or path.startswith(("http:", "https:", "file:"))
+                or os.path.isabs(path)
+            ):
                 return path
-            
+
             internal = os.path.join(self.app_root, "_internal", path)
             if os.path.exists(internal):
                 return internal

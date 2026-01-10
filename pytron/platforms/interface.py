@@ -73,4 +73,3 @@ class PlatformInterface:
 
     def set_menu(self, w, menu_bar):
         pass
-

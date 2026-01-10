@@ -28,7 +28,9 @@ class ReactiveState:
                     try:
                         window.emit("pytron:state-update", {"key": key, "value": value})
                     except Exception as e:
-                        print(f"[Pytron] Error emitting state update for key '{key}': {e}")
+                        print(
+                            f"[Pytron] Error emitting state update for key '{key}': {e}"
+                        )
 
     def __getattr__(self, key):
         lock = getattr(self, "_lock", None)

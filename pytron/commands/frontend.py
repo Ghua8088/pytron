@@ -23,7 +23,7 @@ def cmd_frontend(args: argparse.Namespace) -> int:
     config = get_config()
     default_provider = config.get("frontend_provider", "npm")
     provider = getattr(args, "provider", None) or default_provider
-    
+
     # Check for provider binary
     provider_bin = shutil.which(provider)
     if not provider_bin:

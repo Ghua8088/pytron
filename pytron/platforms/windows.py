@@ -3,6 +3,7 @@ import ctypes.wintypes
 from .interface import PlatformInterface
 from .windows_ops import window, system, webview
 
+
 class WindowsImplementation(PlatformInterface):
     def __init__(self):
         user32 = ctypes.windll.user32
@@ -29,7 +30,7 @@ class WindowsImplementation(PlatformInterface):
                 user32.SetProcessDPIAware()
             except Exception:
                 pass
-        
+
         self._protocol_handler = None
         self._webview_env = None
 
@@ -69,7 +70,9 @@ class WindowsImplementation(PlatformInterface):
     def open_file_dialog(self, w, title, default_path=None, file_types=None):
         return system.open_file_dialog(w, title, default_path, file_types)
 
-    def save_file_dialog(self, w, title, default_path=None, default_name=None, file_types=None):
+    def save_file_dialog(
+        self, w, title, default_path=None, default_name=None, file_types=None
+    ):
         return system.save_file_dialog(w, title, default_path, default_name, file_types)
 
     def open_folder_dialog(self, w, title, default_path=None):
@@ -104,4 +107,3 @@ class WindowsImplementation(PlatformInterface):
 
     def set_menu(self, w, menu_bar):
         window.set_menu(w, menu_bar)
-

@@ -23,6 +23,7 @@ from ..pack.nuitka import run_nuitka_build
 from ..pack.pyinstaller import run_pyinstaller_build
 from ..pack.secure import run_secure_build
 
+
 def cmd_package(args: argparse.Namespace) -> int:
     script_path = args.script
     if not script_path:
@@ -230,21 +231,25 @@ def cmd_package(args: argparse.Namespace) -> int:
         "out_name": out_name,
         "settings": settings,
         "package_dir": package_dir,
-        "app_icon": app_icon
+        "app_icon": app_icon,
     }
 
     # Discover and run Plugin on_package hooks
     from ..plugin import discover_plugins
+
     plugins_dir = script.parent / "plugins"
     if plugins_dir.exists():
         log("Evaluating plugins for packaging hooks...", style="dim")
         plugin_objs = discover_plugins(str(plugins_dir))
-        
+
         # Robust mock app for hook context
         class PackageAppMock:
             class MockState:
-                def __getattr__(self, name): return None
-                def __setattr__(self, name, value): pass
+                def __getattr__(self, name):
+                    return None
+
+                def __setattr__(self, name, value):
+                    pass
 
             def __init__(self, settings_data, folder):
                 self.config = settings_data
@@ -253,20 +258,30 @@ def cmd_package(args: argparse.Namespace) -> int:
                 self.logger = log
                 self.state = self.MockState()
 
-            def expose(self, *args, **kwargs): pass
-            def broadcast(self, *args, **kwargs): pass
-            def publish(self, *args, **kwargs): pass
-            def on_exit(self, func): return func
-            
+            def expose(self, *args, **kwargs):
+                pass
+
+            def broadcast(self, *args, **kwargs):
+                pass
+
+            def publish(self, *args, **kwargs):
+                pass
+
+            def on_exit(self, func):
+                return func
+
         mock_app = PackageAppMock(settings, script.parent)
-        
+
         for p in plugin_objs:
             try:
                 # We perform a minimal load
                 p.load(mock_app)
                 p.invoke_package_hook(package_context)
             except Exception as e:
-                log(f"Warning: Build hook for plugin '{p.name}' skipped: {e}", style="warning")
+                log(
+                    f"Warning: Build hook for plugin '{p.name}' skipped: {e}",
+                    style="warning",
+                )
 
         # Sync back modified values from plugins (Shenanigans support)
         out_name = package_context["out_name"]
@@ -322,19 +337,45 @@ def cmd_package(args: argparse.Namespace) -> int:
     # --- Nuitka Compilation Logic ---
     if getattr(args, "nuitka", False):
         return run_nuitka_build(
-            args, script, out_name, settings, app_icon, package_dir, add_data, frontend_dist, progress, task, 
-            package_context=package_context
+            args,
+            script,
+            out_name,
+            settings,
+            app_icon,
+            package_dir,
+            add_data,
+            frontend_dist,
+            progress,
+            task,
+            package_context=package_context,
         )
 
     # --- Rust Bootloader (Secure) Logic ---
     if getattr(args, "secure", False):
         return run_secure_build(
-            args, script, out_name, settings, app_icon, package_dir, add_data, progress, task,
-            package_context=package_context
+            args,
+            script,
+            out_name,
+            settings,
+            app_icon,
+            package_dir,
+            add_data,
+            progress,
+            task,
+            package_context=package_context,
         )
 
     # --- PyInstaller Compilation Logic ---
     return run_pyinstaller_build(
-        args, script, out_name, settings, app_icon, package_dir, add_data, manifest_path, progress, task,
-        package_context=package_context
+        args,
+        script,
+        out_name,
+        settings,
+        app_icon,
+        package_dir,
+        add_data,
+        manifest_path,
+        progress,
+        task,
+        package_context=package_context,
     )

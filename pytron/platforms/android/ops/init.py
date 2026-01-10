@@ -3,12 +3,13 @@ import shutil
 from pathlib import Path
 from ....console import log
 
+
 def init_android_project(project_root: str, force: bool = False) -> None:
     """
     Initialize the Android project structure.
     """
     target_android_dir = os.path.join(project_root, "android")
-    
+
     # Template directory is ../shell relative to this file
     # pytron/platforms/android/ops/init.py -> pytron/platforms/android/shell
     current_dir = Path(__file__).resolve().parent
@@ -28,9 +29,7 @@ def init_android_project(project_root: str, force: bool = False) -> None:
     # Helper to ignore some build files
     def ignore_patterns(path, names):
         return [
-            n
-            for n in names
-            if n in ["build", ".gradle", ".idea", "local.properties"]
+            n for n in names if n in ["build", ".gradle", ".idea", "local.properties"]
         ]
 
     shutil.copytree(template_dir, target_android_dir, ignore=ignore_patterns)
@@ -45,19 +44,20 @@ def init_android_project(project_root: str, force: bool = False) -> None:
 
     log("Android project initialized!", style="success")
 
+
 def reset_android_project(project_root: str) -> None:
     """
     Reset the Android project structure (delete and re-init).
     """
     target_android_dir = os.path.join(project_root, "android")
-    
+
     if os.path.exists(target_android_dir):
         log(
             f"Removing existing Android folder: {target_android_dir}",
             style="warning",
         )
         shutil.rmtree(target_android_dir)
-    
+
     # Reuse init logic, forcing creation
     init_android_project(project_root, force=True)
     log("Android project reset complete!", style="success")

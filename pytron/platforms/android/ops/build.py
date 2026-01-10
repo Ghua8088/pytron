@@ -2,12 +2,13 @@ import os
 from ....console import log
 from .utils import run_command
 
+
 def build_android_project(project_root: str, is_aab: bool = False) -> None:
     """
     Build the Android project (APK or AAB).
     """
     target_android_dir = os.path.join(project_root, "android")
-    
+
     if not os.path.exists(target_android_dir):
         log("Run init first.", style="error")
         return

@@ -2,12 +2,13 @@ import os
 from ....console import log
 from .utils import run_command
 
+
 def run_android_project(project_root: str) -> None:
     """
     Install and run the Android app on a connected device.
     """
     target_android_dir = os.path.join(project_root, "android")
-    
+
     # Install and Launch
     log("Installing...", style="info")
     # Find the APK - it might have a different name if we customized the build
@@ -20,9 +21,12 @@ def run_android_project(project_root: str) -> None:
         "debug",
         "app-debug.apk",
     )
-    
+
     if not os.path.exists(apk_path):
-        log(f"APK not found at {apk_path}. Run 'pytron android build' first.", style="error")
+        log(
+            f"APK not found at {apk_path}. Run 'pytron android build' first.",
+            style="error",
+        )
         return
 
     run_command(["adb", "install", "-r", apk_path], cwd=project_root)
@@ -53,6 +57,7 @@ def run_android_project(project_root: str) -> None:
 
     log("Starting Logcat...", style="info")
     run_logcat()
+
 
 def run_logcat() -> None:
     """

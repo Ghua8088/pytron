@@ -5,6 +5,7 @@ from ..platforms.android.ops.sync import sync_android_project
 from ..platforms.android.ops.build import build_android_project
 from ..platforms.android.ops.run import run_android_project, run_logcat
 
+
 def cmd_android(args: argparse.Namespace) -> None:
     action = args.action
     project_root = os.getcwd()

@@ -9,6 +9,7 @@ try:
 except ImportError:
     winreg = None
 
+
 def notification(w, title, message, icon=None):
     shell32 = ctypes.windll.shell32
     user32 = ctypes.windll.user32
@@ -57,18 +58,18 @@ def notification(w, title, message, icon=None):
     except Exception as e:
         print(f"[Pytron] Notification Exception: {e}")
 
+
 def message_box(w, title, message, style=0):
     hwnd = get_hwnd(w)
     return ctypes.windll.user32.MessageBoxW(hwnd, message, title, style)
+
 
 def set_window_icon(w, icon_path):
     if not icon_path or not os.path.exists(icon_path):
         return
     hwnd = get_hwnd(w)
     try:
-        h_small = ctypes.windll.user32.LoadImageW(
-            0, str(icon_path), 1, 16, 16, 0x10
-        )
+        h_small = ctypes.windll.user32.LoadImageW(0, str(icon_path), 1, 16, 16, 0x10)
         if h_small:
             ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 0, h_small)
 
@@ -77,6 +78,7 @@ def set_window_icon(w, icon_path):
             ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 1, h_big)
     except Exception as e:
         print(f"Icon error: {e}")
+
 
 def _prepare_ofn(w, title, default_path, file_types, file_buffer_size=1024):
     ofn = OPENFILENAMEW()
@@ -107,18 +109,15 @@ def _prepare_ofn(w, title, default_path, file_types, file_buffer_size=1024):
 
     return ofn, buff
 
+
 def open_file_dialog(w, title, default_path=None, file_types=None):
     ofn, buff = _prepare_ofn(w, title, default_path, file_types)
-    ofn.Flags = (
-        OFN_EXPLORER
-        | OFN_FILEMUSTEXIST
-        | OFN_PATHMUSTEXIST
-        | OFN_NOCHANGEDIR
-    )
+    ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR
 
     if ctypes.windll.comdlg32.GetOpenFileNameW(ctypes.byref(ofn)):
         return buff.value
     return None
+
 
 def save_file_dialog(w, title, default_path=None, default_name=None, file_types=None):
     path = default_path
@@ -129,16 +128,12 @@ def save_file_dialog(w, title, default_path=None, default_name=None, file_types=
             path = default_name
 
     ofn, buff = _prepare_ofn(w, title, path, file_types)
-    ofn.Flags = (
-        OFN_EXPLORER
-        | OFN_OVERWRITEPROMPT
-        | OFN_PATHMUSTEXIST
-        | OFN_NOCHANGEDIR
-    )
+    ofn.Flags = OFN_EXPLORER | OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR
 
     if ctypes.windll.comdlg32.GetSaveFileNameW(ctypes.byref(ofn)):
         return buff.value
     return None
+
 
 def open_folder_dialog(w, title, default_path=None):
     bif = BROWSEINFOW()
@@ -155,6 +150,7 @@ def open_folder_dialog(w, title, default_path=None):
         ctypes.windll.shell32.ILFree(ctypes.c_void_p(pidl))
     return None
 
+
 def register_protocol(scheme):
     if not winreg:
         return False
@@ -167,7 +163,7 @@ def register_protocol(scheme):
             # Use __main__.__file__ to get the absolute path to the running script
             main_file = os.path.abspath(sys.modules["__main__"].__file__)
             command = f'"{exe}" "{main_file}" "%1"'
-            
+
         key_path = f"Software\\Classes\\{scheme}"
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
             winreg.SetValueEx(key, "", 0, winreg.REG_SZ, f"URL:{scheme} Protocol")
@@ -179,6 +175,7 @@ def register_protocol(scheme):
         return True
     except Exception:
         return False
+
 
 def set_launch_on_boot(app_name, exe_path, enable=True):
     if not winreg:
@@ -202,11 +199,13 @@ def set_launch_on_boot(app_name, exe_path, enable=True):
     except Exception:
         return False
 
+
 def set_app_id(app_id):
     try:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
     except Exception:
         pass
+
 
 def set_window_icon(w, icon_path):
     """Sets the icon for the specified window."""
@@ -216,14 +215,19 @@ def set_window_icon(w, icon_path):
             return
 
         user32 = ctypes.windll.user32
-        
+
         # Determine if it's an .ico or something else
         # Windows requires HICON, so we use LoadImage
         icon_path = str(os.path.abspath(icon_path))
-        
+
         # Load small icon (16x16)
         h_icon_small = user32.LoadImageW(
-            0, icon_path, 1, 16, 16, 0x00000010 | 0x00000040 # LR_LOADFROMFILE | LR_DEFAULTSIZE
+            0,
+            icon_path,
+            1,
+            16,
+            16,
+            0x00000010 | 0x00000040,  # LR_LOADFROMFILE | LR_DEFAULTSIZE
         )
         # Load large icon (32x32)
         h_icon_large = user32.LoadImageW(
@@ -231,15 +235,17 @@ def set_window_icon(w, icon_path):
         )
 
         if h_icon_small:
-            user32.SendMessageW(hwnd, 0x0080, 0, h_icon_small) # WM_SETICON, ICON_SMALL
+            user32.SendMessageW(hwnd, 0x0080, 0, h_icon_small)  # WM_SETICON, ICON_SMALL
         if h_icon_large:
-            user32.SendMessageW(hwnd, 0x0080, 1, h_icon_large) # WM_SETICON, ICON_BIG
-            
+            user32.SendMessageW(hwnd, 0x0080, 1, h_icon_large)  # WM_SETICON, ICON_BIG
+
     except Exception as e:
         print(f"[Pytron] Failed to set window icon: {e}")
 
+
 # Taskbar Progress
 _taskbar_list = None
+
 
 def _init_taskbar():
     global _taskbar_list
@@ -260,15 +266,42 @@ def _init_taskbar():
             _methods_ = [
                 # ITaskbarList
                 COMMETHOD([], HRESULT, "HrInit"),
-                COMMETHOD([], HRESULT, "AddTab", (["in"], ctypes.wintypes.HWND, "hwnd")),
-                COMMETHOD([], HRESULT, "DeleteTab", (["in"], ctypes.wintypes.HWND, "hwnd")),
-                COMMETHOD([], HRESULT, "ActivateTab", (["in"], ctypes.wintypes.HWND, "hwnd")),
-                COMMETHOD([], HRESULT, "SetActiveAlt", (["in"], ctypes.wintypes.HWND, "hwnd")),
+                COMMETHOD(
+                    [], HRESULT, "AddTab", (["in"], ctypes.wintypes.HWND, "hwnd")
+                ),
+                COMMETHOD(
+                    [], HRESULT, "DeleteTab", (["in"], ctypes.wintypes.HWND, "hwnd")
+                ),
+                COMMETHOD(
+                    [], HRESULT, "ActivateTab", (["in"], ctypes.wintypes.HWND, "hwnd")
+                ),
+                COMMETHOD(
+                    [], HRESULT, "SetActiveAlt", (["in"], ctypes.wintypes.HWND, "hwnd")
+                ),
                 # ITaskbarList2
-                COMMETHOD([], HRESULT, "MarkFullscreenWindow", (["in"], ctypes.wintypes.HWND, "hwnd"), (["in"], ctypes.c_int, "fFullscreen")),
+                COMMETHOD(
+                    [],
+                    HRESULT,
+                    "MarkFullscreenWindow",
+                    (["in"], ctypes.wintypes.HWND, "hwnd"),
+                    (["in"], ctypes.c_int, "fFullscreen"),
+                ),
                 # ITaskbarList3
-                COMMETHOD([], HRESULT, "SetProgressValue", (["in"], ctypes.wintypes.HWND, "hwnd"), (["in"], ctypes.c_ulonglong, "ullCompleted"), (["in"], ctypes.c_ulonglong, "ullTotal")),
-                COMMETHOD([], HRESULT, "SetProgressState", (["in"], ctypes.wintypes.HWND, "hwnd"), (["in"], ctypes.c_int, "tbpFlags")),
+                COMMETHOD(
+                    [],
+                    HRESULT,
+                    "SetProgressValue",
+                    (["in"], ctypes.wintypes.HWND, "hwnd"),
+                    (["in"], ctypes.c_ulonglong, "ullCompleted"),
+                    (["in"], ctypes.c_ulonglong, "ullTotal"),
+                ),
+                COMMETHOD(
+                    [],
+                    HRESULT,
+                    "SetProgressState",
+                    (["in"], ctypes.wintypes.HWND, "hwnd"),
+                    (["in"], ctypes.c_int, "tbpFlags"),
+                ),
             ]
 
         _taskbar_list = comtypes.client.CreateObject(
@@ -279,6 +312,7 @@ def _init_taskbar():
     except Exception as e:
         print(f"[Pytron] Taskbar Init Failed: {e}")
         return None
+
 
 def set_taskbar_progress(w, state="normal", value=0, max_value=100):
     try:
@@ -301,34 +335,35 @@ def set_taskbar_progress(w, state="normal", value=0, max_value=100):
     except Exception:
         pass
 
+
 # Clipboard Support (Native Win32 implementation)
 def set_clipboard_text(text: str):
     """Copies text to the system clipboard."""
     try:
         user32 = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
-        
+
         # 1. Open Clipboard
         if not user32.OpenClipboard(0):
             return False
-            
+
         # 2. Empty Clipboard
         user32.EmptyClipboard()
-        
+
         # 3. Alloc Memory for UTF-16 text
         # (len + 1 for null terminator) * 2 bytes per char
         text_unicode = text
         size = (len(text_unicode) + 1) * 2
-        h_mem = kernel32.GlobalAlloc(0x0042, size) # GMEM_MOVEABLE | GMEM_ZEROINIT
-        
+        h_mem = kernel32.GlobalAlloc(0x0042, size)  # GMEM_MOVEABLE | GMEM_ZEROINIT
+
         # 4. Lock Memory and copy
         p_mem = kernel32.GlobalLock(h_mem)
         ctypes.memmove(p_mem, text_unicode, size)
         kernel32.GlobalUnlock(h_mem)
-        
+
         # 5. Set Data to Clipboard (CF_UNICODETEXT = 13)
         user32.SetClipboardData(13, h_mem)
-        
+
         # 6. Close Clipboard
         user32.CloseClipboard()
         return True
@@ -336,60 +371,64 @@ def set_clipboard_text(text: str):
         print(f"[Pytron] Clipboard Set Error: {e}")
         return False
 
+
 def get_clipboard_text():
     """Returns text from the system clipboard."""
     try:
         user32 = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
-        
+
         if not user32.OpenClipboard(0):
             return None
-            
+
         # CF_UNICODETEXT = 13
         h_mem = user32.GetClipboardData(13)
         if not h_mem:
             user32.CloseClipboard()
             return None
-            
+
         p_mem = kernel32.GlobalLock(h_mem)
         text = ctypes.c_wchar_p(p_mem).value
         kernel32.GlobalUnlock(p_mem)
-        
+
         user32.CloseClipboard()
         return text
     except Exception as e:
         print(f"[Pytron] Clipboard Get Error: {e}")
         return None
 
+
 def get_system_info():
     """Returns platform core information."""
     import platform
-    import psutil # Note: Added as dynamic check to avoid dependency blowup if not installed
-    
+    import psutil  # Note: Added as dynamic check to avoid dependency blowup if not installed
+
     info = {
         "os": platform.system(),
         "arch": platform.machine(),
         "release": platform.release(),
         "version": platform.version(),
-        "cpu_count": os.cpu_count()
+        "cpu_count": os.cpu_count(),
     }
-    
+
     try:
         import psutil
+
         mem = psutil.virtual_memory()
         info["ram_total"] = mem.total
         info["ram_available"] = mem.available
         info["cpu_usage"] = psutil.cpu_percent(interval=None)
     except ImportError:
         pass
-        
+
     return info
+
 
 # -------------------------------------------------------------------------
 # Native Drag & Drop Support - REMOVED AS PER USER REQUEST
 # -------------------------------------------------------------------------
 
+
 def enable_drag_drop_safe(w, callback):
     # Legacy Native Hook - Disabled in favor of JS Bridge
     pass
-    

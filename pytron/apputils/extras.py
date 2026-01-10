@@ -1,9 +1,11 @@
 import os
 from ..tray import SystemTray
 
+
 class ExtrasMixin:
     def load_plugin(self, manifest_path):
         from ..plugin import Plugin, PluginError
+
         try:
             plugin = Plugin(manifest_path)
             plugin.check_dependencies()
@@ -13,7 +15,9 @@ class ExtrasMixin:
         except PluginError as e:
             self.logger.error(f"Failed to load plugin from {manifest_path}: {e}")
         except Exception as e:
-            self.logger.error(f"Unexpected error loading plugin from {manifest_path}: {e}")
+            self.logger.error(
+                f"Unexpected error loading plugin from {manifest_path}: {e}"
+            )
 
     def setup_tray(self, title=None, icon=None):
         if not title:

@@ -91,8 +91,10 @@ def cmd_init(args: argparse.Namespace) -> int:
             # npx create-next-app@latest frontend --use-npm --no-git --ts --eslint --no-tailwind --src-dir --app --import-alias "@/*"
             # Using defaults but forcing non-interactive
             runner = "npx"
-            if provider == "bun": runner = "bunx"
-            elif provider == "pnpm": runner = "pnpx"
+            if provider == "bun":
+                runner = "bunx"
+            elif provider == "pnpm":
+                runner = "pnpx"
 
             cmd = [
                 runner,
@@ -173,8 +175,10 @@ def cmd_init(args: argparse.Namespace) -> int:
         # that appear in newer versions (v6+).
         try:
             runner = "npx"
-            if provider == "bun": runner = "bunx"
-            elif provider == "pnpm": runner = "pnpx"
+            if provider == "bun":
+                runner = "bunx"
+            elif provider == "pnpm":
+                runner = "pnpx"
 
             ret = run_command_with_output(
                 [

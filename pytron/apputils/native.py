@@ -2,10 +2,12 @@ import sys
 import os
 from typing import Optional
 
+
 class NativeMixin:
     """
     Mixin class to handle native system interactions.
     """
+
     def set_start_on_boot(self, enable=True):
         """
         Enables or disables automatic application startup on system boot.
@@ -38,22 +40,24 @@ class NativeMixin:
         # Fallback if no window yet or needed
         try:
             import platform
+
             sys_plat = platform.system()
             impl = None
             if sys_plat == "Windows":
                 from ..platforms.windows import WindowsImplementation
+
                 impl = WindowsImplementation()
             elif sys_plat == "Linux":
                 from ..platforms.linux import LinuxImplementation
+
                 impl = LinuxImplementation()
             elif sys_plat == "Darwin":
                 from ..platforms.darwin import DarwinImplementation
+
                 impl = DarwinImplementation()
 
             if impl:
-                return impl.set_launch_on_boot(
-                    safe_name, exe_path, enable
-                )
+                return impl.set_launch_on_boot(safe_name, exe_path, enable)
         except Exception as e:
             self.logger.warning(f"Could not set start on boot: {e}")
 
@@ -120,9 +124,10 @@ class NativeMixin:
         """Returns hardware and OS information."""
         if self.windows:
             return self.windows[0]._platform.get_system_info()
-        
+
         # Fallback if no window
         import platform
+
         return {"os": platform.system(), "arch": platform.machine()}
 
     def store_set(self, key: str, value):

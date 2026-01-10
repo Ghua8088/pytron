@@ -3,6 +3,7 @@ import os
 import ctypes
 from . import libs
 
+
 def message_box(w, title, message, style=0):
     # Styles: 0=OK, 1=OK/cancel, 4=Yes/No
     # Return: 1=OK, 2=Cancel, 6=Yes, 7=No
@@ -37,6 +38,7 @@ def message_box(w, title, message, style=0):
             print("Pytron Warning: No dialog tool (zenity/kdialog) found.")
             return 0
 
+
 def notification(w, title, message, icon=None):
     # Try notify-send
     try:
@@ -44,9 +46,10 @@ def notification(w, title, message, icon=None):
     except Exception:
         print("Pytron Warning: notify-send not found.")
 
+
 def _run_subprocess_dialog(title, action, default_path, default_name):
     # Action: 0=Open, 1=Save, 2=Folder
-    
+
     # Try ZENITY
     try:
         cmd = ["zenity", "--file-selection", "--title=" + title]
@@ -88,19 +91,21 @@ def _run_subprocess_dialog(title, action, default_path, default_name):
     except Exception:
         pass
 
-    print(
-        "Pytron Warning: No file dialog provider (zenity/kdialog) found on Linux."
-    )
+    print("Pytron Warning: No file dialog provider (zenity/kdialog) found on Linux.")
     return None
+
 
 def open_file_dialog(w, title, default_path=None, file_types=None):
     return _run_subprocess_dialog(title, 0, default_path, None)
 
+
 def save_file_dialog(w, title, default_path=None, default_name=None, file_types=None):
     return _run_subprocess_dialog(title, 1, default_path, default_name)
 
+
 def open_folder_dialog(w, title, default_path=None):
     return _run_subprocess_dialog(title, 2, default_path, None)
+
 
 def set_app_id(app_id):
     if not libs.glib:
@@ -112,6 +117,7 @@ def set_app_id(app_id):
         libs.glib.g_set_application_name(app_id.encode("utf-8"))
     except Exception:
         pass
+
 
 def set_launch_on_boot(app_name, exe_path, enable=True):
     config_home = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
@@ -144,17 +150,20 @@ X-GNOME-Autostart-enabled=true
             print(f"[Pytron] Failed to disable autostart on Linux: {e}")
             return False
 
+
 def set_taskbar_progress(w, state="normal", value=0, max_value=100):
     pass
+
 
 def register_protocol(scheme):
     try:
         import sys
+
         # Get absolute path to this executable or script
         exe_path = os.path.abspath(sys.executable)
-        if not getattr(sys, 'frozen', False):
+        if not getattr(sys, "frozen", False):
             # If running as script, we need the script path too
-            main_script = sys.modules['__main__'].__file__
+            main_script = sys.modules["__main__"].__file__
             exe_path = f'"{exe_path}" "{os.path.abspath(main_script)}"'
         else:
             exe_path = f'"{exe_path}"'
@@ -179,7 +188,10 @@ Terminal=false
         # Update mime database and register
         try:
             subprocess.run(["update-desktop-database", apps_dir], capture_output=True)
-            subprocess.run(["xdg-mime", "default", desktop_filename, f"x-scheme-handler/{scheme}"], capture_output=True)
+            subprocess.run(
+                ["xdg-mime", "default", desktop_filename, f"x-scheme-handler/{scheme}"],
+                capture_output=True,
+            )
             return True
         except Exception:
             # Fallback if tools are missing
@@ -188,10 +200,12 @@ Terminal=false
         print(f"[Pytron] Failed to register protocol on Linux: {e}")
         return False
 
+
 # -------------------------------------------------------------------------
 # Native Drag & Drop Support (Linux/GTK3)
 # -------------------------------------------------------------------------
-_drag_callbacks = {} # Keep references alive
+_drag_callbacks = {}  # Keep references alive
+
 
 def enable_drag_drop(w, callback):
     """
@@ -207,49 +221,52 @@ def enable_drag_drop(w, callback):
 
     # Define Target Entry
     # drag_dest_set expects an array of GtkTargetEntry
-    # But usually webview already accepts drags (for the browser). 
+    # But usually webview already accepts drags (for the browser).
     # We might just need to connect the signal!
-    
+
     # Let's try just connecting the signal first.
-    
+
     # Callback Sig: void user_function (GtkWidget *widget, GdkDragContext *context, gint x, gint y, GtkSelectionData *data, guint info, guint time, gpointer user_data)
     CALLBACK_TYPE = ctypes.CFUNCTYPE(
-        None, 
-        ctypes.c_void_p, # widget
-        ctypes.c_void_p, # context
-        ctypes.c_int,    # x
-        ctypes.c_int,    # y
-        ctypes.c_void_p, # data (GtkSelectionData*)
-        ctypes.c_uint,   # info
-        ctypes.c_uint,   # time
-        ctypes.c_void_p  # user_data
+        None,
+        ctypes.c_void_p,  # widget
+        ctypes.c_void_p,  # context
+        ctypes.c_int,  # x
+        ctypes.c_int,  # y
+        ctypes.c_void_p,  # data (GtkSelectionData*)
+        ctypes.c_uint,  # info
+        ctypes.c_uint,  # time
+        ctypes.c_void_p,  # user_data
     )
 
     def on_drag_data_received(widget, context, x, y, data, info, time, user_data):
         try:
             # gtk_selection_data_get_uris (data) -> gchar**
-            libs.gtk.gtk_selection_data_get_uris.restype = ctypes.POINTER(ctypes.c_char_p)
+            libs.gtk.gtk_selection_data_get_uris.restype = ctypes.POINTER(
+                ctypes.c_char_p
+            )
             libs.gtk.gtk_selection_data_get_uris.argtypes = [ctypes.c_void_p]
-            
+
             uris_ptr = libs.gtk.gtk_selection_data_get_uris(data)
             files = []
-            
+
             if uris_ptr:
                 # Iterate null-terminated array
                 i = 0
                 while uris_ptr[i]:
-                    uri_str = uris_ptr[i].decode('utf-8')
+                    uri_str = uris_ptr[i].decode("utf-8")
                     # Convert file:// URI to path
                     if uri_str.startswith("file://"):
                         # Basic unquoting (replace %20 with space, etc)
                         import urllib.parse
+
                         path = urllib.parse.unquote(uri_str.replace("file://", ""))
                         # Sanitize line endings
                         files.append(path.strip())
                     else:
                         files.append(uri_str)
                     i += 1
-                
+
                 # Free strings? GTK owns them usually in this context or we need to free the array?
                 # g_strfreev(uris_ptr) usually.
                 if libs.glib and hasattr(libs.glib, "g_strfreev"):
@@ -257,7 +274,7 @@ def enable_drag_drop(w, callback):
 
             if files:
                 callback(files)
-                
+
             # Finish drag
             libs.gtk.gtk_drag_finish(context, True, False, time)
         except Exception as e:
@@ -265,25 +282,30 @@ def enable_drag_drop(w, callback):
             libs.gtk.gtk_drag_finish(context, False, False, time)
 
     c_callback = CALLBACK_TYPE(on_drag_data_received)
-    
+
     # Keep alive
     _drag_callbacks[w] = c_callback
-    
+
     # Function sig: gulong g_signal_connect_data (gpointer instance, const gchar *detailed_signal, GCallback c_handler, gpointer data, GClosureNotify destroy_data, GConnectFlags connect_flags)
     libs.glib.g_signal_connect_data.restype = ctypes.c_ulong
     libs.glib.g_signal_connect_data.argtypes = [
-        ctypes.c_void_p, ctypes.c_char_p, CALLBACK_TYPE, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        CALLBACK_TYPE,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_int,
     ]
 
     libs.glib.g_signal_connect_data(
-        ctypes.c_void_p(w), 
-        "drag-data-received".encode("utf-8"), 
-        c_callback, 
-        None, 
-        None, 
-        0
+        ctypes.c_void_p(w),
+        "drag-data-received".encode("utf-8"),
+        c_callback,
+        None,
+        None,
+        0,
     )
-    
+
     # Also ensure it is a drop destination
     # gtk_drag_dest_set (widget, GTK_DEST_DEFAULT_ALL, NULL, 0, GDK_ACTION_COPY)
     # Actually, we should probably add URI targets. This is verbose in ctypes.

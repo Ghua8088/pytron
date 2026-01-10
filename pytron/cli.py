@@ -208,20 +208,24 @@ def build_parser() -> argparse.ArgumentParser:
     plugin_sub = p_plugin.add_subparsers(dest="plugin_command")
 
     # Plugin Install
-    p_plugin_inst = plugin_sub.add_parser("install", help="Install a plugin from GitHub")
-    p_plugin_inst.add_argument("identifier", help="username.repo.version (e.g. ghua8088.pytron-weather-plugin)")
-    
+    p_plugin_inst = plugin_sub.add_parser(
+        "install", help="Install a plugin from GitHub"
+    )
+    p_plugin_inst.add_argument(
+        "identifier", help="username.repo.version (e.g. ghua8088.pytron-weather-plugin)"
+    )
+
     # Plugin List
     p_plugin_list = plugin_sub.add_parser("list", help="List installed plugins")
-    
+
     # Plugin Create
     p_plugin_create = plugin_sub.add_parser("create", help="Scaffold a new plugin")
     p_plugin_create.add_argument("name", help="Name of the plugin directory")
-    
+
     # Plugin Uninstall
     p_plugin_uninst = plugin_sub.add_parser("uninstall", help="Remove a plugin")
     p_plugin_uninst.add_argument("name", help="Directory name of the plugin to remove")
-    
+
     p_plugin.set_defaults(func=cmd_plugin)
 
     p_android = sub.add_parser(

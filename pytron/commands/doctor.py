@@ -70,6 +70,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     # 2. Web Application Dependencies
     console.print(f"[bold]Web & Frontend Tools[/bold]")
     from .helpers import get_config
+
     config = get_config()
     configured_provider = config.get("frontend_provider", "npm")
 
@@ -85,7 +86,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     for p in providers:
         p_path, p_ver = check_command(p)
         status = "[success]✓[/success]" if p_path else "[dim]✗[/dim]"
-        configured_tag = " [cyan](Configured)[/cyan]" if p == configured_provider else ""
+        configured_tag = (
+            " [cyan](Configured)[/cyan]" if p == configured_provider else ""
+        )
         if p_path:
             console.print(f"  {status} {p}: {p_ver}{configured_tag}")
         elif p == configured_provider:

@@ -31,6 +31,7 @@ NIF_INFO = 0x10
 NIIF_INFO = 0x1
 NOTIFYICON_VERSION_4 = 4
 
+
 # --- Structures ---
 class NOTIFYICONDATAW(ctypes.Structure):
     _pack_ = 8  # <--- CRITICAL FIX: Force 8-byte packing for x64 compatibility
@@ -51,6 +52,7 @@ class NOTIFYICONDATAW(ctypes.Structure):
         ("guidItem", ctypes.c_ubyte * 16),
         ("hBalloonIcon", ctypes.c_void_p),
     ]
+
 
 class OPENFILENAMEW(ctypes.Structure):
     _fields_ = [
@@ -76,12 +78,14 @@ class OPENFILENAMEW(ctypes.Structure):
         ("lpTemplateName", ctypes.c_wchar_p),
     ]
 
+
 # Flags for OpenFileName
 OFN_EXPLORER = 0x00080000
 OFN_FILEMUSTEXIST = 0x00001000
 OFN_PATHMUSTEXIST = 0x00000800
 OFN_OVERWRITEPROMPT = 0x00000002
 OFN_NOCHANGEDIR = 0x00000008
+
 
 class BROWSEINFOW(ctypes.Structure):
     _fields_ = [
@@ -94,6 +98,7 @@ class BROWSEINFOW(ctypes.Structure):
         ("lParam", ctypes.c_long),
         ("iImage", ctypes.c_int),
     ]
+
 
 BIF_RETURNONLYFSDIRS = 0x00000001
 BIF_NEWDIALOGSTYLE = 0x00000040

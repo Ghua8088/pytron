@@ -5,9 +5,10 @@ webkit = None
 glib = None
 gio = None
 
+
 def load_libs():
     global gtk, webkit, glib, gio
-    
+
     # Load GTK
     if not gtk:
         try:
@@ -41,6 +42,7 @@ def load_libs():
             gio = ctypes.CDLL("libgio-2.0.so.0")
         except OSError:
             pass
+
 
 # Initialize on import? Or let the facade call it?
 # Let's initialize on import for simplicity, or lazily.

@@ -4,6 +4,7 @@ import ctypes.util
 cocoa = None
 objc = None
 
+
 def load_libs():
     global cocoa, objc
     try:
@@ -25,5 +26,6 @@ def load_libs():
     except Exception as e:
         print(f"Pytron Warning: Cocoa/ObjC not found: {e}")
         objc = None
+
 
 load_libs()

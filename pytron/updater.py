@@ -74,16 +74,18 @@ class Updater:
 
     def download_and_install(self, update_info: dict, on_progress=None):
         """
-        Downloads the update. 
+        Downloads the update.
         In Secure Builds, it prefers the 'patch_url' to download a tiny evolution patch.
         Otherwise, it downloads the full installer.
         """
         patch_url = update_info.get("patch_url")
         full_url = update_info.get("url")
-        
+
         # Detect if we are in a Secure Build (app.pytron exists next to EXE)
         is_secure = False
-        app_root = Path(getattr(sys, "_MEIPASS", os.getcwd())) # Usually _internal if frozen
+        app_root = Path(
+            getattr(sys, "_MEIPASS", os.getcwd())
+        )  # Usually _internal if frozen
         if getattr(sys, "frozen", False):
             # Real app root is parent of _internal or where exe is
             exe_dir = Path(sys.executable).parent
@@ -96,7 +98,7 @@ class Updater:
         if is_secure and patch_url:
             self.logger.info(f"Preferring evolution patch: {patch_url}")
             return self._handle_patch_download(patch_url, on_progress)
-        
+
         if not full_url:
             self.logger.error("No download URL provided in update info.")
             return False
@@ -107,9 +109,9 @@ class Updater:
         try:
             exe_dir = Path(sys.executable).parent
             patch_dest = exe_dir / "app.pytron_patch"
-            
+
             self.logger.info(f"Downloading patch to {patch_dest}...")
-            
+
             def progress(block_num, block_size, total_size):
                 if on_progress:
                     downloaded = block_num * block_size
@@ -118,15 +120,17 @@ class Updater:
 
             urllib.request.urlretrieve(url, patch_dest, reporthook=progress)
             self.logger.info("Evolution patch downloaded successfully.")
-            
+
             # Since the Rust loader handles patching on launch, we just need to restart
             self.logger.info("Restarting to apply evolution...")
-            
+
             if sys.platform == "win32":
-                 subprocess.Popen([sys.executable], shell=True, creationflags=0x00000008) # DETACHED_PROCESS
+                subprocess.Popen(
+                    [sys.executable], shell=True, creationflags=0x00000008
+                )  # DETACHED_PROCESS
             else:
-                 subprocess.Popen([sys.executable])
-                 
+                subprocess.Popen([sys.executable])
+
             sys.exit(0)
             return True
         except Exception as e:
@@ -135,11 +139,18 @@ class Updater:
 
     def _handle_full_download(self, url, on_progress):
         filename = url.split("/")[-1]
-        if not filename.endswith((".exe", ".msi", ".dmg", ".pkg", ".deb", ".rpm", ".AppImage")):
-            filename = "update_installer.exe" if sys.platform == "win32" else "update_installer"
+        if not filename.endswith(
+            (".exe", ".msi", ".dmg", ".pkg", ".deb", ".rpm", ".AppImage")
+        ):
+            filename = (
+                "update_installer.exe"
+                if sys.platform == "win32"
+                else "update_installer"
+            )
 
         download_path = Path(tempfile.gettempdir()) / filename
         try:
+
             def progress(block_num, block_size, total_size):
                 if on_progress:
                     percent = min(100, int((block_num * block_size / total_size) * 100))
@@ -149,7 +160,9 @@ class Updater:
             self.logger.info(f"Download complete: {download_path}")
 
             if sys.platform == "win32":
-                subprocess.Popen([str(download_path)], shell=True, creationflags=0x00000008)
+                subprocess.Popen(
+                    [str(download_path)], shell=True, creationflags=0x00000008
+                )
             elif sys.platform == "darwin":
                 subprocess.Popen(["open", str(download_path)])
             else:

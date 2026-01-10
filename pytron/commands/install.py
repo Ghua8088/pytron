@@ -102,7 +102,7 @@ def cmd_install(args: argparse.Namespace) -> int:
                         current_plugins.append(plugin_id)
                 else:
                     return 1
-            
+
             req_data["plugins"] = sorted(list(set(current_plugins)))
             save_requirements(req_data)
             log(f"Added plugins to {REQUIREMENTS_JSON}", style="success")
@@ -234,7 +234,10 @@ def cmd_install(args: argparse.Namespace) -> int:
         current_plugins = req_data.get("plugins", [])
 
         if not current_deps and not current_plugins:
-            log(f"No dependencies or plugins found in {REQUIREMENTS_JSON}.", style="warning")
+            log(
+                f"No dependencies or plugins found in {REQUIREMENTS_JSON}.",
+                style="warning",
+            )
             return 0
 
         if current_deps:
@@ -254,10 +257,9 @@ def cmd_install(args: argparse.Namespace) -> int:
                 else:
                     log("Failed to install dependencies.", style="error")
                     return 1
-            except (
-                Exception
-            ) as e:
-                if 'progress' in locals(): progress.stop()
+            except Exception as e:
+                if "progress" in locals():
+                    progress.stop()
                 log(f"Error installing dependencies: {e}", style="error")
                 return 1
 
@@ -275,16 +277,21 @@ def cmd_install(args: argparse.Namespace) -> int:
             log(f"Detected frontend in {frontend_dir}. Syncing NPM dependencies...")
             provider = req_data.get("provider", "npm")
             provider_bin = shutil.which(provider)
-            
+
             if provider_bin:
                 try:
                     # Run install in the frontend directory
                     subprocess.check_call([provider_bin, "install"], cwd=frontend_dir)
-                    log("Frontend dependencies installed successfully.", style="success")
+                    log(
+                        "Frontend dependencies installed successfully.", style="success"
+                    )
                 except subprocess.CalledProcessError as e:
                     log(f"Failed to install frontend dependencies: {e}", style="error")
                     return 1
             else:
-                log(f"Warning: '{provider}' not found. Please install '{provider}' to sync frontend dependencies.", style="warning")
+                log(
+                    f"Warning: '{provider}' not found. Please install '{provider}' to sync frontend dependencies.",
+                    style="warning",
+                )
 
     return 0

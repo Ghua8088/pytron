@@ -3,10 +3,12 @@ import sys
 import subprocess
 import platform
 
+
 class Shell:
     """
     Native OS Shell utilities for Pytron.
     """
+
     @staticmethod
     def open_external(url: str):
         """
@@ -41,6 +43,7 @@ class Shell:
         """
         try:
             from send2trash import send2trash
+
             send2trash(path)
             return True
         except ImportError:

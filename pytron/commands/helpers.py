@@ -82,11 +82,11 @@ def run_frontend_build(frontend_dir: Path) -> bool | None:
     config = get_config()
     provider = config.get("frontend_provider", "npm")
     provider_bin = shutil.which(provider)
-    
+
     if not provider_bin:
         print(f"[Pytron] {provider} not found, skipping frontend build.")
         return None
-        
+
     print(f"[Pytron] Building frontend at: {frontend_dir} using {provider}")
     # Ensure Next.js static export-friendly config when applicable
     # Determine if this is a Next.js project and ensure config if so
@@ -106,9 +106,11 @@ def run_frontend_build(frontend_dir: Path) -> bool | None:
         # If this is a Next.js project, prefer npx/bunx/pnpx next build (and export)
         if is_next:
             runner = "npx"
-            if provider == "bun": runner = "bunx"
-            elif provider == "pnpm": runner = "pnpx"
-            
+            if provider == "bun":
+                runner = "bunx"
+            elif provider == "pnpm":
+                runner = "pnpx"
+
             print(f"[Pytron] Detected Next.js project — running `{runner} next build`.")
             # Run build to create a static `out/` directory (Next.js 13.4+ with output: "export")
             subprocess.run(

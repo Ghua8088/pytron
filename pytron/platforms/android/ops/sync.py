@@ -12,12 +12,13 @@ from ..builder import AndroidBuilder
 
 import time
 
+
 def sync_android_project(project_root: str, native: bool = False) -> None:
     """
     Sync the current project assets to the Android project.
     """
     target_android_dir = os.path.join(project_root, "android")
-    
+
     if not os.path.exists(target_android_dir):
         log(
             "Android project not found. Run 'pytron android init' first.",
@@ -35,24 +36,33 @@ def sync_android_project(project_root: str, native: bool = False) -> None:
 
     # 0. Build Frontend
     frontend_dir = os.path.join(project_root, "frontend")
-    if os.path.exists(frontend_dir) and os.path.exists(os.path.join(frontend_dir, "package.json")):
+    if os.path.exists(frontend_dir) and os.path.exists(
+        os.path.join(frontend_dir, "package.json")
+    ):
         console.print("  [Frontend] Building frontend...", style="dim")
         try:
             # Check for node_modules
             if not os.path.exists(os.path.join(frontend_dir, "node_modules")):
-                 config = get_config()
-                 provider = config.get("frontend_provider", "npm")
-                 provider_bin = shutil.which(provider) or provider
-                 console.print(f"  [Frontend] Installing dependencies using {provider}...", style="dim")
-                 subprocess.run(f"{provider_bin} install", shell=True, cwd=frontend_dir, check=True)
-            
+                config = get_config()
+                provider = config.get("frontend_provider", "npm")
+                provider_bin = shutil.which(provider) or provider
+                console.print(
+                    f"  [Frontend] Installing dependencies using {provider}...",
+                    style="dim",
+                )
+                subprocess.run(
+                    f"{provider_bin} install", shell=True, cwd=frontend_dir, check=True
+                )
+
             config = get_config()
             provider = config.get("frontend_provider", "npm")
             provider_bin = shutil.which(provider) or provider
-            subprocess.run(f"{provider_bin} run build", shell=True, cwd=frontend_dir, check=True)
+            subprocess.run(
+                f"{provider_bin} run build", shell=True, cwd=frontend_dir, check=True
+            )
             console.print("  [Frontend] Build successful.", style="success")
         except subprocess.CalledProcessError as e:
-             console.print(f"  [Frontend] Build failed: {e}", style="error")
+            console.print(f"  [Frontend] Build failed: {e}", style="error")
 
     # 1. Frontend (www)
     # Search for standard build output locations
@@ -227,7 +237,7 @@ def sync_android_project(project_root: str, native: bool = False) -> None:
     cand2_repo = os.path.join(os.path.dirname(project_root), "pytron")
     # This is the Package Root
     cand2_pkg = os.path.join(cand2_repo, "pytron")
-    
+
     # Candidate 3: The root of the running code
     # pytron/platforms/android/ops/sync.py -> pytron/
     pytron_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -244,7 +254,7 @@ def sync_android_project(project_root: str, native: bool = False) -> None:
 
     # Decide source
     # We check if local_pytron_source is NOT the system site-packages to label it "LOCAL"
-    
+
     is_dev = False
     if local_pytron_source:
         if local_pytron_source == cand1 or local_pytron_source == cand2_pkg:
@@ -300,37 +310,46 @@ def sync_android_project(project_root: str, native: bool = False) -> None:
     # 4. Unzip Standard Library & Fix .so files (User Request)
     # We do this at build time to avoid runtime unzip and to fix filenames
     python_zip = os.path.join(python_dir, "python314.zip")
-    
+
     # If python314.zip is missing, try to provision it using AndroidBuilder (BeeWare support)
-    if not os.path.exists(python_zip) and not os.path.exists(os.path.join(python_dir, "Lib")):
-        console.print("  [StdLib]   Python runtime not found. Provisioning via BeeWare...", style="dim")
+    if not os.path.exists(python_zip) and not os.path.exists(
+        os.path.join(python_dir, "Lib")
+    ):
+        console.print(
+            "  [StdLib]   Python runtime not found. Provisioning via BeeWare...",
+            style="dim",
+        )
         try:
             builder = AndroidBuilder(arch="aarch64")
             # This downloads to a cache dir
             cache_dir = os.path.join(target_android_dir, "wheels_cache")
             os.makedirs(cache_dir, exist_ok=True)
-            
+
             support_pkg_dir = builder.setup_python_target(cache_dir)
-            
+
             # Copy from support package to assets/python
             # BeeWare structure: /python/lib/python3.x/...
             # We need to map it to our structure.
             # Usually support package has a 'python' folder or similar.
-            
+
             # Let's look for 'lib' or 'usr/lib'
             # BeeWare support package structure varies.
             # Usually: /python/lib/python3.X
-            
+
             # Simple recursive copy of the whole thing into python_dir?
             # Our python_dir expects: Lib/, lib-dynload/, etc.
-            
+
             # Let's just copy everything from the support package root to python_dir
             if os.path.exists(support_pkg_dir):
                 shutil.copytree(support_pkg_dir, python_dir, dirs_exist_ok=True)
-                console.print("  [StdLib]   Provisioned Python runtime.", style="success")
-                
+                console.print(
+                    "  [StdLib]   Provisioned Python runtime.", style="success"
+                )
+
         except Exception as e:
-            console.print(f"  [StdLib]   Failed to provision Python: {e}", style="error")
+            console.print(
+                f"  [StdLib]   Failed to provision Python: {e}", style="error"
+            )
 
     if os.path.exists(python_zip):
         console.print(f"  [StdLib]   Unzipping {python_zip}...", style="dim")
@@ -566,49 +585,64 @@ def sync_android_project(project_root: str, native: bool = False) -> None:
                     shutil.copy2(
                         libpy_src, os.path.join(jni_libs_dir, "libpython3.14.so")
                     )
-    
+
     # 6c. ALWAYS ensure libpython3.14.so is in jniLibs/arm64-v8a if not already there
     # This is critical for the native bridge to link against it, even if no other extensions are built.
-    jni_libs_arm64 = os.path.join(target_android_dir, "app", "src", "main", "jniLibs", "arm64-v8a")
+    jni_libs_arm64 = os.path.join(
+        target_android_dir, "app", "src", "main", "jniLibs", "arm64-v8a"
+    )
     os.makedirs(jni_libs_arm64, exist_ok=True)
     libpy_dst = os.path.join(jni_libs_arm64, "libpython3.14.so")
-    
+
     # Check for local workspace android-python-3.14 (Common in this user's env)
     workspace_root = os.path.dirname(project_root)
     local_python_dir = os.path.join(workspace_root, "android-python-3.14")
-    
+
     if not os.path.exists(libpy_dst):
-        local_lib_path = os.path.join(local_python_dir, "jniLibs", "arm64-v8a", "libpython3.14.so")
-        
+        local_lib_path = os.path.join(
+            local_python_dir, "jniLibs", "arm64-v8a", "libpython3.14.so"
+        )
+
         if os.path.exists(local_lib_path):
-             shutil.copy2(local_lib_path, libpy_dst)
-             console.print(f"  [Native]   Copied libpython3.14.so from local workspace: {local_lib_path}", style="success")
+            shutil.copy2(local_lib_path, libpy_dst)
+            console.print(
+                f"  [Native]   Copied libpython3.14.so from local workspace: {local_lib_path}",
+                style="success",
+            )
         else:
             # Fallback: Initialize builder just to find the lib if missing
             if not builder:
-                 try:
-                     builder = AndroidBuilder(arch="aarch64")
-                     if builder.ndk_info and builder.ndk_info.get("lib"):
-                         libpy_src = os.path.join(builder.ndk_info["lib"], "libpython3.14.so")
-                         if os.path.exists(libpy_src):
-                             shutil.copy2(libpy_src, libpy_dst)
-                             console.print("  [Native]   Copied libpython3.14.so to jniLibs (Critical for bridge).", style="dim")
-                 except Exception:
-                     pass
+                try:
+                    builder = AndroidBuilder(arch="aarch64")
+                    if builder.ndk_info and builder.ndk_info.get("lib"):
+                        libpy_src = os.path.join(
+                            builder.ndk_info["lib"], "libpython3.14.so"
+                        )
+                        if os.path.exists(libpy_src):
+                            shutil.copy2(libpy_src, libpy_dst)
+                            console.print(
+                                "  [Native]   Copied libpython3.14.so to jniLibs (Critical for bridge).",
+                                style="dim",
+                            )
+                except Exception:
+                    pass
 
     # 6d. Ensure libffi.so is present (Required by libpython3.14.so)
     libffi_dst = os.path.join(jni_libs_arm64, "libffi.so")
     if not os.path.exists(libffi_dst):
-         ffi_candidates = [
-             os.path.join(local_python_dir, "libffi.so"),
-             os.path.join(local_python_dir, "lib-dynload", "libffi.so"),
-             os.path.join(local_python_dir, "jniLibs", "arm64-v8a", "libffi.so")
-         ]
-         for ffi in ffi_candidates:
-             if os.path.exists(ffi):
-                 shutil.copy2(ffi, libffi_dst)
-                 console.print(f"  [Native]   Copied libffi.so from local workspace: {ffi}", style="success")
-                 break
+        ffi_candidates = [
+            os.path.join(local_python_dir, "libffi.so"),
+            os.path.join(local_python_dir, "lib-dynload", "libffi.so"),
+            os.path.join(local_python_dir, "jniLibs", "arm64-v8a", "libffi.so"),
+        ]
+        for ffi in ffi_candidates:
+            if os.path.exists(ffi):
+                shutil.copy2(ffi, libffi_dst)
+                console.print(
+                    f"  [Native]   Copied libffi.so from local workspace: {ffi}",
+                    style="success",
+                )
+                break
 
     # 7. Inject Project Metadata (Name, Author, Version)
     log("  [Metadata] Injecting project details...", style="dim")
@@ -699,9 +733,7 @@ def sync_android_project(project_root: str, native: bool = False) -> None:
                 os.makedirs(mipmap_dir, exist_ok=True)
 
                 # Copy to both standard and round icon names
-                shutil.copy2(
-                    app_icon_src, os.path.join(mipmap_dir, "ic_launcher.png")
-                )
+                shutil.copy2(app_icon_src, os.path.join(mipmap_dir, "ic_launcher.png"))
                 shutil.copy2(
                     app_icon_src, os.path.join(mipmap_dir, "ic_launcher_round.png")
                 )
@@ -722,8 +754,12 @@ def sync_android_project(project_root: str, native: bool = False) -> None:
         ts_path = os.path.join(python_dir, "build_timestamp.txt")
         with open(ts_path, "w") as f:
             f.write(timestamp)
-        console.print(f"  [Cache]    Generated build timestamp: {timestamp}", style="dim")
+        console.print(
+            f"  [Cache]    Generated build timestamp: {timestamp}", style="dim"
+        )
     except Exception as e:
-        console.print(f"  [Cache]    Failed to generate timestamp: {e}", style="warning")
+        console.print(
+            f"  [Cache]    Failed to generate timestamp: {e}", style="warning"
+        )
 
     log("Sync complete.", style="success")
