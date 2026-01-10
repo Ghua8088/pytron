@@ -207,9 +207,9 @@ def cmd_package(args: argparse.Namespace) -> int:
                     )
 
     # Fallback to Pytron icon
-    pytron_icon = package_dir / "installer" / "pytron.ico"
-    if not app_icon and pytron_icon.exists():
-        app_icon = str(pytron_icon)
+    pytron_v_icon = Path(pytron.__file__).resolve().parent / "installer" / "pytron.ico"
+    if not app_icon and pytron_v_icon.exists():
+        app_icon = str(pytron_v_icon)
 
     # Manifest support: prefer passing a manifest on the PyInstaller CLI
     manifest_path = None
@@ -220,12 +220,64 @@ def cmd_package(args: argparse.Namespace) -> int:
         manifest_path = possible_manifest.resolve()
         log(f"Found Windows UTF-8 manifest: {manifest_path}", style="dim")
 
+    # --- Plugin Build Hooks ---
+    package_context = {
+        "add_data": args.add_data or [],
+        "hidden_imports": [],
+        "binaries": [],
+        "extra_args": [],
+        "script": script,
+        "out_name": out_name,
+        "settings": settings,
+        "package_dir": package_dir,
+        "app_icon": app_icon
+    }
+
+    # Discover and run Plugin on_package hooks
+    from ..plugin import discover_plugins
+    plugins_dir = script.parent / "plugins"
+    if plugins_dir.exists():
+        log("Evaluating plugins for packaging hooks...", style="dim")
+        plugin_objs = discover_plugins(str(plugins_dir))
+        
+        # Robust mock app for hook context
+        class PackageAppMock:
+            class MockState:
+                def __getattr__(self, name): return None
+                def __setattr__(self, name, value): pass
+
+            def __init__(self, settings_data, folder):
+                self.config = settings_data
+                self.app_root = folder
+                self.storage_path = str(folder / "build" / "storage")
+                self.logger = log
+                self.state = self.MockState()
+
+            def expose(self, *args, **kwargs): pass
+            def broadcast(self, *args, **kwargs): pass
+            def publish(self, *args, **kwargs): pass
+            def on_exit(self, func): return func
+            
+        mock_app = PackageAppMock(settings, script.parent)
+        
+        for p in plugin_objs:
+            try:
+                # We perform a minimal load
+                p.load(mock_app)
+                p.invoke_package_hook(package_context)
+            except Exception as e:
+                log(f"Warning: Build hook for plugin '{p.name}' skipped: {e}", style="warning")
+
+        # Sync back modified values from plugins (Shenanigans support)
+        out_name = package_context["out_name"]
+        app_icon = package_context["app_icon"]
+        settings = package_context["settings"]
+        log(f"Build context updated by plugins (Name: {out_name})", style="dim")
+
     progress.update(task, description="Gathering Assets...", completed=20)
 
     # Auto-detect and include assets (settings.json + frontend build)
-    add_data = []
-    if args.add_data:
-        add_data.extend(args.add_data)
+    add_data = package_context["add_data"]
 
     # Automatically include the icon file in the build output
     # This ensures tray icons (which load from file) work in packaged builds
@@ -270,16 +322,19 @@ def cmd_package(args: argparse.Namespace) -> int:
     # --- Nuitka Compilation Logic ---
     if getattr(args, "nuitka", False):
         return run_nuitka_build(
-            args, script, out_name, settings, app_icon, package_dir, add_data, frontend_dist, progress, task
+            args, script, out_name, settings, app_icon, package_dir, add_data, frontend_dist, progress, task, 
+            package_context=package_context
         )
 
     # --- Rust Bootloader (Secure) Logic ---
     if getattr(args, "secure", False):
         return run_secure_build(
-            args, script, out_name, settings, app_icon, package_dir, add_data, progress, task
+            args, script, out_name, settings, app_icon, package_dir, add_data, progress, task,
+            package_context=package_context
         )
 
     # --- PyInstaller Compilation Logic ---
     return run_pyinstaller_build(
-        args, script, out_name, settings, app_icon, package_dir, add_data, manifest_path, progress, task
+        args, script, out_name, settings, app_icon, package_dir, add_data, manifest_path, progress, task,
+        package_context=package_context
     )

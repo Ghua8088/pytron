@@ -56,7 +56,11 @@ graph TD
 - **Taskbar / Dock Progress & Icons**: APIs to set taskbar progress and update the application icon at runtime (Windows taskbar, macOS Dock badge, basic Linux support).
 - **Native Dialogs**: Cross-platform native file dialogs (open/save/folder) using the OS tools (Windows common dialogs, macOS AppleScript, Linux `zenity`/`kdialog`) are exposed to the `Webview` layer.
 - **Message Boxes**: Unified `message_box` with cross-platform fallbacks (native MessageBox on Windows, `zenity`/`kdialog` on Linux, AppleScript on macOS).
-- **Packaging Improvements**: `pytron package` can now bundle a splash screen into PyInstaller builds (`--splash` support), and the Windows installer compression has been updated for better AV compatibility.
+- **Agentic Shield**: A Rust-based secure bootloader that encrypts your Python logic using AES-256-GCM, preventing simple unpacking/decompilation.
+- **Nuitka Integration**: Option to compile Python code into machine code for maximum performance and IP protection.
+- **Android Support**: Experimental support for building and running Pytron apps on Android.
+- **Smart Assets**: Automatically detects and bundles non-code files (images, configs) into your executable.
+- **High-Performance VAP Bridge**: Zero-copy binary IPC using the `pytron://` protocol for streaming large data (frames, tensors) without Base64 overhead.
 - **Serializer Enhancements**: `PytronJSONEncoder` gained broader support (Pydantic models, PIL images -> data URIs, dataclasses, enums, timedeltas, complex numbers, __slots__, and iterable fallbacks) for safer frontend bridging.
 - **Platform Interface Expanded**: Platform backends now provide richer capabilities (notifications, dialogs, icon/app-id management, tray/daemon helpers).
 
@@ -201,11 +205,23 @@ tray = app.setup_tray_standard()
 window.set_taskbar_progress("normal", 45) 
 ```
 
-**High-Performance Binary IPC:**
+**High-Performance Binary IPC (Virtual Asset Provider):**
+Pytron includes a custom protocol `pytron://` that bypasses the slow JSON/Base64 bridge for binary data. This is perfect for local AI models, camera streams, or large datasets.
+
 ```python
 # Serve large binary data (like images/buffers) via memory
 # Available at pytron://my-raw-frame
 window.serve_data("my-raw-frame", binary_content, "image/jpeg")
+```
+
+In the frontend, you can use these URLs directly in `<img>` tags or `fetch()`:
+```javascript
+// Zero-overhead binary fetch
+const response = await fetch('pytron://my-raw-frame');
+const blob = await response.blob();
+
+// Or just use as src
+<img src="pytron://my-raw-frame" />
 ```
 
 **Native Dialogs & Notifications:**
@@ -259,17 +275,32 @@ pytron run --dev
 *   **Debug Logging**: If `debug: true` is set in `settings.json`, Pytron switches to verbose logging, showing bridge messages and binding invocations.
 *   **Non-Blocking UI**: Pytron automatically runs synchronous Python functions in a background thread pool, ensuring that heavy Python tasks never freeze the UI.
 
-### 7. Deep Linking
-Handle custom URI schemes (e.g., `pytron://my-action`).
+### 7. Deep Linking Router
+Handle custom URI schemes (e.g., `pytron://my-action`) using the built-in router.
+This supports both **Cold Starts** (launching via link) and **Warm Starts** (app already running).
 
-**Python:**
+**Register Routes:**
 ```python
-# Check for link that launched the app
-if app.state.launch_url:
-    print(f"Launched with: {app.state.launch_url}")
+# 1. Simple Action (pytron://settings)
+@app.on_deep_link("settings")
+def open_settings():
+    print("Opening settings...")
 
-# Register a custom protocol on the OS
-app.register_protocol("my-app")
+# 2. Path Parameters (pytron://project/123)
+@app.on_deep_link("project/{id}")
+def open_project(id):
+    print(f"Opening Project ID: {id}")
+
+# 3. Query Params & Full Link Object (pytron://oauth/callback?token=abc)
+@app.on_deep_link("oauth/callback")
+def handle_oauth(token, link):
+    print(f"Token: {token}")
+    print(f"Raw URL: {link.raw_url}")
+
+# Register a custom protocol on the OS (run once)
+if __name__ == "__main__":
+    app.register_protocol("my-app")
+    app.run()
 ```
 
 ### 8. Start on Boot
@@ -302,6 +333,7 @@ Pytron uses a `settings.json` file in your project root to manage application co
     "description": "App Description",
     "copyright": "Copyright © 2025",
     "force-package": ["llama_cpp"],
+    "frontend_provider": "npm",
     "default_context_menu": false,
     "close_to_tray": true
 }
@@ -313,6 +345,7 @@ Pytron uses a `settings.json` file in your project root to manage application co
 *   **force-package**: A list of Python modules that should be explicitly collected during `pytron package`.
 *   **default_context_menu**: Set to `false` to disable the native browser right-click menu (highly recommended if using `pytron-ui` ContextMenu).
 *   **url**: Entry point for the frontend. In `--dev` mode, this is overridden by the dev server.
+*   **frontend_provider**: Choose your default JS package manager: `npm`, `yarn`, `pnpm`, or `bun`.
 
 ## UI Components
 
@@ -339,10 +372,27 @@ Distribute your app as a standalone executable. Pytron automatically reads your 
 **Note on File Permissions**: When your app is installed in `Program Files`, it is read-only. If your app writes logs or databases using relative paths (e.g., `logging.basicConfig(filename='app.log')`), it will crash with `PermissionError`.
 **Pytron Solution**: When running as a packaged app, Pytron automatically changes the Current Working Directory (CWD) to a safe user-writable path (e.g., `%APPDATA%/MyApp`). Your relative writes will safely end up there.
 
-1.  **Build**:
-    ```bash
-    pytron package
-    ```
+### 1. Standard Build
+```bash
+pytron package
+```
+
+### 2. Agentic Shield (Secure Build)
+Protects your intellectual property by encrypting your source code and using a Rust-based bootloader to run it in memory.
+```bash
+pytron package --secure
+```
+
+### 3. Nuitka (C++ Compilation)
+Compiles your Python code into a native C++ executable for maximum performance.
+```bash
+pytron package --nuitka
+```
+
+### 4. Build with Installer
+```bash
+pytron package --installer
+```
 
 ### Cross-Compilation (Build for Linux/macOS from Windows)
 PyInstaller doesn't support true cross-compilation. To build for other platforms, you have two options:
@@ -352,13 +402,13 @@ PyInstaller doesn't support true cross-compilation. To build for other platforms
 ## CLI Reference
 
 *   `pytron init <name> [--template <name>]`: Create a new project.
-*   `pytron install [package]`: Install dependencies.
-    *   Pin versions in `requirements.json`.
-    *   Smartly resolving local path installs to package names.
-*   `pytron frontend install [package]`: Install npm packages for the frontend (auto-detects directory).
+*   `pytron install [package]`: Install dependencies into the project `env/`.
 *   `pytron run [--dev]`: Run the application.
-*   `pytron show`: List installed Python packages and versions.
-*   `pytron package`: Build standalone executable.
+*   `pytron package [--secure] [--nuitka] [--installer]`: Build standalone executable.
+*   `pytron frontend [--provider npm|yarn|pnpm|bun] <args>`: Proxy command for JS package managers. Runs any command in the frontend directory (e.g., `pytron frontend --provider bun install`).
+*   `pytron doctor`: Check system for missing dependencies and configuration issues.
+*   `pytron info`: Show information about the current environment.
+*   `pytron android <action>`: Experimental tools for Android (init, sync, build, run).
 *   `pytron workflow init`: Generate GitHub Actions for multi-platform packaging (Windows/Linux/macOS).
 
 **Happy Coding with Pytron!**

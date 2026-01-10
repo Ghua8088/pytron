@@ -110,3 +110,40 @@ class TestSerializer:
         img = Image.new('RGB', (10, 10), color = 'red')
         serialized = pytron_serialize(img)
         assert serialized.startswith("data:image/png;base64,")
+
+    def test_nested_structures(self):
+        data = {
+            "list": [1, 2, {"a": 3}],
+            "dict": {"b": [4, 5], "c": {"d": 6}},
+            "mixed": [
+                datetime.datetime(2023, 1, 1),
+                uuid.UUID('12345678-1234-5678-1234-567812345678'),
+                decimal.Decimal("1.23")
+            ]
+        }
+        serialized = pytron_serialize(data)
+        assert serialized["list"][2]["a"] == 3
+        assert serialized["dict"]["c"]["d"] == 6
+        assert serialized["mixed"][0] == "2023-01-01T00:00:00"
+        assert serialized["mixed"][1] == "12345678-1234-5678-1234-567812345678"
+        assert serialized["mixed"][2] == 1.23
+
+    def test_circular_reference(self):
+        a = {}
+        b = {"a": a}
+        a["b"] = b
+        
+        # Serializer should handle this or raise error (currently it will likely RecursionError)
+        # We check that it doesn't crash the interpreter at least, or we could implement a check.
+        with pytest.raises(RecursionError):
+            pytron_serialize(a)
+
+    def test_unknown_type(self):
+        class Unknown:
+            pass
+        
+        # If it doesn't have __dict__ or isn't a known primitive, 
+        # it should probably return string representation or be handled gracefully
+        obj = Unknown()
+        serialized = pytron_serialize(obj)
+        assert isinstance(serialized, dict) or isinstance(serialized, str)

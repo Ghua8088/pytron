@@ -139,13 +139,96 @@ class PytronJSONEncoder(json.JSONEncoder):
 def pytron_serialize(obj, vap_provider=None):
     """
     Helper to serialize objects to JSON-compatible primitives.
-    OPTIMIZED: Avoids double serialization (dumps/loads) by manually traversing
-    complex types or using a lightweight conversion.
+    OPTIMIZED: Avoids double serialization (dumps/loads) by recursively
+    converting complex types into primitives.
     """
-    if isinstance(obj, (str, int, float, bool, type(None))):
+    if obj is None or isinstance(obj, (str, int, float, bool)):
         return obj
 
-    # We pass the vap_provider recursively through the encoder
-    # json.dumps takes cls and passes extra kwargs to the cls constructor
-    serialized = json.dumps(obj, cls=PytronJSONEncoder, vap_provider=vap_provider)
-    return json.loads(serialized)
+    # Handle Pydantic Models
+    if pydantic and isinstance(obj, pydantic.BaseModel):
+        try:
+            return pytron_serialize(obj.model_dump(), vap_provider)
+        except AttributeError:
+            return pytron_serialize(obj.dict(), vap_provider)
+
+    # Handle PIL Images
+    if Image and isinstance(obj, Image.Image):
+        buffered = io.BytesIO()
+        obj.save(buffered, format="PNG")
+        if vap_provider:
+            asset_id = f"gen_img_{uuid.uuid4().hex[:8]}"
+            vap_provider(asset_id, buffered.getvalue(), "image/png")
+            return f"pytron://{asset_id}"
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        return f"data:image/png;base64,{img_str}"
+
+    if isinstance(obj, bytes):
+        if vap_provider:
+            asset_id = f"gen_bin_{uuid.uuid4().hex[:8]}"
+            vap_provider(asset_id, obj, "application/octet-stream")
+            return f"pytron://{asset_id}"
+        return base64.b64encode(obj).decode("utf-8")
+
+    if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
+        return obj.isoformat()
+    if isinstance(obj, datetime.timedelta):
+        return obj.total_seconds()
+    if isinstance(obj, uuid.UUID):
+        return str(obj)
+    if isinstance(obj, decimal.Decimal):
+        return float(obj)
+    if isinstance(obj, pathlib.Path):
+        return str(obj)
+    if isinstance(obj, set):
+        return [pytron_serialize(i, vap_provider) for i in obj]
+    if isinstance(obj, complex):
+        return {"real": obj.real, "imag": obj.imag}
+
+    # Dataclasses
+    try:
+        import dataclasses
+        if dataclasses.is_dataclass(obj):
+            return pytron_serialize(dataclasses.asdict(obj), vap_provider)
+    except ImportError:
+        pass
+
+    # Enums
+    try:
+        import enum
+        if isinstance(obj, enum.Enum):
+            return obj.value
+    except ImportError:
+        pass
+
+    # Dictionaries
+    if isinstance(obj, dict):
+        return {str(k): pytron_serialize(v, vap_provider) for k, v in obj.items()}
+
+    # Iterables
+    if isinstance(obj, (list, tuple)):
+        return [pytron_serialize(i, vap_provider) for i in obj]
+
+    # Universal Fallback: Try __dict__
+    if hasattr(obj, "__dict__"):
+        return {k: pytron_serialize(v, vap_provider) for k, v in vars(obj).items() if not k.startswith("_")}
+
+    # Slots Fallback
+    if hasattr(obj, "__slots__"):
+        data = {}
+        slots = obj.__slots__
+        if isinstance(slots, str):
+            slots = [slots]
+        for key in slots:
+            if not key.startswith("_"):
+                try:
+                    data[key] = pytron_serialize(getattr(obj, key), vap_provider)
+                except Exception:
+                    pass
+        return data
+
+    # Final attempt: String representation
+    try:
+        return str(obj)
+    except Exception:
+        return None

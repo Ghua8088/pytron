@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from ..console import console, log
 
-def cleanup_dist(dist_path: Path):
+def cleanup_dist(dist_path: Path, preserve_tk: bool = False):
     """
     Removes unnecessary files (node_modules, node.exe, etc) from the build output
     to optimize the package size.
@@ -24,10 +24,16 @@ def cleanup_dist(dist_path: Path):
         "node_modules", "node.exe", "npm.cmd", "npx.cmd", ".git", ".gitignore",
         ".vscode", ".idea", "package.json", "package-lock.json", "yarn.lock",
         "pnpm-lock.yaml", "__pycache__", ".env", "venv", ".venv",
-        "python.exe", "pythonw.exe", "tcl86t.dll", "tk86t.dll",
-        "tcl", "tk", "lib2to3", "idle_test", "test", "tests", "unit_test",
-        "include", "tcl8.6", "tk8.6", "msvcrt.dll" # Nuclear Pruning
+        "python.exe", "pythonw.exe", "lib2to3", "idle_test", "test", "tests", "unit_test",
+        "include", "msvcrt.dll" # Nuclear Pruning
     }
+
+    if not preserve_tk:
+        remove_names.update({
+            "tcl86t.dll", "tk86t.dll", "tcl", "tk", "tcl8.6", "tk8.6"
+        })
+    else:
+        log("Preserving Tcl/Tk dependencies (required for splash screen)", style="info")
 
     log(f"Optimizing build directory: {target_path}")
 

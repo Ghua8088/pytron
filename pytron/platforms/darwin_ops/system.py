@@ -159,3 +159,29 @@ def set_taskbar_progress(w, state="normal", value=0, max_value=100):
 
     except Exception:
         pass
+
+def register_protocol(scheme):
+    """
+    Registers the application to handle a custom URI scheme on macOS.
+    Note: On macOS, this is primarily handled via the Info.plist CFBundleURLTypes.
+    This method attempts to refresh the Launch Services database if bundled.
+    """
+    try:
+        import sys
+        if getattr(sys, 'frozen', False):
+            # Try to find the .app bundle path
+            exec_path = sys.executable
+            if ".app/Contents/MacOS/" in exec_path:
+                app_path = exec_path.split(".app/Contents/MacOS/")[0] + ".app"
+                # Use lsregister to refresh the registration
+                lsregister_path = "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+                if os.path.exists(lsregister_path):
+                    subprocess.run([lsregister_path, "-f", app_path], capture_output=True)
+                    return True
+        
+        # If not bundled or lsregister failed
+        print(f"[Pytron] Warning: For {scheme}:// to work on macOS, the application should be bundled as a .app with the scheme defined in Info.plist.")
+        return False
+    except Exception as e:
+        print(f"[Pytron] macOS Protocol Registration Error: {e}")
+        return False

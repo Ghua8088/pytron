@@ -58,3 +58,6 @@ class LinuxImplementation(PlatformInterface):
 
     def set_launch_on_boot(self, app_name, exe_path, enable=True):
         return system.set_launch_on_boot(app_name, exe_path, enable)
+
+    def register_protocol(self, scheme):
+        return system.register_protocol(scheme)

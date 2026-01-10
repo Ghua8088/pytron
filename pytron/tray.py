@@ -74,6 +74,7 @@ class SystemTray:
         self._running = False
         self._next_id = 1000
         self._thread = None
+        self._app = None
 
     def add_item(self, label: str, callback: Optional[Callable] = None):
         item = MenuItem(label, callback)
@@ -87,20 +88,21 @@ class SystemTray:
         self.menu_items.append(item)
         return self
 
-    def add_quit_item(self, label: str = "Quit", callback: Optional[Callable] = None):
+    def add_quit_item(self, label: str = "Quit"):
         """Adds a standard Quit item to the tray menu."""
 
         def _quit():
-            if callback:
-                callback()
-            import sys
-
-            os._exit(0)  # Force exit
+            if self._app:
+                # Use app.quit() for graceful exit (triggers cleanup/atexit)
+                self._app.quit()
+            else:
+                os._exit(0)
 
         return self.add_item(label, _quit)
 
     def start(self, app):
         """Starts the tray icon."""
+        self._app = app
         platform = sys.platform
         if platform == "win32":
             self._start_windows(app)
@@ -115,10 +117,10 @@ class SystemTray:
         platform = sys.platform
         if platform == "win32":
             self._stop_windows()
-        elif platform == "darwin":
-            pass
-        elif platform == "linux":
-            pass
+            # Cleanup Icon handle to prevent leaks
+            if self._hicon:
+                ctypes.windll.user32.DestroyIcon(self._hicon)
+                self._hicon = None
 
     def _start_darwin(self, app):
         try:

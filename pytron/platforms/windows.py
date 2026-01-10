@@ -78,6 +78,9 @@ class WindowsImplementation(PlatformInterface):
     def register_protocol(self, scheme):
         return system.register_protocol(scheme)
 
+    def register_pytron_scheme(self, w, callback):
+        return webview.register_pytron_scheme(w, callback)
+
     def set_taskbar_progress(self, w, state="normal", value=0, max_value=100):
         system.set_taskbar_progress(w, state, value, max_value)
 
@@ -89,4 +92,16 @@ class WindowsImplementation(PlatformInterface):
 
     def set_launch_on_boot(self, app_name, exe_path, enable=True):
         return system.set_launch_on_boot(app_name, exe_path, enable)
+
+    def set_clipboard_text(self, text):
+        return system.set_clipboard_text(text)
+
+    def get_clipboard_text(self):
+        return system.get_clipboard_text()
+
+    def get_system_info(self):
+        return system.get_system_info()
+
+    def set_menu(self, w, menu_bar):
+        window.set_menu(w, menu_bar)
 

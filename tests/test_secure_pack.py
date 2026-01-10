@@ -1,7 +1,10 @@
 import os
 import pytest
+import secrets
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from pytron.pack.secure import BOOT_KEY
+
+# Use a fixed key for tests instead of trying to import it
+TEST_BOOT_KEY = secrets.token_bytes(32)
 
 def test_encryption_decryption_integrity():
     """
@@ -9,7 +12,7 @@ def test_encryption_decryption_integrity():
     correctly decrypted and that any tampering is detected.
     """
     original_code = "print('Hello, Secure World!')"
-    aesgcm = AESGCM(BOOT_KEY)
+    aesgcm = AESGCM(TEST_BOOT_KEY)
     nonce = os.urandom(12)
     
     # Encrypt
@@ -28,7 +31,7 @@ def test_tamper_detection():
     Ensures that AES-GCM tag validation fails if the payload is modified.
     """
     original_code = "secret_logic()"
-    aesgcm = AESGCM(BOOT_KEY)
+    aesgcm = AESGCM(TEST_BOOT_KEY)
     nonce = os.urandom(12)
     encrypted_payload = aesgcm.encrypt(nonce, original_code.encode("utf-8"), None)
     

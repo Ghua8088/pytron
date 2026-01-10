@@ -24,6 +24,11 @@ class ConfigMixin:
             if possible_url.startswith("pytron:") or "://" in possible_url:
                 self.logger.info(f"App launched via Deep Link: {possible_url}")
                 self.state.launch_url = possible_url
+                # Defer dispatch to run-time if needed, but since plugins/handlers 
+                # might be registered AFTER init, we might need to handle this carefully.
+                # However, for now, we'll store it. The handlers usually aren't registered
+                # until the user script runs. 
+                # So we should probably dispatch in app.run().
 
     def _load_config(self, config_file):
         self.config = {}
@@ -69,7 +74,12 @@ class ConfigMixin:
     def _setup_identity(self):
         title = self.config.get("title", "Pytron App")
         safe_title = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in title).strip("_")
-        self._register_app_id(title, safe_title)
+        app_id = self._register_app_id(title, safe_title)
+        
+        # Single Instance Guard
+        if self.config.get("single_instance", True):
+            self._setup_single_instance(app_id)
+            
         return title, safe_title
 
     def _register_app_id(self, title, safe_title):
@@ -97,6 +107,67 @@ class ConfigMixin:
                 DarwinImplementation().set_app_id(title)
             except Exception:
                 pass
+        return app_id
+
+    def _setup_single_instance(self, app_id):
+        import socket
+        import hashlib
+        import threading
+        import os
+
+        # Skip during tests as they often create multiple app instances rapidly
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            return
+
+        # Generate a stable port between 10000-60000 based on app_id
+        port = 10000 + (int(hashlib.md5(app_id.encode()).hexdigest(), 16) % 50000)
+        self._instance_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
+        try:
+            self._instance_socket.bind(('127.0.0.1', port))
+            self._instance_socket.listen(1)
+            
+            def _listen_for_other_instances():
+                while True:
+                    try:
+                        conn, _ = self._instance_socket.accept()
+                        data = conn.recv(1024).decode('utf-8')
+                        if data:
+                            msg = json.loads(data)
+                            url = msg.get("url")
+                            if url:
+                                self.logger.info(f"Received deep link from another instance: {url}")
+                                # Update launch URL and show windows
+                                self.state.launch_url = url
+                                self.router.dispatch(url)
+                                for window in self.windows:
+                                    window.show()
+                                    window.emit("pytron:deep-link", {"url": url})
+                        conn.close()
+                    except Exception:
+                        break
+            
+            t = threading.Thread(target=_listen_for_other_instances, daemon=True)
+            t.start()
+            
+            @self.on_exit
+            def _close_instance_socket():
+                try:
+                    self._instance_socket.close()
+                except Exception:
+                    pass
+                    
+        except socket.error:
+            # Instance already running!
+            self.logger.info("Another instance is already running. Forwarding launch URL and exiting.")
+            try:
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.connect(('127.0.0.1', port))
+                client.send(json.dumps({"url": self.state.launch_url}).encode('utf-8'))
+                client.close()
+            except Exception:
+                pass
+            sys.exit(0)
 
     def _setup_storage(self, safe_title):
         if sys.platform == "win32":
@@ -113,9 +184,14 @@ class ConfigMixin:
         self.storage_path = os.path.join(base_path, safe_title)
 
         if getattr(sys, "frozen", False):
-            self.app_root = os.path.dirname(sys.executable)
+            self.app_root = os.path.dirname(os.path.abspath(sys.executable))
         else:
-            self.app_root = os.getcwd()
+            # Better way to find app root than os.getcwd() which depends on where user ran Python
+            main_module = sys.modules.get("__main__")
+            if main_module and hasattr(main_module, "__file__"):
+                self.app_root = os.path.dirname(os.path.abspath(main_module.__file__))
+            else:
+                self.app_root = os.path.abspath(sys.path[0] if sys.path and sys.path[0] else os.getcwd())
 
         try:
             os.makedirs(self.storage_path, exist_ok=True)
@@ -150,3 +226,37 @@ class ConfigMixin:
                 self.logger.info(f"Resolved icon to: {resolved_icon}")
             else:
                 self.logger.warning(f"Could not find icon at: {orig_icon}")
+
+    def _setup_key_value_store(self):
+        self._store_file = os.path.join(self.storage_path, "store.json")
+        self._kv_store = {}
+        if os.path.exists(self._store_file):
+            try:
+                with open(self._store_file, "r") as f:
+                    self._kv_store = json.load(f)
+            except Exception as e:
+                self.logger.warning(f"Failed to load persistent store: {e}")
+
+    def store_set(self, key, value):
+        """Sets a value in the persistent store."""
+        self._kv_store[key] = value
+        self._save_store()
+
+    def store_get(self, key, default=None):
+        """Gets a value from the persistent store."""
+        return self._kv_store.get(key, default)
+
+    def store_delete(self, key):
+        """Removes a key from the persistent store."""
+        if key in self._kv_store:
+            del self._kv_store[key]
+            self._save_store()
+            return True
+        return False
+
+    def _save_store(self):
+        try:
+            with open(self._store_file, "w") as f:
+                json.dump(self._kv_store, f)
+        except Exception as e:
+            self.logger.error(f"Failed to save persistent store: {e}")

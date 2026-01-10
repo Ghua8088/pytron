@@ -30,8 +30,12 @@ def mock_log_run():
         yield m
 
 def test_init_android_project(tmp_path, mock_log):
-    # Mock shutil.copytree
-    with patch("shutil.copytree") as mock_copy:
+    # Mock shutil.copytree to ensure the target directory exists for subsequent code
+    def mock_copy_effect(src, dst, **kwargs):
+        os.makedirs(dst, exist_ok=True)
+        return dst
+
+    with patch("shutil.copytree", side_effect=mock_copy_effect) as mock_copy:
         init_android_project(str(tmp_path))
         
         mock_copy.assert_called_once()

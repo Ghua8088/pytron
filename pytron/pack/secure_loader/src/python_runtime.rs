@@ -60,14 +60,18 @@ pub fn run_python_and_payload(root_dir: &Path, internal_dir: &Path, base_zip: &P
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to read app.pytron at {:?}: {}", payload_path, e)))?;
         
         match decrypt_payload(&encrypted_data) {
-            Ok(decrypted_code) => {
+            Ok(decrypted_bytes) => {
+                let decrypted_code = String::from_utf8(decrypted_bytes).map_err(|e| 
+                    PyErr::new::<pyo3::exceptions::PyUnicodeDecodeError, _>(format!("Invalid UTF-8 in payload: {}", e))
+                )?;
+                
                 let namespace = pyo3::types::PyDict::new_bound(py);
                 namespace.set_item("__name__", "__main__")?;
                 namespace.set_item("__file__", payload_path.to_string_lossy())?;
                 
                 let builtins = py.import_bound("builtins")?;
                 namespace.set_item("__builtins__", builtins)?;
-                
+
                 py.run_bound(&decrypted_code, Some(&namespace), Some(&namespace))?;
             },
             Err(e) => {

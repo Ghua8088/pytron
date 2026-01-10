@@ -70,3 +70,37 @@ def center(w):
     x = (screen_width - width) // 2
     y = (screen_height - height) // 2
     ctypes.windll.user32.SetWindowPos(hwnd, 0, x, y, 0, 0, 0x0001)
+
+# Window Procedure Hooking for Menus
+_wnd_procs = {}
+
+def set_menu(w, menu_bar):
+    """Attaches a MenuBar to the window and hooks its messages."""
+    hwnd = get_hwnd(w)
+    if not hwnd: return
+    
+    h_menu = menu_bar.build_for_windows(hwnd)
+    
+    # Subclass window to catch WM_COMMAND
+    user32 = ctypes.windll.user32
+    WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_longlong, ctypes.wintypes.HWND, ctypes.wintypes.UINT, ctypes.wintypes.WPARAM, ctypes.wintypes.LPARAM)
+    
+    # Get original proc
+    from .constants import GWL_WNDPROC, WM_COMMAND
+    old_proc = user32.GetWindowLongPtrW(hwnd, GWL_WNDPROC)
+    
+    def new_wnd_proc(hwnd_in, msg, wparam, lparam):
+        if msg == WM_COMMAND:
+            # Low word of wparam is the menu ID
+            cmd_id = wparam & 0xFFFF
+            if menu_bar.handle_command(cmd_id):
+                return 0
+        
+        return user32.CallWindowProcW(old_proc, hwnd_in, msg, wparam, lparam)
+    
+    # Keep reference to prevent GC
+    new_proc_inst = WNDPROC(new_wnd_proc)
+    _wnd_procs[hwnd] = (new_proc_inst, old_proc)
+    
+    user32.SetWindowLongPtrW(hwnd, GWL_WNDPROC, new_proc_inst)
+    user32.DrawMenuBar(hwnd)

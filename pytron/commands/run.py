@@ -13,22 +13,19 @@ from .helpers import (
     run_frontend_build,
     get_python_executable,
     ensure_next_config,
+    get_config,
 )
 
 try:
-    from watchgod import watch, DefaultWatcher
+    from watchfiles import watch, DefaultFilter
 except ImportError:
-    DefaultWatcher = (
-        object  # Fallback for type hinting if needed, though we check in run_dev_mode
-    )
+    DefaultFilter = object
 
 
-class DevWatcher(DefaultWatcher):
-    frontend_dir = None
-
-    def should_watch_dir(self, entry):
-        # Robust ignores for common build artifacts and heavy directories
-        if entry.name in {
+class PytronFilter(DefaultFilter):
+    def __init__(self, frontend_dir: Path = None, **kwargs):
+        self.frontend_dir = frontend_dir.resolve() if frontend_dir else None
+        self.ignore_dirs = {
             ".git",
             "__pycache__",
             "node_modules",
@@ -37,62 +34,72 @@ class DevWatcher(DefaultWatcher):
             ".next",
             ".output",
             "coverage",
-        }:
+            "env",
+            "venv",
+        }
+        super().__init__(**kwargs)
+
+    def __call__(self, change, path):
+        path_obj = Path(path).resolve()
+
+        # 1. Ignore common heavy or build directories
+        if any(part in self.ignore_dirs for part in path_obj.parts):
             return False
 
+        # 2. Frontend specific ignores
         if self.frontend_dir:
             try:
-                entry_path = Path(entry.path).resolve()
-                # If we are inside the frontend directory
-                if (
-                    self.frontend_dir in entry_path.parents
-                    or self.frontend_dir == entry_path
-                ):
-                    rel = entry_path.relative_to(self.frontend_dir)
-                    # Ignore source files in frontend to let HMR handle them
-                    # We also ignore public/assets as those presumably don't affect the backend logic
-                    if str(rel).startswith(("src", "public", "assets")):
+                if self.frontend_dir in path_obj.parents or self.frontend_dir == path_obj:
+                    rel = path_obj.relative_to(self.frontend_dir)
+                    # Ignore source and assets to let HMR handle it
+                    if any(
+                        str(rel).startswith(p)
+                        for p in ["src", "public", "assets", "node_modules"]
+                    ):
                         return False
             except ValueError:
                 pass
-        return super().should_watch_dir(entry)
+
+        # 3. Default filter (ignores binary files, etc.)
+        return super().__call__(change, path)
 
 
 def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int:
     try:
-        from watchgod import watch
+        from watchfiles import watch
     except ImportError:
         log(
-            "watchgod is required for --dev mode. Install it with: pip install watchgod",
+            "watchfiles is required for --dev mode. Install it with: pip install watchfiles",
             style="error",
         )
         return 1
 
     frontend_dir = locate_frontend_dir(Path("."))
+    watcher_filter = PytronFilter(frontend_dir=frontend_dir)
 
     npm_proc = None
     dev_server_url = None
 
     if frontend_dir:
-        log(f"Found frontend in: {frontend_dir}")
-        DevWatcher.frontend_dir = frontend_dir
-
-        npm = shutil.which("npm")
-        if npm:
+        config = get_config()
+        provider = config.get("frontend_provider", "npm")
+        provider_bin = shutil.which(provider)
+        
+        if provider_bin:
             pkg_path = frontend_dir / "package.json"
             pkg_data = json.loads(pkg_path.read_text())
             scripts = pkg_data.get("scripts", {})
 
             if "dev" in scripts:
                 log(
-                    "Found 'dev' script. Starting development server...",
+                    f"Found 'dev' script. Starting development server using {provider}...",
                     style="success",
                 )
                 # We need to capture output to find the port, so PIPE it.
                 # But we also want the user to see it.
                 # We'll use a thread to read stdout and look for the URL.
                 npm_proc = subprocess.Popen(
-                    ["npm", "run", "dev"],
+                    [provider_bin, "run", "dev"],
                     cwd=str(frontend_dir),
                     shell=(sys.platform == "win32"),
                     stdout=subprocess.PIPE,
@@ -120,7 +127,7 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
                             if not line:
                                 break
                             console.print(
-                                f"[dim][npm][/dim] {line.strip()}", style="dim"
+                                f"[dim][{provider}][/dim] {line.strip()}", style="dim"
                             )  # Echo to console
 
                             if not dev_server_url:
@@ -135,14 +142,14 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
                                     )
                                     url_found_event.set()
                         except Exception as e:
-                            log(f"Error reading npm output: {e}", style="error")
+                            log(f"Error reading {provider} output: {e}", style="error")
                             break
 
                 t = threading.Thread(target=scan_output, daemon=True)
                 t.start()
 
                 # Wait for a bit to find the URL
-                print("[Pytron] Waiting for dev server to start...")
+                print(f"[Pytron] Waiting for {provider} dev server to start...")
                 url_found_event.wait(timeout=10)
 
                 if not dev_server_url:
@@ -178,15 +185,15 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
                             style="warning",
                         )
 
-                log(f"Starting frontend watcher: npm {' '.join(args)}", style="dim")
-                # Use shell=True for Windows compatibility with npm
+                log(f"Starting frontend watcher: {provider} {' '.join(args)}", style="dim")
+                # Use shell=True for Windows compatibility
                 npm_proc = subprocess.Popen(
-                    ["npm"] + args,
+                    [provider_bin] + args,
                     cwd=str(frontend_dir),
                     shell=(sys.platform == "win32"),
                 )
         else:
-            log("npm not found, skipping frontend watch.", style="warning")
+            log(f"{provider} not found, skipping frontend watch.", style="warning")
 
     app_proc = None
 
@@ -225,7 +232,7 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
     try:
         start_app()
         log(f"Watching for changes in {Path.cwd()}...", style="success")
-        for changes in watch(str(Path.cwd()), watcher_cls=DevWatcher):
+        for changes in watch(str(Path.cwd()), watch_filter=watcher_filter):
             log(f"Detected changes: {changes}", style="dim")
             # Filter out non-code changes manually if needed, but DevWatcher handles most
             start_app()

@@ -54,3 +54,23 @@ class PlatformInterface:
     def set_launch_on_boot(self, app_name, exe_path, enable=True):
         pass
 
+    def register_protocol(self, scheme):
+        return False
+
+    def center(self, w):
+        pass
+
+    # Clipboard
+    def set_clipboard_text(self, text):
+        pass
+
+    def get_clipboard_text(self):
+        return None
+
+    # System Info
+    def get_system_info(self):
+        return {}
+
+    def set_menu(self, w, menu_bar):
+        pass
+

@@ -7,44 +7,60 @@ from .helpers import locate_frontend_dir
 from ..console import log, run_command_with_output, get_progress
 
 
-def cmd_frontend_install(args: argparse.Namespace) -> int:
+def cmd_frontend(args: argparse.Namespace) -> int:
     """
-    Installs libraries into the frontend project.
+    Proxy command that runs '<provider> <args>' in the frontend directory.
     """
     # Try to find frontend dir
-    # Use current directory as robust start
     frontend_dir = locate_frontend_dir(Path("."))
 
     if not frontend_dir:
         log("Could not locate a frontend directory (package.json).", style="error")
         return 1
 
-    log(f"Found frontend in: {frontend_dir}", style="dim")
-
-    # Check for package manager
-    npm = shutil.which("npm")
-    if not npm:
-        log("npm is not installed or not in PATH.", style="error")
+    # Order of precedence: CLI Arg > settings.json > default 'npm'
+    config = get_config()
+    default_provider = config.get("frontend_provider", "npm")
+    provider = getattr(args, "provider", None) or default_provider
+    
+    # Check for provider binary
+    provider_bin = shutil.which(provider)
+    if not provider_bin:
+        log(f"'{provider}' is not installed or not in PATH.", style="error")
         return 1
 
-    packages = args.packages
-    prog = get_progress()
-    prog.start()
-    if not packages:
-        # Just run install
-        task = prog.add_task("Installing JS dependencies...", total=None)
-        cmd = ["npm", "install"]
-    else:
-        task = prog.add_task(f"Installing {len(packages)} JS packages...", total=None)
-        cmd = ["npm", "install"] + packages
+    npm_args = args.npm_args
+    if not npm_args:
+        # Default to 'install' if no args provided
+        npm_args = ["install"]
 
-    ret = run_command_with_output(cmd, cwd=str(frontend_dir))
-    prog.stop()
+    # Special case: 'install' gets the progress bar for better UX
+    if "install" in npm_args:
+        prog = get_progress()
+        prog.start()
+        task_msg = (
+            f"[{provider}] Installing packages..."
+            if len(npm_args) > 1
+            else f"[{provider}] Installing JS dependencies..."
+        )
+        task = prog.add_task(task_msg, total=None)
+        cmd = [provider_bin] + npm_args
+        ret = run_command_with_output(
+            cmd, cwd=str(frontend_dir), shell=(sys.platform == "win32")
+        )
+        prog.stop()
+    else:
+        # For 'run dev', 'build', etc., just stream the output directly
+        cmd = [provider_bin] + npm_args
+        log(f"Running: {provider} {' '.join(npm_args)}", style="dim")
+        ret = run_command_with_output(
+            cmd, cwd=str(frontend_dir), shell=(sys.platform == "win32")
+        )
 
     if ret == 0:
-        log("Frontend dependencies installed successfully.", style="success")
+        log(f"Frontend command ({provider}) completed successfully.", style="success")
     else:
-        log("Error installing frontend packages.", style="error")
+        log(f"Command failed ({provider} {' '.join(npm_args)})", style="error")
         return 1
 
     return 0

@@ -37,6 +37,7 @@ class Webview:
     def __init__(self, config):
         self.config = config
         self.logger = logging.getLogger("Pytron.Webview")
+        self.id = config.get("id") or str(int(time.time() * 1000))
 
         # SECURITY/CORS: Fix for "origin 'null'" and CORS issues with file:// and ES Modules in WebView2.
         # This allows Vite builds (type="module") to load correctly over the file:// scheme.
@@ -44,8 +45,15 @@ class Webview:
              # --allow-file-access-from-files: Allows file:// to fetch other file:// resources.
              # --disable-web-security: Permissive mode for complex ESM module graphs over custom schemes/file.
              args = os.environ.get("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "")
+             
+             # IMPROVEMENT: Only disable web security if requested, default to safer mode
              if "--allow-file-access-from-files" not in args:
-                 os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = f"{args} --allow-file-access-from-files --disable-web-security"
+                 args = f"{args} --allow-file-access-from-files"
+             
+             if config.get("disable_web_security", False) and "--disable-web-security" not in args:
+                 args = f"{args} --disable-web-security"
+                 
+             os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = args.strip()
 
         # PERFORMANCE: Use shared thread pool from App if available
         self.app = config.get("__app__")
@@ -56,7 +64,7 @@ class Webview:
                 "concurrent.futures"
             ).futures.ThreadPoolExecutor(max_workers=5)
 
-        self._gc_protector = deque(maxlen=50)
+        self._gc_protector = deque(maxlen=200) # Increased to handle bursts of updates
         self._bound_functions = {}
         self._served_data = {}
 
@@ -128,6 +136,20 @@ class Webview:
         # Compatibility binding for UI components
         self.bind("get_registered_shortcuts", lambda: [], run_in_thread=False)
 
+        # State Sync Binding
+        self.bind("pytron_sync_state", self._sync_state, run_in_thread=False)
+        self.bind("pytron_emit_to", lambda target_id, event, data: self.app.emit_to(target_id, event, data) if self.app else None, run_in_thread=False)
+
+        # Native Drag &amp; Drop (From JS Bridge as fallback/primary for WebView)
+        def _handle_js_drop(files):
+            print(f"[Pytron] Bridge received drop: {files}")
+            if self.app and hasattr(self.app, "_on_file_drop_callback") and self.app._on_file_drop_callback:
+                # Dispatch to the App's on_file_drop handler
+                # self is 'webview', but the callback expects 'window' (which is the webview instance in Pytron architecture usually)
+                self.app._on_file_drop_callback(self, files)
+        
+        self.bind("pytron_native_drop", _handle_js_drop, run_in_thread=True)
+
         # Asset Provider (Performance Bridge)
         # This provides a port-less, high-performance O(1) binary bridge.
         # It handles pytron:// URLs via window.fetch and the Latin-1 trick.
@@ -144,7 +166,13 @@ class Webview:
             # 2. Check Disk (Virtual Mapping for the app)
             elif key.startswith("app/"):
                 rel_path = key[4:]
-                app_dir = getattr(self, "_vap_app_dir", self._app_root)
+                
+                # SPECIAL HANDLING: Allow access to plugins directory even if it's outside the dist folder
+                if rel_path.startswith("plugins/"):
+                    # Use the main app root for plugins
+                    app_dir = pathlib.Path(self._app_root)
+                else:
+                    app_dir = getattr(self, "_vap_app_dir", self._app_root)
                 
                 try:
                     # SECURITY: Sanitize path to prevent directory traversal
@@ -152,7 +180,8 @@ class Webview:
                     safe_path = os.path.normpath(rel_path).lstrip(os.path.sep).lstrip("/")
                     path_obj = (app_dir / safe_path).resolve()
                     
-                    if not str(path_obj).startswith(str(app_dir.resolve())):
+                    # Ensure it's still within the project root or the specifically allowed plugins dir
+                    if not str(path_obj).startswith(os.path.join(str(app_dir.resolve()), "")):
                          self.logger.warning(f"Security blocked path traversal attempt: {key}")
                          return None
 
@@ -190,7 +219,7 @@ class Webview:
             
             function getPytronKey(url) {
                 if (!url || typeof url !== 'string') return null;
-                const match = url.match(/pytron:\/\/([^?#]+)/);
+                const match = url.match(/pytron:\\/\\/([^?#]+)/);
                 return match ? match[1] : null;
             }
 
@@ -299,10 +328,11 @@ class Webview:
         })();
         """
         
-        init_js += """
+        init_js += f"""
         console.log("[Pytron] Core Initialized");
-        window.pytron = window.pytron || {};
+        window.pytron = window.pytron || {{}};
         window.pytron.is_ready = true;
+        window.pytron.id = "{self.id}";
         """
 
         # Disable default context menu if requested in config, but allow it in debug mode
@@ -310,6 +340,10 @@ class Webview:
             init_js += (
                 "\nwindow.addEventListener('contextmenu', e => e.preventDefault());"
             )
+            
+        # Prevent default file drop behavior (stops opening files in browser)
+        # Drag & Drop is now handled exclusively by pytron-client.
+        # No injected JS listeners here to avoid conflicts.
 
         # Development Shortcuts
         if config.get("debug", False):
@@ -322,6 +356,27 @@ class Webview:
                 }
             });
             """
+
+        # Error Reporting
+        self.bind("__pytron_report_error", self._report_error, run_in_thread=False)
+        init_js += """
+        window.addEventListener('error', function(e) {
+            window.__pytron_report_error({
+                message: e.message,
+                source: e.filename,
+                lineno: e.lineno,
+                colno: e.colno,
+                stack: e.error ? e.error.stack : ''
+            });
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+            window.__pytron_report_error({
+                message: 'Unhandled Promise Rejection: ' + e.reason,
+                source: 'promise',
+                stack: e.reason ? e.reason.stack : ''
+            });
+        });
+        """
 
         lib.webview_init(self.w, init_js.encode("utf-8"))
 
@@ -461,6 +516,10 @@ class Webview:
         lib.webview_run(self.w)
         lib.webview_destroy(self.w)
 
+    def set_menu(self, menu_bar):
+        """Attaches a native system menu bar to this window."""
+        self._platform.set_menu(self.w, menu_bar)
+
     # -------------------------------------------------------------------
     # Safe JS -> Python Binding
     # -------------------------------------------------------------------
@@ -523,7 +582,10 @@ class Webview:
                         res_json = json.dumps(_serialize_result(result))
                         self._return_result(seq, 0, res_json)
                     except Exception as e:
+                        import traceback
                         self.logger.error(f"Async execution error in {name}: {e}")
+                        if self.config.get("debug", False):
+                            self.logger.error(traceback.format_exc())
                         err_json = json.dumps(str(e))
                         self._return_result(seq, 1, err_json)
 
@@ -540,7 +602,10 @@ class Webview:
                         result_json = json.dumps(_serialize_result(result))
                         self._return_result(seq, 0, result_json)
                     except Exception as e:
+                        import traceback
                         self.logger.error(f"Execution error in {name}: {e}")
+                        if self.config.get("debug", False):
+                            self.logger.error(traceback.format_exc())
                         error_msg = json.dumps(str(e))
                         self._return_result(seq, 1, error_msg)
 
@@ -598,11 +663,14 @@ class Webview:
         def _thread_send():
             js_buf = ctypes.create_string_buffer(js_code.encode("utf-8"))
             self._gc_protector.append(js_buf)
-            if len(self._gc_protector) > 50:
-                self._gc_protector.pop(0)
             lib.webview_dispatch(self.w, self._cb, ctypes.cast(js_buf, ctypes.c_void_p))
 
-        threading.Thread(target=_thread_send, daemon=True).start()
+        # PERFORMANCE: Use thread pool instead of spawning new thread for every eval()
+        self.thread_pool.submit(_thread_send)
+
+    def set_menu(self, menu_bar):
+        """Attaches a native menu bar to this window."""
+        self._platform.set_menu(self.w, menu_bar)
 
     def serve_data(self, key, data, mime_type="application/octet-stream"):
         """
@@ -618,6 +686,22 @@ class Webview:
             self.logger.warning(
                 "serve_data is not supported on this platform/engine configuration."
             )
+
+    def unserve_data(self, key):
+        """
+        Removes previously served data from memory.
+        """
+        if hasattr(self, "_served_data") and key in self._served_data:
+            del self._served_data[key]
+            self.logger.debug(f"Unserved data at pytron://{key}")
+
+    def _sync_state(self):
+        """
+        Returns the current application state for initial sync.
+        """
+        if self.app:
+            return self.app.state.to_dict()
+        return {}
 
     def expose(self, entity):
         if callable(entity) and not isinstance(entity, type):

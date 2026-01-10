@@ -59,6 +59,6 @@ try:
 except ImportError:
     __version__ = "0.0.0-dev"
 
-from .core import App, Webview, get_resource_path
+from .core import App, Webview, get_resource_path, Menu, MenuBar
 from .plugin import Plugin
 from .updater import Updater

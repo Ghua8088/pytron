@@ -7,6 +7,7 @@ import json
 import subprocess
 from pathlib import Path
 from ....console import log, console
+from ....commands.helpers import get_config
 from ..builder import AndroidBuilder
 
 import time
@@ -39,10 +40,16 @@ def sync_android_project(project_root: str, native: bool = False) -> None:
         try:
             # Check for node_modules
             if not os.path.exists(os.path.join(frontend_dir, "node_modules")):
-                 console.print("  [Frontend] Installing dependencies...", style="dim")
-                 subprocess.run("npm install", shell=True, cwd=frontend_dir, check=True)
+                 config = get_config()
+                 provider = config.get("frontend_provider", "npm")
+                 provider_bin = shutil.which(provider) or provider
+                 console.print(f"  [Frontend] Installing dependencies using {provider}...", style="dim")
+                 subprocess.run(f"{provider_bin} install", shell=True, cwd=frontend_dir, check=True)
             
-            subprocess.run("npm run build", shell=True, cwd=frontend_dir, check=True)
+            config = get_config()
+            provider = config.get("frontend_provider", "npm")
+            provider_bin = shutil.which(provider) or provider
+            subprocess.run(f"{provider_bin} run build", shell=True, cwd=frontend_dir, check=True)
             console.print("  [Frontend] Build successful.", style="success")
         except subprocess.CalledProcessError as e:
              console.print(f"  [Frontend] Build failed: {e}", style="error")

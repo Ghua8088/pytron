@@ -19,7 +19,7 @@ authors = [
   { name = "Ghua8088" }
 ]
 dependencies = [
-  "watchgod",
+  "watchfiles",
   "pydantic",
   "importlib-metadata; python_version < '3.8'",
   "pyinstaller",
@@ -39,6 +39,20 @@ classifiers = [
   "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [
+    "template_vite",
+    "android",
+    "env",
+    "venv",
+    "build",
+    "dist",
+    "node_modules",
+    "*/main/assets/python"
+]
+asyncio_mode = "auto"
 
 [project.scripts]
 pytron = "pytron.cli:main"

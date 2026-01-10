@@ -13,7 +13,10 @@ from ..console import (
     Rule,
     run_command_with_output,
 )
+import shutil
+
 from .helpers import get_venv_python_path
+from .plugin import perform_plugin_install
 
 REQUIREMENTS_JSON = Path("requirements.json")
 
@@ -21,13 +24,16 @@ REQUIREMENTS_JSON = Path("requirements.json")
 def load_requirements() -> dict:
     if REQUIREMENTS_JSON.exists():
         try:
-            return json.loads(REQUIREMENTS_JSON.read_text())
+            data = json.loads(REQUIREMENTS_JSON.read_text())
+            if "plugins" not in data:
+                data["plugins"] = []
+            return data
         except json.JSONDecodeError:
             log(
                 f"Warning: {REQUIREMENTS_JSON} is invalid JSON. Using empty defaults.",
                 style="warning",
             )
-    return {"dependencies": []}
+    return {"dependencies": [], "plugins": []}
 
 
 def save_requirements(data: dict):
@@ -84,8 +90,24 @@ def cmd_install(args: argparse.Namespace) -> int:
     packages_to_install = args.packages
     req_data = load_requirements()
     current_deps = req_data.get("dependencies", [])
+    current_plugins = req_data.get("plugins", [])
 
     if packages_to_install:
+        if getattr(args, "plugin", False):
+            # Handle Plugin Installation
+            for plugin_id in packages_to_install:
+                ret = perform_plugin_install(plugin_id)
+                if ret == 0:
+                    if plugin_id not in current_plugins:
+                        current_plugins.append(plugin_id)
+                else:
+                    return 1
+            
+            req_data["plugins"] = sorted(list(set(current_plugins)))
+            save_requirements(req_data)
+            log(f"Added plugins to {REQUIREMENTS_JSON}", style="success")
+            return 0
+
         # Warn about versionless packages
         for pkg in packages_to_install:
             # Check if it's a local path
@@ -209,31 +231,60 @@ def cmd_install(args: argparse.Namespace) -> int:
             return 1
     else:
         # Install from requirements.json
-        if not current_deps:
-            log(f"No dependencies found in {REQUIREMENTS_JSON}.", style="warning")
+        current_plugins = req_data.get("plugins", [])
+
+        if not current_deps and not current_plugins:
+            log(f"No dependencies or plugins found in {REQUIREMENTS_JSON}.", style="warning")
             return 0
 
-        log(f"Installing dependencies from {REQUIREMENTS_JSON}...")
-        try:
-            progress = get_progress()
-            progress.start()
-            task = progress.add_task("Syncing Dependencies...", total=None)
+        if current_deps:
+            log(f"Installing dependencies from {REQUIREMENTS_JSON}...")
+            try:
+                progress = get_progress()
+                progress.start()
+                task = progress.add_task("Syncing Dependencies...", total=None)
 
-            ret = run_command_with_output(
-                [str(venv_python), "-m", "pip", "install"] + current_deps
-            )
+                ret = run_command_with_output(
+                    [str(venv_python), "-m", "pip", "install"] + current_deps
+                )
 
-            progress.stop()
-            if ret == 0:
-                log("Dependencies installed successfully.", style="success")
-            else:
-                log("Failed to install dependencies.", style="error")
+                progress.stop()
+                if ret == 0:
+                    log("Dependencies installed successfully.", style="success")
+                else:
+                    log("Failed to install dependencies.", style="error")
+                    return 1
+            except (
+                Exception
+            ) as e:
+                if 'progress' in locals(): progress.stop()
+                log(f"Error installing dependencies: {e}", style="error")
                 return 1
-        except (
-            Exception
-        ) as e:  # Catching a general exception here for safety, as CalledProcessError is handled by run_command_with_output
-            progress.stop()
-            log(f"Error installing dependencies: {e}", style="error")
-            return 1
+
+        if current_plugins:
+            log(f"Installing plugins from {REQUIREMENTS_JSON}...")
+            for plugin_id in current_plugins:
+                ret = perform_plugin_install(plugin_id)
+                if ret != 0:
+                    log(f"Failed to install plugin: {plugin_id}", style="error")
+                    return 1
+
+        # 3. Frontend Dependencies (NPM/Yarn/Bun)
+        frontend_dir = Path("frontend")
+        if frontend_dir.exists() and (frontend_dir / "package.json").exists():
+            log(f"Detected frontend in {frontend_dir}. Syncing NPM dependencies...")
+            provider = req_data.get("provider", "npm")
+            provider_bin = shutil.which(provider)
+            
+            if provider_bin:
+                try:
+                    # Run install in the frontend directory
+                    subprocess.check_call([provider_bin, "install"], cwd=frontend_dir)
+                    log("Frontend dependencies installed successfully.", style="success")
+                except subprocess.CalledProcessError as e:
+                    log(f"Failed to install frontend dependencies: {e}", style="error")
+                    return 1
+            else:
+                log(f"Warning: '{provider}' not found. Please install '{provider}' to sync frontend dependencies.", style="warning")
 
     return 0

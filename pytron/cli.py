@@ -2,7 +2,7 @@
 
 This implementation uses only the standard library so there are no extra
 dependencies. It provides convenience commands to scaffold a minimal app,
-run a Python entrypoint, run `pyinstaller` to package, and run `npm run build`
+run a Python entrypoint, run `pyinstaller` to package, and run frontend builds
 for frontend folders.
 """
 
@@ -19,7 +19,8 @@ from .commands.info import cmd_info
 from .commands.install import cmd_install
 from .commands.uninstall import cmd_uninstall
 from .commands.show import cmd_show
-from .commands.frontend import cmd_frontend_install
+from .commands.plugin import cmd_plugin
+from .commands.frontend import cmd_frontend
 from .commands.android import cmd_android
 from .commands.doctor import cmd_doctor
 from .commands.workflow import cmd_workflow
@@ -50,6 +51,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="react",
         help="Frontend template (react, vue, svelte, vanilla, etc.)",
     )
+    p_init.add_argument(
+        "--provider",
+        choices=["npm", "yarn", "pnpm", "bun"],
+        default="npm",
+        help="JS Package Manager to use for scaffolding (default: npm)",
+    )
     p_init.set_defaults(func=cmd_init)
 
     p_install = sub.add_parser(
@@ -61,6 +68,11 @@ def build_parser() -> argparse.ArgumentParser:
         "packages",
         nargs="*",
         help="Packages to install (if empty, installs from requirements.json)",
+    )
+    p_install.add_argument(
+        "--plugin",
+        action="store_true",
+        help="Install as a plugin instead of a Python dependency",
     )
     p_install.set_defaults(func=cmd_install)
 
@@ -78,20 +90,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_show.set_defaults(func=cmd_show)
 
     p_doctor = sub.add_parser(
-        "doctor", help="Check system for Pytron dependencies", parents=[base_parser]
+        "doctor", help="Check system dependencies", parents=[base_parser]
     )
     p_doctor.set_defaults(func=cmd_doctor)
 
     p_frontend = sub.add_parser(
-        "frontend", help="Frontend package management", parents=[base_parser]
+        "frontend",
+        help="Frontend commands proxy (runs '<provider> <args>' in the frontend folder)",
+        parents=[base_parser],
     )
-    frontend_sub = p_frontend.add_subparsers(dest="frontend_command")
-
-    pf_install = frontend_sub.add_parser(
-        "install", help="Install packages into the frontend", parents=[base_parser]
+    p_frontend.add_argument(
+        "--provider",
+        choices=["npm", "yarn", "pnpm", "bun"],
+        default="npm",
+        help="JS Package Manager to use (default: npm)",
     )
-    pf_install.add_argument("packages", nargs="*", help="npm packages to install")
-    pf_install.set_defaults(func=cmd_frontend_install)
+    p_frontend.add_argument(
+        "npm_args",
+        nargs=argparse.REMAINDER,
+        help="Arguments to pass to the provider (e.g., install, run dev, test)",
+    )
+    p_frontend.set_defaults(func=cmd_frontend)
 
     p_run = sub.add_parser(
         "run", help="Run a Python entrypoint script", parents=[base_parser]
@@ -173,7 +192,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_pkg.set_defaults(func=cmd_package)
     p_build = sub.add_parser(
         "build-frontend",
-        help="Run npm build in a frontend folder",
+        help="Run frontend build in a frontend folder",
         parents=[base_parser],
     )
     p_build.add_argument("folder", help="Frontend folder (contains package.json)")
@@ -181,6 +200,29 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_info = sub.add_parser("info", help="Show environment info", parents=[base_parser])
     p_info.set_defaults(func=cmd_info)
+
+    # Plugin Management
+    p_plugin = sub.add_parser(
+        "plugin", help="Manage application plugins", parents=[base_parser]
+    )
+    plugin_sub = p_plugin.add_subparsers(dest="plugin_command")
+
+    # Plugin Install
+    p_plugin_inst = plugin_sub.add_parser("install", help="Install a plugin from GitHub")
+    p_plugin_inst.add_argument("identifier", help="username.repo.version (e.g. ghua8088.pytron-weather-plugin)")
+    
+    # Plugin List
+    p_plugin_list = plugin_sub.add_parser("list", help="List installed plugins")
+    
+    # Plugin Create
+    p_plugin_create = plugin_sub.add_parser("create", help="Scaffold a new plugin")
+    p_plugin_create.add_argument("name", help="Name of the plugin directory")
+    
+    # Plugin Uninstall
+    p_plugin_uninst = plugin_sub.add_parser("uninstall", help="Remove a plugin")
+    p_plugin_uninst.add_argument("name", help="Directory name of the plugin to remove")
+    
+    p_plugin.set_defaults(func=cmd_plugin)
 
     p_android = sub.add_parser(
         "android", help="Android build tools", parents=[base_parser]

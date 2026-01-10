@@ -38,11 +38,20 @@ class NativeMixin:
         # Fallback if no window yet or needed
         try:
             import platform
-
-            if platform.system() == "Windows":
+            sys_plat = platform.system()
+            impl = None
+            if sys_plat == "Windows":
                 from ..platforms.windows import WindowsImplementation
+                impl = WindowsImplementation()
+            elif sys_plat == "Linux":
+                from ..platforms.linux import LinuxImplementation
+                impl = LinuxImplementation()
+            elif sys_plat == "Darwin":
+                from ..platforms.darwin import DarwinImplementation
+                impl = DarwinImplementation()
 
-                return WindowsImplementation().set_launch_on_boot(
+            if impl:
+                return impl.set_launch_on_boot(
                     safe_name, exe_path, enable
                 )
         except Exception as e:
@@ -94,3 +103,43 @@ class NativeMixin:
                     break
                 except Exception:
                     pass
+
+    def copy_to_clipboard(self, text: str):
+        """Copies text to the system clipboard."""
+        if self.windows:
+            return self.windows[0]._platform.set_clipboard_text(text)
+        return False
+
+    def get_clipboard_text(self):
+        """Returns text from the system clipboard."""
+        if self.windows:
+            return self.windows[0]._platform.get_clipboard_text()
+        return None
+
+    def get_system_info(self):
+        """Returns hardware and OS information."""
+        if self.windows:
+            return self.windows[0]._platform.get_system_info()
+        
+        # Fallback if no window
+        import platform
+        return {"os": platform.system(), "arch": platform.machine()}
+
+    def store_set(self, key: str, value):
+        """Persists a value to the app's local storage."""
+        # Fix recursion: This was incorrectly calling self.store_set instead of the ConfigMixin implementation
+        if hasattr(super(), "store_set"):
+            return super().store_set(key, value)
+        return False
+
+    def store_get(self, key: str, default=None):
+        """Retrieves a persisted value from the app's local storage."""
+        if hasattr(super(), "store_get"):
+            return super().store_get(key, default)
+        return default
+
+    def store_delete(self, key: str):
+        """Removes a persisted value."""
+        if hasattr(super(), "store_delete"):
+            return super().store_delete(key)
+        return False

@@ -9,13 +9,23 @@ from ..commands.harvest import generate_nuclear_hooks
 from .installers import build_installer
 from .utils import cleanup_dist
 
-def run_pyinstaller_build(args, script, out_name, settings, app_icon, package_dir, add_data, manifest_path, progress, task):
+def run_pyinstaller_build(args, script, out_name, settings, app_icon, package_dir, add_data, manifest_path, progress, task, package_context=None):
     # --------------------------------------------------
     # Create a .spec file with the UTF-8 bootloader option
     # --------------------------------------------------
     try:
         log("Generating spec file...", style="info")
         progress.update(task, description="Generating Spec...", completed=30)
+        
+        # Merge context if provided
+        hidden_imports = ["pytron"]
+        binaries = []
+        extra_makespec_args = []
+        
+        if package_context:
+            hidden_imports.extend(package_context.get("hidden_imports", []))
+            binaries.extend(package_context.get("binaries", []))
+            extra_makespec_args.extend(package_context.get("extra_args", []))
 
         dll_name = "webview.dll"
         if sys.platform == "linux":
@@ -55,8 +65,6 @@ def run_pyinstaller_build(args, script, out_name, settings, app_icon, package_di
         else:
             makespec_cmd.append("--noconsole")
 
-        hidden_imports = ["pytron"]
-
         # PySide6 logic removed.
         # If user really needs hidden imports, they can use spec files.
 
@@ -72,8 +80,27 @@ def run_pyinstaller_build(args, script, out_name, settings, app_icon, package_di
 
         # makespec_cmd already initialized
 
+        splash_image = settings.get("splash_image")
+        if splash_image:
+            possible_splash = script.parent / splash_image
+            if possible_splash.exists():
+                makespec_cmd.extend(["--splash", str(possible_splash)])
+                if "pyi_splash" not in hidden_imports:
+                    hidden_imports.append("pyi_splash")
+                
+                # IMPORTANT: PyInstaller splash requires Tcl/Tk DLLs.
+                # If they were excluded or not collected, the splash will fail with a DLL error.
+                makespec_cmd.append("--collect-all=tkinter")
+                
+                log(f"Injected splash screen: {splash_image} (Ensuring Tcl/Tk dependencies)", style="success")
+            else:
+                log(f"Warning: Splash image not found: {splash_image}", style="warning")
+
         for imp in hidden_imports:
             makespec_cmd.append(f"--hidden-import={imp}")
+        
+        for bin_pair in binaries:
+            makespec_cmd.append(f"--add-binary={bin_pair}")
 
         makespec_cmd.append(f"--add-binary={dll_src}{os.pathsep}{dll_dest}")
         makespec_cmd.append(str(script))
@@ -81,11 +108,18 @@ def run_pyinstaller_build(args, script, out_name, settings, app_icon, package_di
         # Add browser engine to data if not native
         for item in browser_data:
             makespec_cmd.extend(["--add-data", item])
+            
+        # Add plugin-requested data if any
+        for item in add_data:
+            makespec_cmd.extend(["--add-data", item])
+            
+        # Add extra args from plugins
+        makespec_cmd.extend(extra_makespec_args)
 
         # Windows-specific options
         if sys.platform == "win32":
             makespec_cmd.append(f"--runtime-hook={package_dir}/pytron/utf8_hook.py")
-            # Pass manifest to makespec so spec may include it (deprecated shorthand supported by some PyInstaller versions)
+            # Pass manifest to makespec so spec may include it
             if manifest_path:
                 makespec_cmd.append(f"--manifest={manifest_path}")
 
@@ -104,9 +138,6 @@ def run_pyinstaller_build(args, script, out_name, settings, app_icon, package_di
         if app_icon:
             makespec_cmd.extend(["--icon", app_icon])
             log(f"Using icon: {app_icon}", style="dim")
-
-        for item in add_data:
-            makespec_cmd.extend(["--add-data", item])
 
         # Force Package logic (apply --collect-all for libraries specified in settings.json)
         force_pkgs = settings.get("force-package", [])
@@ -208,7 +239,8 @@ def run_pyinstaller_build(args, script, out_name, settings, app_icon, package_di
             return ret_code
 
         # Cleanup
-        cleanup_dist(Path("dist") / out_name)
+        has_splash = bool(settings.get("splash_image"))
+        cleanup_dist(Path("dist") / out_name, preserve_tk=has_splash)
 
     except subprocess.CalledProcessError as e:
         log(f"Error generating spec or building: {e}", style="error")

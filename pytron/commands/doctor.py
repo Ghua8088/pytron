@@ -69,20 +69,29 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     # 2. Web Application Dependencies
     console.print(f"[bold]Web & Frontend Tools[/bold]")
-    node_path, node_ver = check_command("node")
-    npm_path, npm_ver = check_command("npm")
+    from .helpers import get_config
+    config = get_config()
+    configured_provider = config.get("frontend_provider", "npm")
 
+    node_path, node_ver = check_command("node")
     if node_path:
         console.print(f"  [success]✓[/success] Node.js: {node_ver}")
     else:
         console.print(
-            f"  [error]✗[/error] Node.js: Not found (Required for 'pytron init' and 'build-frontend')"
+            f"  [error]✗[/error] Node.js: Not found (Only required for 'npm/yarn/pnpm')"
         )
 
-    if npm_path:
-        console.print(f"  [success]✓[/success] npm: {npm_ver}")
-    else:
-        console.print(f"  [error]✗[/error] npm: Not found")
+    providers = ["npm", "yarn", "pnpm", "bun"]
+    for p in providers:
+        p_path, p_ver = check_command(p)
+        status = "[success]✓[/success]" if p_path else "[dim]✗[/dim]"
+        configured_tag = " [cyan](Configured)[/cyan]" if p == configured_provider else ""
+        if p_path:
+            console.print(f"  {status} {p}: {p_ver}{configured_tag}")
+        elif p == configured_provider:
+            console.print(f"  [error]✗[/error] {p}: Not found{configured_tag}")
+        else:
+            console.print(f"  {status} {p}: Not found")
 
     console.print("")
 

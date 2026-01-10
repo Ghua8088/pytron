@@ -44,12 +44,20 @@ def cmd_init(args: argparse.Namespace) -> int:
     is_next = args.template.lower() in ["next", "nextjs"]
     dist_path = "frontend/out/index.html" if is_next else "frontend/dist/index.html"
 
+    # Resolve provider
+    provider = getattr(args, "provider", "npm")
+    provider_bin = shutil.which(provider)
+    if not provider_bin:
+        log(f"Warning: '{provider}' not found. Defaulting to 'npm'.", style="warning")
+        provider = "npm"
+
     settings_file = target / "settings.json"
     settings_data = {
         "title": target.name,
         "version": "1.0.0",
         "pytron_version": __version__,
         "frontend_framework": args.template,
+        "frontend_provider": provider,
         "dimensions": [800, 600],
         "frameless": False,
         "default_context_menu": False,
@@ -57,7 +65,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         "url": dist_path,
         "author": "Your Name",
         "description": "A brief description of your app",
-        "copyright": "Copyright © 2026 Your Name",
+        "copyright": f"Copyright © 2026 Your Name",
     }
     settings_file.write_text(json.dumps(settings_data, indent=4))
 
@@ -82,12 +90,16 @@ def cmd_init(args: argparse.Namespace) -> int:
         try:
             # npx create-next-app@latest frontend --use-npm --no-git --ts --eslint --no-tailwind --src-dir --app --import-alias "@/*"
             # Using defaults but forcing non-interactive
+            runner = "npx"
+            if provider == "bun": runner = "bunx"
+            elif provider == "pnpm": runner = "pnpx"
+
             cmd = [
-                "npx",
+                runner,
                 "-y",
                 "create-next-app@latest",
                 "frontend",
-                "--use-npm",
+                f"--use-{provider}" if provider in ["npm", "pnpm", "yarn"] else "",
                 "--no-git",
                 "--ts",
                 "--eslint",
@@ -97,6 +109,8 @@ def cmd_init(args: argparse.Namespace) -> int:
                 "--import-alias",
                 "@/*",
             ]
+            # Remove empty strings if any
+            cmd = [c for c in cmd if c]
 
             # log output while keeping progress bar alive
             run_command_with_output(
@@ -158,9 +172,13 @@ def cmd_init(args: argparse.Namespace) -> int:
         # We use a specific version (5.5.0) to avoid experimental prompts (like rolldown)
         # that appear in newer versions (v6+).
         try:
+            runner = "npx"
+            if provider == "bun": runner = "bunx"
+            elif provider == "pnpm": runner = "pnpx"
+
             ret = run_command_with_output(
                 [
-                    "npx",
+                    runner,
                     "-y",
                     "create-vite@5.5.0",
                     "frontend",
@@ -215,13 +233,13 @@ def cmd_init(args: argparse.Namespace) -> int:
                 task, description="Installing Dependencies...", completed=40
             )
             ret = run_command_with_output(
-                ["npm", "install"],
+                [provider, "install"],
                 cwd=str(target / "frontend"),
                 shell=(sys.platform == "win32"),
             )
             if ret != 0:
                 log(
-                    "Warning: npm install failed. You may need to run 'npm install' manually in the frontend folder.",
+                    f"Warning: {provider} install failed. You may need to run '{provider} install' manually in the frontend folder.",
                     style="warning",
                 )
 

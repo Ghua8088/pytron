@@ -8,8 +8,23 @@ from ..console import log, run_command_with_output, console, Rule
 from ..commands.helpers import get_python_executable, get_venv_site_packages
 from .installers import build_installer
 
-def run_nuitka_build(args, script, out_name, settings, app_icon, package_dir, add_data, frontend_dist, progress, task):
+def run_nuitka_build(args, script, out_name, settings, app_icon, package_dir, add_data, frontend_dist, progress, task, package_context=None):
     log("Packaging using Nuitka (Native Compilation)...", style="info")
+    
+    # Context handling
+    extra_plugin_args = []
+    if package_context:
+        extra_plugin_args.extend(package_context.get("extra_args", []))
+        # Nuitka uses different flags for hidden imports and assets
+        # For simplicity, we'll try to map common ones
+        for imp in package_context.get("hidden_imports", []):
+            extra_plugin_args.append(f"--include-module={imp}")
+        for dat in package_context.get("add_data", []):
+            # add_data usually is src;dest
+            if os.pathsep in dat:
+                src, dest = dat.split(os.pathsep, 1)
+                extra_plugin_args.append(f"--include-data-files={src}={dest}")
+
     log(f"Debug: Nuitka block entered. Script: {script}", style="dim")
 
     # Check for Nuitka
@@ -117,6 +132,10 @@ def run_nuitka_build(args, script, out_name, settings, app_icon, package_dir, ad
     # Engine Plugins
     requested_engine = getattr(args, "engine", None)
     # PySide6 plugin enablement removed.
+
+    # Add extra plugin args from package_context
+    if extra_plugin_args:
+        cmd.extend(extra_plugin_args)
 
     # Run It
     cmd.append(str(script))

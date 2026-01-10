@@ -2,6 +2,8 @@ import argparse
 import shutil
 import subprocess
 from pathlib import Path
+from .helpers import get_config
+import sys
 
 
 def cmd_build_frontend(args: argparse.Namespace) -> int:
@@ -10,11 +12,16 @@ def cmd_build_frontend(args: argparse.Namespace) -> int:
         print(f"Folder not found: {folder}")
         return 1
 
-    # Prefer npm if available
-    npm = shutil.which("npm")
-    if not npm:
-        print("npm not found in PATH")
+    config = get_config()
+    provider = config.get("frontend_provider", "npm")
+    provider_bin = shutil.which(provider)
+    if not provider_bin:
+        print(f"{provider} not found in PATH")
         return 1
 
-    print(f"Running npm run build in {folder}")
-    return subprocess.call([npm, "run", "build"], cwd=str(folder))
+    print(f"Running {provider} run build in {folder}")
+    return subprocess.call(
+        [provider_bin, "run", "build"],
+        cwd=str(folder),
+        shell=(sys.platform == "win32"),
+    )

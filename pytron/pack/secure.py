@@ -100,7 +100,14 @@ class MetadataEditor:
             if icon_path and os.path.exists(icon_path):
                 try:
                     # Uses Win32 API UpdateResource - strict, safe, and reliable for Windows
-                    CopyIcons(str(binary_path), str(icon_path))
+                    # Some versions of PyInstaller require a workpath or have changed signatures
+                    log(f"Injecting icon: {icon_path} into {binary_path.name}", style="dim")
+                    try:
+                        CopyIcons(str(binary_path), str(icon_path))
+                    except (TypeError, KeyError):
+                        # Fallback for newer PyInstaller signatures (dst, src, workpath)
+                        CopyIcons(str(binary_path), str(icon_path), ".")
+                    
                     log("Applied app icon via Win32 API (PyInstaller utils).", style="success")
                 except Exception as e:
                     log(f"Icon injection warning: {e}", style="warning")
@@ -224,7 +231,7 @@ def append_key_footer(binary_path, key_bytes, settings):
         log(f"Error appending key footer: {e}", style="error")
         return False
 
-def run_secure_build(args, script, out_name, settings, app_icon, package_dir, add_data, progress, task):
+def run_secure_build(args, script, out_name, settings, app_icon, package_dir, add_data, progress, task, package_context=None):
     """
     Implements the 'Agentic Shield' secure packaging workflow.
     """
@@ -412,8 +419,32 @@ coll = COLLECT(
         nonce = os.urandom(12)
         encrypted_code = aesgcm.encrypt(nonce, code.encode("utf-8"), None)
         
+        new_payload_data = nonce + encrypted_code
         with open(payload_dest, "wb") as f:
-            f.write(nonce + encrypted_code)
+            f.write(new_payload_data)
+
+        # 6.6. GENERATE EVOLUTION PATCH (If requested)
+        patch_from = getattr(args, "patch_from", None)
+        if patch_from:
+            old_payload_path = Path(patch_from)
+            if old_payload_path.exists():
+                try:
+                    import bsdiff4
+                    log(f"Generating Binary Evolution patch from {old_payload_path.name}...", style="cyan")
+                    old_payload_data = old_payload_path.read_bytes()
+                    patch_data = bsdiff4.diff(old_payload_data, new_payload_data)
+                    
+                    patch_dest = build_dir / "dist" / out_name / "app.pytron_patch"
+                    patch_dest.write_bytes(patch_data)
+                    
+                    reduction = 100 - (len(patch_data) / len(new_payload_data) * 100)
+                    log(f"Success: Evolution patch generated ({len(patch_data)} bytes, -{reduction:.1f}% size)", style="success")
+                except ImportError:
+                    log("Warning: 'bsdiff4' not installed. Skipping patch generation.", style="warning")
+                except Exception as e:
+                    log(f"Warning: Failed to generate patch: {e}", style="warning")
+            else:
+                log(f"Warning: Patch source file not found: {patch_from}", style="warning")
 
         # Cleanup leaked files
         internal_folder = build_dir / "dist" / out_name / "_internal"
@@ -454,7 +485,8 @@ coll = COLLECT(
             return 1
 
         # Nuclear Pruning & Distribution Hardening
-        prune_junk_folders(final_dist)
+        has_splash = bool(settings.get("splash_image"))
+        prune_junk_folders(final_dist, preserve_tk=has_splash)
         
         # Cleanup dummy base
         base_bin = final_dist / f"{out_name}_base{ext}"

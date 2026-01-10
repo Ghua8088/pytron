@@ -19,6 +19,17 @@ def get_python_executable() -> str:
     return sys.executable
 
 
+def get_config() -> dict:
+    """Load settings.json from the current directory."""
+    path = Path("settings.json")
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
 def get_venv_site_packages(python_exe: str) -> list[str]:
     """
     Get the site-packages directories for the given python executable.
@@ -45,7 +56,15 @@ def locate_frontend_dir(start_dir: Path | None = None) -> Path | None:
     if not base.exists():
         return None
     candidates = [base]
-    candidates.extend([p for p in base.iterdir() if p.is_dir()])
+    # Ignores common large folders to avoid slow searches and false positives
+    ignored_dirs = {"node_modules", "env", "venv", ".git", "build", "dist"}
+    candidates.extend(
+        [
+            p
+            for p in base.iterdir()
+            if p.is_dir() and p.name not in ignored_dirs and not p.name.startswith(".")
+        ]
+    )
     for candidate in candidates:
         pkg = candidate / "package.json"
         if not pkg.exists():
@@ -60,11 +79,15 @@ def locate_frontend_dir(start_dir: Path | None = None) -> Path | None:
 
 
 def run_frontend_build(frontend_dir: Path) -> bool | None:
-    npm = shutil.which("npm")
-    if not npm:
-        print("[Pytron] npm not found, skipping frontend build.")
+    config = get_config()
+    provider = config.get("frontend_provider", "npm")
+    provider_bin = shutil.which(provider)
+    
+    if not provider_bin:
+        print(f"[Pytron] {provider} not found, skipping frontend build.")
         return None
-    print(f"[Pytron] Building frontend at: {frontend_dir}")
+        
+    print(f"[Pytron] Building frontend at: {frontend_dir} using {provider}")
     # Ensure Next.js static export-friendly config when applicable
     # Determine if this is a Next.js project and ensure config if so
     is_next = False
@@ -80,21 +103,25 @@ def run_frontend_build(frontend_dir: Path) -> bool | None:
         pass
 
     try:
-        # If this is a Next.js project, prefer `npx next build` (and export)
+        # If this is a Next.js project, prefer npx/bunx/pnpx next build (and export)
         if is_next:
-            print("[Pytron] Detected Next.js project — running `npx next build`.")
+            runner = "npx"
+            if provider == "bun": runner = "bunx"
+            elif provider == "pnpm": runner = "pnpx"
+            
+            print(f"[Pytron] Detected Next.js project — running `{runner} next build`.")
             # Run build to create a static `out/` directory (Next.js 13.4+ with output: "export")
             subprocess.run(
-                ["npx", "next", "build"],
+                [runner, "next", "build"],
                 cwd=str(frontend_dir),
                 shell=(sys.platform == "win32"),
                 check=True,
             )
             return True
 
-        # Fallback to the project's npm build script
+        # Fallback to the project's build script via provider
         subprocess.run(
-            ["npm", "run", "build"],
+            [provider_bin, "run", "build"],
             cwd=str(frontend_dir),
             shell=(sys.platform == "win32"),
             check=True,

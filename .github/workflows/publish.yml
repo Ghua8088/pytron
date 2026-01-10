@@ -1,27 +1,44 @@
-name: Publish to PyPI 🐍
+name: Release & Publish 🐍
 
 on:
-  release:
-    types: [published] # Triggers when you click "Publish Release" on GitHub
   workflow_dispatch:
+
 jobs:
-  build-and-publish:
-    name: Build & Publish
+  release-and-publish:
+    name: Build, Release & Publish
     runs-on: ubuntu-latest
     
-    # Permission needed for the publishing action to work
     permissions:
-      id-token: write  # IMPORTANT: This is required for trusted publishing
-      contents: read
+      contents: write  # Required for creating GitHub Releases
+      id-token: write  # Required for OIDC PyPI publishing
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Get Version from pyproject.toml
+        id: get_version
+        run: |
+          # Extract version using python (requires 3.11+)
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VERSION"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: Release v${{ steps.get_version.outputs.version }}
+          generate_release_notes: true  # Automatically generates "What's Changed" from PRs
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install build tools
         run: |
@@ -30,10 +47,8 @@ jobs:
 
       - name: Build package
         run: python -m build
-        # This creates the 'dist/' folder at the root
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
-          # It automatically looks in 'dist/', so we don't need to specify paths!

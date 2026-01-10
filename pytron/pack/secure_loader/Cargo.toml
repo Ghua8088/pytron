@@ -12,6 +12,7 @@ bsdiff = "0.1"
 aes-gcm = "0.10"
 rfd = "0.14"
 obfstr = "0.4"
+zip = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "debugapi", "consoleapi", "shellapi", "objbase", "libloaderapi"] }
