@@ -18,7 +18,10 @@ try:
     import pefile
 except ImportError:
     pefile = None
-from PyInstaller.utils.win32.icon import CopyIcons
+try:
+    from PyInstaller.utils.win32.icon import CopyIcons
+except ImportError:
+    CopyIcons = None
 
 
 # The placeholder that exists in the precompiled binary
