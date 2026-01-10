@@ -351,12 +351,13 @@ hiddenimports += tmp_ret[2]
 
         # Note: We rely on Analysis of bootstrap_env.py (which imports user script) 
         # to find dependencies. We explicitly add site_packages to pathex.
+        dll_dest_posix = dll_dest.replace('\\', '/')
         spec_content = f"""
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
 datas = {repr(spec_datas)}
-binaries = [('{dll_src.as_posix()}', '{dll_dest.replace('\\', '/')}')]
+binaries = [('{dll_src.as_posix()}', '{dll_dest_posix}')]
 hiddenimports = ['pytron', 'textwrap', 're', 'json', 'ctypes', 'cryptography']
 
 # Force-Package Collections

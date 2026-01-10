@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from .helpers import locate_frontend_dir
+from ..config import get_config
 from ..console import log, run_command_with_output, get_progress
 
 

@@ -2,6 +2,7 @@ import os
 import sys
 import shutil
 import inspect
+import asyncio
 from ..webview import Webview
 
 class WindowMixin:

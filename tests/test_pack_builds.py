@@ -27,18 +27,20 @@ def test_run_nuitka_build(mock_run, tmp_path):
     
     # Mock shutil.which to avoid install attempt
     with patch("shutil.which", return_value="nuitka"):
-        run_nuitka_build(
-            args, 
-            script, 
-            "MyApp", 
-            settings, 
-            None, # icon
-            str(tmp_path), # package_dir
-            [], # add_data
-            None, # frontend_dist
-            MagicMock(), # progress
-            MagicMock() # task
-        )
+        # Mock sys.platform to ensure Windows flags are tested regardless of runner OS
+        with patch("sys.platform", "win32"):
+            run_nuitka_build(
+                args, 
+                script, 
+                "MyApp", 
+                settings, 
+                None, # icon
+                str(tmp_path), # package_dir
+                [], # add_data
+                None, # frontend_dist
+                MagicMock(), # progress
+                MagicMock() # task
+            )
         
     mock_run.assert_called()
     cmd = mock_run.call_args[0][0]
@@ -63,20 +65,22 @@ def test_run_pyinstaller_build(mock_run_pyi, tmp_path):
     
     # Mock cleanup_dist to avoid errors
     with patch("pytron.pack.pyinstaller.cleanup_dist"):
-        # Mock spec file existence check
-        with patch("pathlib.Path.exists", return_value=True):
-            run_pyinstaller_build(
-                args,
-                script,
-                "MyApp",
-                settings,
-                None,
-                str(tmp_path),
-                [],
-                None, # manifest
-                MagicMock(),
-                MagicMock()
-            )
+        # Mock build_installer to prevent actual installer creation (which fails with mocked commands)
+        with patch("pytron.pack.pyinstaller.build_installer") as mock_build_installer:
+            # Mock spec file existence check
+            with patch("pathlib.Path.exists", return_value=True):
+                run_pyinstaller_build(
+                    args,
+                    script,
+                    "MyApp",
+                    settings,
+                    None,
+                    str(tmp_path),
+                    [],
+                    None, # manifest
+                    MagicMock(),
+                    MagicMock()
+                )
             
     # Should call run_command_with_output twice: once for makespec, once for build
     assert mock_run_pyi.call_count == 2
