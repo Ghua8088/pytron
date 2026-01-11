@@ -59,6 +59,36 @@ try:
 except ImportError:
     __version__ = "0.0.0-dev"
 
+# --- Plugin Configuration Namespace ---
+import types
+
+class PluginsNamespace(types.ModuleType):
+    def __init__(self):
+        super().__init__("plugins")
+        self._registered_configs = {}
+
+    def __getattr__(self, name):
+        # Return a configurator for the requested plugin
+        return PluginConfigurator(name, self._registered_configs)
+
+    def get_registered_config(self, plugin_name):
+        return self._registered_configs.get(plugin_name, {})
+
+class PluginConfigurator:
+    def __init__(self, plugin_name, registry):
+        self.plugin_name = plugin_name
+        self.registry = registry
+
+    def __call__(self, **kwargs):
+        self.registry[self.plugin_name] = kwargs
+        return self
+
+# Create the instance and inject it into sys.modules so 'import plugins' works
+plugins = PluginsNamespace()
+sys.modules['plugins'] = plugins
+# print(f"[Pytron] Injected plugins namespace into sys.modules: {sys.modules['plugins']}")
+# --------------------------------------
+
 from .core import App, Webview, get_resource_path, Menu, MenuBar
 from .plugin import Plugin
 from .updater import Updater

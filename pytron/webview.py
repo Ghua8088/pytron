@@ -705,12 +705,23 @@ class Webview:
 
     def eval(self, js_code):
         def _thread_send():
-            js_buf = ctypes.create_string_buffer(js_code.encode("utf-8"))
-            self._gc_protector.append(js_buf)
-            lib.webview_dispatch(self.w, self._cb, ctypes.cast(js_buf, ctypes.c_void_p))
+            try:
+                js_buf = ctypes.create_string_buffer(js_code.encode("utf-8"))
+                self._gc_protector.append(js_buf)
+                lib.webview_dispatch(self.w, self._cb, ctypes.cast(js_buf, ctypes.c_void_p))
+            except Exception as e:
+                self.logger.debug(f"Failed to dispatch JS: {e}")
 
         # PERFORMANCE: Use thread pool instead of spawning new thread for every eval()
-        self.thread_pool.submit(_thread_send)
+        try:
+            # Check if app is still running and pool is active
+            if self.app and not self.app.is_running:
+                return
+
+            self.thread_pool.submit(_thread_send)
+        except (RuntimeError, AttributeError):
+            # Happens after thread pool shutdown during app exit
+            pass
 
     def set_menu(self, menu_bar):
         """Attaches a native menu bar to this window."""

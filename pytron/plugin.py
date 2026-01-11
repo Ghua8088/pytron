@@ -144,6 +144,11 @@ class Plugin:
         return self.manifest.get("ui_entry")
 
     @property
+    def config(self) -> Dict[str, Any]:
+        """Plugin-specific configuration from manifest."""
+        return self.manifest.get("config", {})
+
+    @property
     def isolated(self) -> bool:
         """Whether this plugin should run in its own process/venv."""
         return self.manifest.get("isolated", False)
@@ -251,14 +256,33 @@ class Plugin:
                         self.logger.info(
                             f"Initializing plugin '{self.name}' via function '{object_name}'"
                         )
-                        self.instance = entry_obj(supervised_app)
+                        # Check for manual configuration from the 'plugins' pseudo-module if it exists
+                        manual_config = {}
+                        if "plugins" in sys.modules:
+                            p_mod = sys.modules["plugins"]
+                            if hasattr(p_mod, "get_registered_config"):
+                                manual_config = p_mod.get_registered_config(self.name)
+                            elif hasattr(p_mod, "_registered_configs"):
+                                manual_config = getattr(p_mod, "_registered_configs").get(self.name, {})
+
+                        self.instance = entry_obj(supervised_app, **manual_config)
 
                     # 2. If it's a class, instantiate it with `supervised_app`
                     elif isinstance(entry_obj, type):
                         self.logger.info(
                             f"Initializing plugin '{self.name}' via class '{object_name}'"
                         )
-                        self.instance = entry_obj(supervised_app)
+                        # Check for manual configuration from the 'plugins' pseudo-module if it exists
+                        manual_config = {}
+                        if "plugins" in sys.modules:
+                            p_mod = sys.modules["plugins"]
+                            if hasattr(p_mod, "get_registered_config"):
+                                manual_config = p_mod.get_registered_config(self.name)
+                            elif hasattr(p_mod, "_registered_configs"):
+                                manual_config = getattr(p_mod, "_registered_configs").get(self.name, {})
+
+                        self.instance = entry_obj(supervised_app, **manual_config)
+
                         # If the class has a 'setup' method, call it
                         if hasattr(self.instance, "setup"):
                             self.instance.setup()
