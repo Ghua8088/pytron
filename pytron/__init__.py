@@ -62,6 +62,7 @@ except ImportError:
 # --- Plugin Configuration Namespace ---
 import types
 
+
 class PluginsNamespace(types.ModuleType):
     def __init__(self):
         super().__init__("plugins")
@@ -74,6 +75,7 @@ class PluginsNamespace(types.ModuleType):
     def get_registered_config(self, plugin_name):
         return self._registered_configs.get(plugin_name, {})
 
+
 class PluginConfigurator:
     def __init__(self, plugin_name, registry):
         self.plugin_name = plugin_name
@@ -83,9 +85,10 @@ class PluginConfigurator:
         self.registry[self.plugin_name] = kwargs
         return self
 
+
 # Create the instance and inject it into sys.modules so 'import plugins' works
 plugins = PluginsNamespace()
-sys.modules['plugins'] = plugins
+sys.modules["plugins"] = plugins
 # print(f"[Pytron] Injected plugins namespace into sys.modules: {sys.modules['plugins']}")
 # --------------------------------------
 

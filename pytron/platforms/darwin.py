@@ -35,6 +35,11 @@ class DarwinImplementation(PlatformInterface):
     def is_visible(self, w):
         return window.is_visible(w)
 
+    def is_alive(self, w):
+        # On macOS/Cocoa, we check if the NSWindow pointer is still valid
+        win = window.get_window(w)
+        return bool(win and win != 0)
+
     def show(self, w):
         window.show(w)
 

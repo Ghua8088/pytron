@@ -188,15 +188,13 @@ class Plugin:
                 python_exe = sys.executable
                 venv_scripts = os.path.join(os.getcwd(), "env", "Scripts", "python.exe")
                 venv_bin = os.path.join(os.getcwd(), "env", "bin", "python")
-                
+
                 if os.path.exists(venv_scripts):
                     python_exe = venv_scripts
                 elif os.path.exists(venv_bin):
                     python_exe = venv_bin
 
-                subprocess.check_call(
-                    [python_exe, "-m", "pip", "install"] + py_deps
-                )
+                subprocess.check_call([python_exe, "-m", "pip", "install"] + py_deps)
                 self.logger.info(f"Python dependencies installed into {python_exe}")
             except subprocess.CalledProcessError as e:
                 self.logger.error(f"Failed to install Python dependencies: {e}")
@@ -207,18 +205,18 @@ class Plugin:
         if js_deps:
             # ISOLATION: Install inside the plugin directory
             target_dir = self.directory
-            
+
             self.logger.info(
                 f"Installing JS dependencies for {self.name} using '{provider}' in {target_dir} for isolation..."
             )
-            
+
             # Ensure a package.json exists in the plugin directory
             pkg_json_path = os.path.join(target_dir, "package.json")
             if not os.path.exists(pkg_json_path):
                 pkg_data = {
                     "name": f"pytron-plugin-{self.name}",
                     "version": self.version,
-                    "dependencies": js_deps
+                    "dependencies": js_deps,
                 }
                 with open(pkg_json_path, "w") as f:
                     json.dump(pkg_data, f, indent=2)
@@ -227,11 +225,19 @@ class Plugin:
                 # Find JS provider binary
                 provider_bin = shutil.which(provider)
                 if not provider_bin:
-                    self.logger.warning(f"JS Provider '{provider}' not found in PATH. Skipping JS dependencies.")
+                    self.logger.warning(
+                        f"JS Provider '{provider}' not found in PATH. Skipping JS dependencies."
+                    )
                     return
 
-                subprocess.check_call([provider_bin, "install"], cwd=target_dir, shell=(sys.platform == "win32"))
-                self.logger.info(f"JS dependencies installed successfully using {provider}.")
+                subprocess.check_call(
+                    [provider_bin, "install"],
+                    cwd=target_dir,
+                    shell=(sys.platform == "win32"),
+                )
+                self.logger.info(
+                    f"JS dependencies installed successfully using {provider}."
+                )
             except Exception as e:
                 self.logger.error(f"Failed to install JS dependencies: {e}")
                 raise PluginError(f"JS dependency installation failed: {e}")
@@ -267,7 +273,9 @@ class Plugin:
                 file_path = init_path
 
         if not os.path.exists(file_path):
-            raise PluginError(f"Could not find entry point file for plugin '{self.name}': {file_path}")
+            raise PluginError(
+                f"Could not find entry point file for plugin '{self.name}': {file_path}"
+            )
 
         # Create the Supervised proxy
         supervised_app = SupervisedApp(app_instance, self.name)
@@ -277,8 +285,8 @@ class Plugin:
             spec = importlib.util.spec_from_file_location(unique_module_name, file_path)
             if spec and spec.loader:
                 self.module = importlib.util.module_from_spec(spec)
-                sys.modules[unique_module_name] = self.module # Register it safely
-                
+                sys.modules[unique_module_name] = self.module  # Register it safely
+
                 # To support local imports inside the plugin folder, we briefly add to path
                 # only during the execution of the module.
                 _old_path = sys.path[:]
@@ -312,9 +320,11 @@ class Plugin:
                             p_mod = sys.modules["plugins"]
                             if hasattr(p_mod, "get_registered_config"):
                                 manual_config = p_mod.get_registered_config(self.name)
-                            
+
                         if manual_config:
-                            self.logger.info(f"Applying manual configuration to '{self.name}': {list(manual_config.keys())}")
+                            self.logger.info(
+                                f"Applying manual configuration to '{self.name}': {list(manual_config.keys())}"
+                            )
 
                         self.instance = entry_obj(supervised_app, **manual_config)
 
@@ -331,7 +341,9 @@ class Plugin:
                                 manual_config = p_mod.get_registered_config(self.name)
 
                         if manual_config:
-                            self.logger.info(f"Applying manual configuration to '{self.name}': {list(manual_config.keys())}")
+                            self.logger.info(
+                                f"Applying manual configuration to '{self.name}': {list(manual_config.keys())}"
+                            )
 
                         self.instance = entry_obj(supervised_app, **manual_config)
 

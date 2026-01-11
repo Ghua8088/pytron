@@ -15,23 +15,29 @@ class WindowMixin:
         window_config = self.config.copy()
         window_config.update(kwargs)
         window_config["__app__"] = self
-        original_url = window_config.get("url")
+        # Only navigate if a URL was explicitly provided, or if this is the first (main) window
+        target_url = kwargs.get("url")
+        if target_url is None and not self.windows:
+            target_url = self.config.get("url")
+
         window_config["navigate_on_init"] = False
         window = Webview(config=window_config)
         self.windows.append(window)
         for name, data in self._exposed_functions.items():
             func = data["func"]
             secure = data["secure"]
+            run_in_thread = data.get("run_in_thread", True)
             if isinstance(func, type):
                 try:
                     window.expose(func)
                 except Exception as e:
                     self.logger.debug(f"Failed to expose class {name}: {e}")
-                    window.bind(name, func, secure=secure)
+                    window.bind(name, func, secure=secure, run_in_thread=run_in_thread)
             else:
-                window.bind(name, func, secure=secure)
-        if original_url:
-            window.navigate(window_config.get("url", original_url))
+                window.bind(name, func, secure=secure, run_in_thread=run_in_thread)
+
+        if target_url:
+            window.navigate(target_url)
         if window_config.get("center", True):
             window.center()
 

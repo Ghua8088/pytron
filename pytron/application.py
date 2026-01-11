@@ -22,6 +22,7 @@ from .apputils.config import ConfigMixin
 from .apputils.windows import WindowMixin
 from .apputils.extras import ExtrasMixin
 from .apputils.shell import Shell
+from .inspector import Inspector
 
 
 class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shell):
@@ -43,6 +44,7 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         self.tray = None
         self.shortcut_manager = ShortcutManager()
         self._on_file_drop_callback = None
+        self.plugin_statuses = []  # Track load status for inspector
 
         # Router Init
         self.router = Router()
@@ -57,6 +59,9 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         self._setup_storage(safe_title)
         self._resolve_resources()
         self._register_core_apis()
+
+        # Initialize Inspector
+        self.inspector = Inspector(self)
 
         if self.config.get("single_instance", False):
             # ConfigMixin already handles this via _setup_identity -> _setup_single_instance
@@ -119,7 +124,7 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         return func
 
     # Expose function to all windows
-    def expose(self, func=None, name=None, secure=False):
+    def expose(self, func=None, name=None, secure=False, run_in_thread=True):
         """
         Expose a function to ALL windows created by this App.
         Can be used as a decorator: @app.expose or @app.expose(secure=True)
@@ -128,7 +133,7 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         if func is None:
 
             def decorator(f):
-                self.expose(f, name=name, secure=secure)
+                self.expose(f, name=name, secure=secure, run_in_thread=run_in_thread)
                 return f
 
             return decorator
@@ -162,6 +167,7 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
                         self._exposed_functions[attr_name] = {
                             "func": attr,
                             "secure": secure,
+                            "run_in_thread": run_in_thread,
                         }
                         self._exposed_ts_defs[attr_name] = self._get_ts_definition(
                             attr_name, attr
@@ -173,7 +179,11 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         if name is None:
             name = func.__name__
 
-        self._exposed_functions[name] = {"func": func, "secure": secure}
+        self._exposed_functions[name] = {
+            "func": func,
+            "secure": secure,
+            "run_in_thread": run_in_thread,
+        }
         self._exposed_ts_defs[name] = self._get_ts_definition(name, func)
         return func
 
@@ -233,9 +243,10 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         self.expose(self.store_delete, name="store_delete")
 
         # App Lifecycle
-        self.expose(self.quit, name="app_quit")
-        self.expose(self.show, name="app_show")
-        self.expose(self.hide, name="app_hide")
+        self.expose(self.quit, name="app_quit", run_in_thread=False)
+        self.expose(self.show, name="app_show", run_in_thread=False)
+        self.expose(self.hide, name="app_hide", run_in_thread=False)
+        self.expose(lambda: self.is_visible, name="app_is_visible", run_in_thread=False)
 
         # Event Bus
         self.expose(self.publish, name="app_publish")
@@ -243,6 +254,11 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         # Updater APIs
         self.expose(self.check_updates, name="app_check_updates")
         self.expose(self.install_update, name="app_install_update")
+
+        # Inspector APIs
+        self.expose(
+            self.toggle_inspector, name="app_toggle_inspector", run_in_thread=False
+        )
 
     def check_updates(self, url: str):
         """
@@ -276,6 +292,14 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         This enables simple cross-window communication.
         """
         self.broadcast(event_name, data)
+        return True
+
+    def toggle_inspector(self):
+        """
+        Toggles the Pytron Inspector window.
+        """
+        if self.inspector:
+            self.inspector.toggle()
         return True
 
     def load_plugins(self, plugins_dir: str):
@@ -319,7 +343,9 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
                         )
                         # Pass the configured provider to ensure consistency
                         provider = self.config.get("frontend_provider", "npm")
-                        plugin.install_dependencies(frontend_dir=frontend_dir, provider=provider)
+                        plugin.install_dependencies(
+                            frontend_dir=frontend_dir, provider=provider
+                        )
 
                     plugin.load(self)
                     self.plugins.append(plugin)
@@ -341,6 +367,14 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
                     plugins_list.append(plugin_meta)
                     self.state.plugins = plugins_list
 
+                    self.plugin_statuses.append(
+                        {
+                            "name": plugin.name,
+                            "status": "loaded",
+                            "version": plugin.version,
+                            "path": plugin_path,
+                        }
+                    )
                     self.logger.info(
                         f"Plugin '{plugin.name}' (v{plugin.version}) loaded successfully."
                     )
@@ -348,6 +382,14 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
                     self.publish("pytron:plugin-loaded", plugin_meta)
 
                 except Exception as e:
+                    self.plugin_statuses.append(
+                        {
+                            "name": item,
+                            "status": "error",
+                            "error": str(e),
+                            "path": plugin_path,
+                        }
+                    )
                     self.logger.error(f"Failed to load plugin at {plugin_path}: {e}")
 
     def unload_plugins(self):

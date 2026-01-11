@@ -35,6 +35,11 @@ class LinuxImplementation(PlatformInterface):
     def is_visible(self, w):
         return window.is_visible(w)
 
+    def is_alive(self, w):
+        # A simple check for Linux/GTK is to see if the widget still has a window
+        win = window.get_window(w)
+        return bool(win and win != 0)
+
     def show(self, w):
         window.show(w)
 

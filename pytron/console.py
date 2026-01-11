@@ -49,7 +49,9 @@ def set_log_file(path: str | None):
     _log_file = path
 
 
-def log(msg: str, style: str = "info", title: str = "Pytron", markup: bool = True) -> None:
+def log(
+    msg: str, style: str = "info", title: str = "Pytron", markup: bool = True
+) -> None:
     """Helper to print [Pytron] messages with style and log to file."""
     # Print to console
     try:

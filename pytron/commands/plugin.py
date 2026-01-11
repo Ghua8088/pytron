@@ -194,7 +194,10 @@ def perform_plugin_install(identifier: str) -> int:
         # We don't want to log the token itself, but we can confirm login status
         log("Authenticated with GitHub (via keyring or env).")
     else:
-        log("Note: Unauthenticated. GitHub API rate limits will apply. Run 'pytron login' to authenticate.", style="info")
+        log(
+            "Note: Unauthenticated. GitHub API rate limits will apply. Run 'pytron login' to authenticate.",
+            style="info",
+        )
 
     try:
         if version == "latest":
@@ -210,7 +213,9 @@ def perform_plugin_install(identifier: str) -> int:
                 f"No release found for {username}/{repo}. Checking main branch source...",
                 style="warning",
             )
-            zip_url = f"https://github.com/{username}/{repo}/archive/refs/heads/main.zip"
+            zip_url = (
+                f"https://github.com/{username}/{repo}/archive/refs/heads/main.zip"
+            )
         elif response.status_code != 200:
             log(
                 f"GitHub API Error: {response.status_code} - {response.text}",
@@ -240,20 +245,23 @@ def perform_plugin_install(identifier: str) -> int:
         extract_tmp = Path("plugin_extract_tmp")
         if extract_tmp.exists():
             shutil.rmtree(extract_tmp)
-            
+
         with zipfile.ZipFile(zip_tmp, "r") as zip_ref:
             # SAFETY: Zip Slip Protection
             for member in zip_ref.namelist():
                 member_path = os.path.normpath(member)
                 if member_path.startswith("..") or member_path.startswith("/"):
-                    log(f"Security Warning: Skipping malicious file path in zip: {member}", style="warning")
+                    log(
+                        f"Security Warning: Skipping malicious file path in zip: {member}",
+                        style="warning",
+                    )
                     continue
                 zip_ref.extract(member, extract_tmp)
 
             # GitHub zips have a top-level folder 'user-repo-hash'
             # We want to extract its contents into plugins/repo
             top_folder = zip_ref.namelist()[0].split("/")[0]
-            
+
         # Move to target
         shutil.move(extract_tmp / top_folder, target_plugin_path)
 
@@ -294,40 +302,56 @@ def install_dependencies(plugin_path: Path):
         # 1. Handle Python Dependencies
         py_deps = data.get("python_dependencies", [])
         if py_deps:
-            log(f"Installing {len(py_deps)} Python dependencies for plugin...", style="info")
+            log(
+                f"Installing {len(py_deps)} Python dependencies for plugin...",
+                style="info",
+            )
             # USE THE PROJECT'S VENV PYTHON
             python_exe = get_python_executable()
             cmd = [python_exe, "-m", "pip", "install"] + py_deps
             subprocess.check_call(cmd)
 
         # 2. Handle JS Dependencies
-        js_deps = data.get("npm_dependencies", {}) # Keep key for manifest compat but rename internally
+        js_deps = data.get(
+            "npm_dependencies", {}
+        )  # Keep key for manifest compat but rename internally
         if js_deps:
             # Install inside the plugin folder for isolation
             target_dir = plugin_path
-            
+
             # Detect Provider
             config = get_config()
             provider = config.get("frontend_provider", "npm")
-            
-            log(f"Installing {len(js_deps)} JS packages using '{provider}' in {target_dir} for isolation...", style="info")
-            
+
+            log(
+                f"Installing {len(js_deps)} JS packages using '{provider}' in {target_dir} for isolation...",
+                style="info",
+            )
+
             # Use plugin's package.json if it exists, otherwise create a temporary one
             pkg_json = target_dir / "package.json"
             if not pkg_json.exists():
-                pkg_data = {"name": f"pytron-plugin-{plugin_path.name}", "dependencies": js_deps}
+                pkg_data = {
+                    "name": f"pytron-plugin-{plugin_path.name}",
+                    "dependencies": js_deps,
+                }
                 target_dir.mkdir(parents=True, exist_ok=True)
                 pkg_json.write_text(json.dumps(pkg_data, indent=2))
-            
+
             # Run installation command
             # Check for binary existence
             provider_bin = shutil.which(provider)
             if not provider_bin:
-                log(f"Warning: JS Provider '{provider}' not found in PATH. Skipping JS dependencies.", style="warning")
+                log(
+                    f"Warning: JS Provider '{provider}' not found in PATH. Skipping JS dependencies.",
+                    style="warning",
+                )
             else:
                 # Most managers use 'install', but we should be safe
                 install_cmd = "install"
-                subprocess.check_call([provider_bin, install_cmd], cwd=target_dir, shell=(os.name == 'nt'))
+                subprocess.check_call(
+                    [provider_bin, install_cmd], cwd=target_dir, shell=(os.name == "nt")
+                )
 
     except subprocess.CalledProcessError as e:
         log(f"Dependency installation failed: {e}", style="error")
@@ -355,17 +379,20 @@ def plugin_list(args):
                     version = data.get("version", "unknown")
                     # If the folder name contains a username prefix, show it as the identifier
                     if "_" in item.name:
-                        log(f"- [bold teal]{display_name}[/] [dim]({item.name})[/dim] (v{version})", markup=True)
+                        log(
+                            f"- [bold teal]{display_name}[/] [dim]({item.name})[/dim] (v{version})",
+                            markup=True,
+                        )
                     else:
                         log(f"- [bold teal]{display_name}[/] (v{version})", markup=True)
                 except Exception:
                     log(f"- {item.name} (Broken Manifest)", style="warning")
             else:
                 log(f"- {item.name} (No Manifest)", style="warning")
-    
+
     if not found:
         log("No plugins installed.")
-        
+
     return 0
 
 
@@ -378,7 +405,7 @@ def plugin_uninstall(args):
 
     # 1. Try direct match (folder name)
     plugin_path = plugins_dir / target
-    
+
     # 2. Try match by username.repo format
     if not plugin_path.exists() and "." in target:
         parts = target.split(".")
@@ -386,14 +413,21 @@ def plugin_uninstall(args):
 
     # 3. Try fuzzy match by repo name only if unique
     if not plugin_path.exists():
-        matches = [p for p in plugins_dir.iterdir() if p.is_dir() and p.name.endswith(f"_{target}")]
+        matches = [
+            p
+            for p in plugins_dir.iterdir()
+            if p.is_dir() and p.name.endswith(f"_{target}")
+        ]
         if len(matches) == 1:
             plugin_path = matches[0]
         elif len(matches) > 1:
             log(f"Multiple plugins found matching '{target}':", style="error")
             for m in matches:
                 log(f"  - {m.name}")
-            log("Please use the full identifier (username.repo or folder_name).", style="info")
+            log(
+                "Please use the full identifier (username.repo or folder_name).",
+                style="info",
+            )
             return 1
 
     if plugin_path.exists() and plugin_path.is_dir():

@@ -64,6 +64,10 @@ class WindowsImplementation(PlatformInterface):
     def is_visible(self, w):
         return window.is_visible(w)
 
+    def is_alive(self, w):
+        hwnd = self.get_hwnd(w)
+        return bool(hwnd and ctypes.windll.user32.IsWindow(hwnd))
+
     def show(self, w):
         window.show(w)
 

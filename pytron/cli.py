@@ -91,12 +91,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_show.set_defaults(func=cmd_show)
 
     p_login = sub.add_parser(
-        "login", help="Securely store GitHub credentials for plugin installation", parents=[base_parser]
+        "login",
+        help="Securely store GitHub credentials for plugin installation",
+        parents=[base_parser],
     )
     p_login.set_defaults(func=cmd_login)
 
     p_logout = sub.add_parser(
-        "logout", help="Log out from GitHub and remove stored credentials", parents=[base_parser]
+        "logout",
+        help="Log out from GitHub and remove stored credentials",
+        parents=[base_parser],
     )
     p_logout.set_defaults(func=cmd_logout)
 

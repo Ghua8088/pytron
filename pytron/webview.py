@@ -51,9 +51,8 @@ class Webview:
                 args = f"{args} --allow-file-access-from-files"
 
             if (
-                config.get("disable_web_security", False)
-                and "--disable-web-security" not in args
-            ):
+                config.get("disable_web_security", False) or config.get("debug", False)
+            ) and "--disable-web-security" not in args:
                 args = f"{args} --disable-web-security"
 
             os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = args.strip()
@@ -286,9 +285,13 @@ class Webview:
                     el.__pytron_loading = true;
                     try {
                         console.log("[Pytron VAP] Reconciling asset key:", key, "for", el.tagName);
-                        const res = await fetch(`pytron://${key}`);
-                        if (res.ok) {
-                            const blob = await res.blob();
+                        const asset = await window.__pytron_vap_get(key);
+                        if (asset) {
+                            const bytes = new Uint8Array(asset.raw.length);
+                            for (let i = 0; i < asset.raw.length; i++) {
+                                bytes[i] = asset.raw.charCodeAt(i);
+                            }
+                            const blob = new Blob([bytes], {type: asset.mime});
                             const blobUrl = URL.createObjectURL(blob);
                             
                             if (isScript) {
@@ -379,9 +382,14 @@ class Webview:
         if config.get("debug", False):
             init_js += """
             window.addEventListener('keydown', e => {
-                if ((e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i')) || e.key === 'F12') {
+                if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i')) {
                     if (typeof window.pytron_open_devtools === 'function') {
                         window.pytron_open_devtools();
+                    }
+                }
+                if (e.key === 'F12') {
+                    if (typeof window.app_toggle_inspector === 'function') {
+                        window.app_toggle_inspector();
                     }
                 }
             });
@@ -501,9 +509,11 @@ class Webview:
         self._platform.start_drag(self.w)
 
     def set_title(self, title):
+        self.config["title"] = title
         lib.webview_set_title(self.w, title.encode("utf-8"))
 
     def set_size(self, w, h):
+        self.config["dimensions"] = [w, h]
         lib.webview_set_size(self.w, w, h, 0)
 
     def hide(self):
@@ -511,6 +521,9 @@ class Webview:
 
     def is_visible(self):
         return self._platform.is_visible(self.w)
+
+    def is_alive(self):
+        return self._platform.is_alive(self.w)
 
     def show(self):
         self._platform.show(self.w)
@@ -552,6 +565,7 @@ class Webview:
         return self._platform.message_box(self.w, title, message, style)
 
     def navigate(self, url):
+        self.config["url"] = url
         lib.webview_navigate(self.w, url.encode("utf-8"))
 
     def start(self):
@@ -584,7 +598,13 @@ class Webview:
                 self.logger.error(f"Unexpected error parsing arguments for {name}: {e}")
                 args = []
 
-            self.logger.debug(f"Bound function : {name} invoked with args {args}")
+            if (
+                not name.startswith("inspector_")
+                and name != "pytron_sync_state"
+                and name != "__pytron_vap_get"
+                and name != "app_is_visible"
+            ):
+                self.logger.debug(f"Bound function : {name} invoked with args {args}")
 
             # ------------------------------------------------
             # SECURITY CHECK
@@ -616,15 +636,40 @@ class Webview:
             # CASE A: ASYNC FUNCTION (Run in Background Loop)
             # ------------------------------------------------
             if is_async:
+                start_t = time.time()
 
                 async def _async_runner():
                     try:
                         result = await python_func(*args)
+                        duration = time.time() - start_t
+                        # Log to Inspector
+                        app = self.config.get("__app__")
+                        if (
+                            app
+                            and hasattr(app, "inspector")
+                            and not name.startswith("inspector_")
+                            and name != "pytron_sync_state"
+                        ):
+                            app.inspector.log_ipc(
+                                name, args, result=result, duration=duration
+                            )
+
                         # Ensure result is JSON-serializable using Pytron's encoder
                         res_json = json.dumps(_serialize_result(result))
                         self._return_result(seq, 0, res_json)
                     except Exception as e:
                         import traceback
+
+                        duration = time.time() - start_t
+                        app = self.config.get("__app__")
+                        if (
+                            app
+                            and hasattr(app, "inspector")
+                            and not name.startswith("inspector_")
+                        ):
+                            app.inspector.log_ipc(
+                                name, args, error=e, duration=duration
+                            )
 
                         self.logger.error(f"Async execution error in {name}: {e}")
                         if self.config.get("debug", False):
@@ -637,15 +682,40 @@ class Webview:
             # CASE B: SYNC FUNCTION
             # ------------------------------------------------
             else:
+                start_t = time.time()
 
                 def _sync_runner():
                     try:
                         result = python_func(*args)
+                        duration = time.time() - start_t
+                        # Log to Inspector
+                        app = self.config.get("__app__")
+                        if (
+                            app
+                            and hasattr(app, "inspector")
+                            and not name.startswith("inspector_")
+                            and name != "pytron_sync_state"
+                        ):
+                            app.inspector.log_ipc(
+                                name, args, result=result, duration=duration
+                            )
+
                         # Ensure result is JSON-serializable using Pytron's encoder
                         result_json = json.dumps(_serialize_result(result))
                         self._return_result(seq, 0, result_json)
                     except Exception as e:
                         import traceback
+
+                        duration = time.time() - start_t
+                        app = self.config.get("__app__")
+                        if (
+                            app
+                            and hasattr(app, "inspector")
+                            and not name.startswith("inspector_")
+                        ):
+                            app.inspector.log_ipc(
+                                name, args, error=e, duration=duration
+                            )
 
                         self.logger.error(f"Execution error in {name}: {e}")
                         if self.config.get("debug", False):
@@ -708,7 +778,9 @@ class Webview:
             try:
                 js_buf = ctypes.create_string_buffer(js_code.encode("utf-8"))
                 self._gc_protector.append(js_buf)
-                lib.webview_dispatch(self.w, self._cb, ctypes.cast(js_buf, ctypes.c_void_p))
+                lib.webview_dispatch(
+                    self.w, self._cb, ctypes.cast(js_buf, ctypes.c_void_p)
+                )
             except Exception as e:
                 self.logger.debug(f"Failed to dispatch JS: {e}")
 

@@ -30,6 +30,10 @@ class PlatformInterface:
     def is_visible(self, w):
         return True  # Default assumption for platforms that don't impl check
 
+    def is_alive(self, w):
+        """Checks if the native window handle is still valid."""
+        return True  # Default assume alive
+
     def show(self, w):
         pass
 
