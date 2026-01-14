@@ -6,110 +6,125 @@ from .utils import get_hwnd
 # -------------------------------------------------------------------
 # Hardened User32
 # -------------------------------------------------------------------
-user32 = ctypes.windll.user32
+# -------------------------------------------------------------------
+# Hardened User32
+# -------------------------------------------------------------------
+try:
+    user32 = ctypes.windll.user32
+except AttributeError:
+    # Non-Windows platform (Linux/macOS) during generic import or tests
+    user32 = None
 
-# ShowWindow
-user32.ShowWindow.argtypes = [ctypes.wintypes.HWND, ctypes.c_int]
-user32.ShowWindow.restype = ctypes.wintypes.BOOL
 
-# SetWindowPos
-user32.SetWindowPos.argtypes = [
-    ctypes.wintypes.HWND,
-    ctypes.wintypes.HWND,
-    ctypes.c_int,
-    ctypes.c_int,
-    ctypes.c_int,
-    ctypes.c_int,
-    ctypes.c_uint,
-]
-user32.SetWindowPos.restype = ctypes.wintypes.BOOL
+if user32:
+    # Function Prototyping (Safe)
 
-# PostMessageW
-user32.PostMessageW.argtypes = [
-    ctypes.wintypes.HWND,
-    ctypes.c_uint,
-    ctypes.wintypes.WPARAM,
-    ctypes.wintypes.LPARAM,
-]
-user32.PostMessageW.restype = ctypes.wintypes.BOOL
+    # ShowWindow
+    user32.ShowWindow.argtypes = [ctypes.wintypes.HWND, ctypes.c_int]
+    user32.ShowWindow.restype = ctypes.wintypes.BOOL
 
-# IsZoomed
-user32.IsZoomed.argtypes = [ctypes.wintypes.HWND]
-user32.IsZoomed.restype = ctypes.wintypes.BOOL
+    # SetWindowPos
+    user32.SetWindowPos.argtypes = [
+        ctypes.wintypes.HWND,
+        ctypes.wintypes.HWND,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_uint,
+    ]
+    user32.SetWindowPos.restype = ctypes.wintypes.BOOL
 
-# GetWindowLongW
-user32.GetWindowLongW.argtypes = [ctypes.wintypes.HWND, ctypes.c_int]
-user32.GetWindowLongW.restype = ctypes.c_long
+    # PostMessageW
+    user32.PostMessageW.argtypes = [
+        ctypes.wintypes.HWND,
+        ctypes.c_uint,
+        ctypes.wintypes.WPARAM,
+        ctypes.wintypes.LPARAM,
+    ]
+    user32.PostMessageW.restype = ctypes.wintypes.BOOL
 
-# SetWindowLongW
-user32.SetWindowLongW.argtypes = [ctypes.wintypes.HWND, ctypes.c_int, ctypes.c_long]
-user32.SetWindowLongW.restype = ctypes.c_long
+    # IsZoomed
+    user32.IsZoomed.argtypes = [ctypes.wintypes.HWND]
+    user32.IsZoomed.restype = ctypes.wintypes.BOOL
 
-# ReleaseCapture
-user32.ReleaseCapture.argtypes = []
-user32.ReleaseCapture.restype = ctypes.wintypes.BOOL
+    # GetWindowLongW
+    user32.GetWindowLongW.argtypes = [ctypes.wintypes.HWND, ctypes.c_int]
+    user32.GetWindowLongW.restype = ctypes.c_long
 
-# SendMessageW
-user32.SendMessageW.argtypes = [
-    ctypes.wintypes.HWND,
-    ctypes.c_uint,
-    ctypes.wintypes.WPARAM,
-    ctypes.wintypes.LPARAM,
-]
-user32.SendMessageW.restype = ctypes.wintypes.LPARAM
+    # SetWindowLongW
+    user32.SetWindowLongW.argtypes = [
+        ctypes.wintypes.HWND,
+        ctypes.c_int,
+        ctypes.c_long,
+    ]
+    user32.SetWindowLongW.restype = ctypes.c_long
 
-# IsWindowVisible
-user32.IsWindowVisible.argtypes = [ctypes.wintypes.HWND]
-user32.IsWindowVisible.restype = ctypes.wintypes.BOOL
+    # ReleaseCapture
+    user32.ReleaseCapture.argtypes = []
+    user32.ReleaseCapture.restype = ctypes.wintypes.BOOL
 
-# SetForegroundWindow
-user32.SetForegroundWindow.argtypes = [ctypes.wintypes.HWND]
-user32.SetForegroundWindow.restype = ctypes.wintypes.BOOL
+    # SendMessageW
+    user32.SendMessageW.argtypes = [
+        ctypes.wintypes.HWND,
+        ctypes.c_uint,
+        ctypes.wintypes.WPARAM,
+        ctypes.wintypes.LPARAM,
+    ]
+    user32.SendMessageW.restype = ctypes.wintypes.LPARAM
 
-# GetWindowRect
-user32.GetWindowRect.argtypes = [
-    ctypes.wintypes.HWND,
-    ctypes.POINTER(ctypes.wintypes.RECT),
-]
-user32.GetWindowRect.restype = ctypes.wintypes.BOOL
+    # IsWindowVisible
+    user32.IsWindowVisible.argtypes = [ctypes.wintypes.HWND]
+    user32.IsWindowVisible.restype = ctypes.wintypes.BOOL
 
-# GetSystemMetrics
-user32.GetSystemMetrics.argtypes = [ctypes.c_int]
-user32.GetSystemMetrics.restype = ctypes.c_int
+    # SetForegroundWindow
+    user32.SetForegroundWindow.argtypes = [ctypes.wintypes.HWND]
+    user32.SetForegroundWindow.restype = ctypes.wintypes.BOOL
 
-# GetWindowLongPtrW
-user32.GetWindowLongPtrW.argtypes = [ctypes.wintypes.HWND, ctypes.c_int]
-if ctypes.sizeof(ctypes.c_void_p) == 8:
-    user32.GetWindowLongPtrW.restype = ctypes.c_longlong
-else:
-    user32.GetWindowLongPtrW.restype = ctypes.c_long
+    # GetWindowRect
+    user32.GetWindowRect.argtypes = [
+        ctypes.wintypes.HWND,
+        ctypes.POINTER(ctypes.wintypes.RECT),
+    ]
+    user32.GetWindowRect.restype = ctypes.wintypes.BOOL
 
-# SetWindowLongPtrW
-# Note: argtypes for the 3rd argument is tricky because it can be a function pointer or a long.
-# We'll treat it loosely or define specific variants if needed, but primarily it's LONG_PTR.
-user32.SetWindowLongPtrW.argtypes = [
-    ctypes.wintypes.HWND,
-    ctypes.c_int,
-    ctypes.c_void_p,
-]
-if ctypes.sizeof(ctypes.c_void_p) == 8:
-    user32.SetWindowLongPtrW.restype = ctypes.c_longlong
-else:
-    user32.SetWindowLongPtrW.restype = ctypes.c_long
+    # GetSystemMetrics
+    user32.GetSystemMetrics.argtypes = [ctypes.c_int]
+    user32.GetSystemMetrics.restype = ctypes.c_int
 
-# CallWindowProcW
-user32.CallWindowProcW.argtypes = [
-    ctypes.c_void_p,
-    ctypes.wintypes.HWND,
-    ctypes.c_uint,
-    ctypes.wintypes.WPARAM,
-    ctypes.wintypes.LPARAM,
-]
-user32.CallWindowProcW.restype = ctypes.wintypes.LPARAM
+    # GetWindowLongPtrW - Check if available
+    if hasattr(user32, "GetWindowLongPtrW"):
+        user32.GetWindowLongPtrW.argtypes = [ctypes.wintypes.HWND, ctypes.c_int]
+        if ctypes.sizeof(ctypes.c_void_p) == 8:
+            user32.GetWindowLongPtrW.restype = ctypes.c_longlong
+        else:
+            user32.GetWindowLongPtrW.restype = ctypes.c_long
 
-# DrawMenuBar
-user32.DrawMenuBar.argtypes = [ctypes.wintypes.HWND]
-user32.DrawMenuBar.restype = ctypes.wintypes.BOOL
+    # SetWindowLongPtrW - Check if available
+    if hasattr(user32, "SetWindowLongPtrW"):
+        user32.SetWindowLongPtrW.argtypes = [
+            ctypes.wintypes.HWND,
+            ctypes.c_int,
+            ctypes.c_void_p,
+        ]
+        if ctypes.sizeof(ctypes.c_void_p) == 8:
+            user32.SetWindowLongPtrW.restype = ctypes.c_longlong
+        else:
+            user32.SetWindowLongPtrW.restype = ctypes.c_long
+
+    # CallWindowProcW
+    user32.CallWindowProcW.argtypes = [
+        ctypes.c_void_p,
+        ctypes.wintypes.HWND,
+        ctypes.c_uint,
+        ctypes.wintypes.WPARAM,
+        ctypes.wintypes.LPARAM,
+    ]
+    user32.CallWindowProcW.restype = ctypes.wintypes.LPARAM
+
+    # DrawMenuBar
+    user32.DrawMenuBar.argtypes = [ctypes.wintypes.HWND]
+    user32.DrawMenuBar.restype = ctypes.wintypes.BOOL
 
 # -------------------------------------------------------------------
 # Operations
