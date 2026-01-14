@@ -479,7 +479,9 @@ button {
             )
         else:
             run_script = target / "run.sh"
-            run_script.write_text("#!/bin/bash\nsource env/bin/activate\npython app.py", encoding="utf-8")
+            run_script.write_text(
+                "#!/bin/bash\nsource env/bin/activate\npython app.py", encoding="utf-8"
+            )
             # Make it executable
             try:
                 run_script.chmod(run_script.stat().st_mode | 0o111)
