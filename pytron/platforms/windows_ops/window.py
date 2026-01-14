@@ -1,5 +1,6 @@
 import ctypes
 import ctypes
+
 try:
     import ctypes.wintypes
 except ImportError:

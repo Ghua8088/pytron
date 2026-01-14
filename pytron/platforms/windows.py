@@ -1,10 +1,13 @@
 import ctypes
+
 try:
     import ctypes.wintypes
 except ImportError:
+
     class MockWintypes:
         HWND = ctypes.c_void_p
         BOOL = ctypes.c_int
+
     ctypes.wintypes = MockWintypes
 from .interface import PlatformInterface
 from .windows_ops import window, system, webview
