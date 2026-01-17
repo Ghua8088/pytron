@@ -31,7 +31,7 @@ class ChromeIPCServer:
         self.pipe_path_base = None
 
         # Windows Handles
-        self._win_in_handle = None   # We Write to this
+        self._win_in_handle = None  # We Write to this
         self._win_out_handle = None  # We Read from this
 
         # Unix Sockets (Simulated Dual Channel via one socket or two? Let's keep Unix simple with one for now, or just use 2 paths)
@@ -55,37 +55,50 @@ class ChromeIPCServer:
         # 2. INBOUND (Electron -> Python)
 
         self.pipe_path_base = f"\\\\.\\pipe\\pytron-{uid}"
-        path_in = self.pipe_path_base + "-in"   # We Write
-        path_out = self.pipe_path_base + "-out" # We Read
+        path_in = self.pipe_path_base + "-in"  # We Write
+        path_out = self.pipe_path_base + "-out"  # We Read
 
-        PIPE_ACCESS_DUPLEX = 0x00000003 # Node.js expects Duplex even if we use simplex
+        PIPE_ACCESS_DUPLEX = 0x00000003  # Node.js expects Duplex even if we use simplex
         PIPE_TYPE_BYTE = 0x00000000
         PIPE_READMODE_BYTE = 0x00000000
         PIPE_WAIT = 0x00000000
         INVALID_HANDLE_VALUE = -1
-        
+
         # 1. Create IN Pipe (Python Write)
         self._win_in_handle = ctypes.windll.kernel32.CreateNamedPipeW(
             path_in,
-            PIPE_ACCESS_DUPLEX, # 0x3
+            PIPE_ACCESS_DUPLEX,  # 0x3
             PIPE_TYPE_BYTE | PIPE_WAIT,
-            1, 65536, 65536, 0, None
+            1,
+            65536,
+            65536,
+            0,
+            None,
         )
-        
+
         # 2. Create OUT Pipe (Python Read)
         self._win_out_handle = ctypes.windll.kernel32.CreateNamedPipeW(
             path_out,
-            PIPE_ACCESS_DUPLEX, # 0x3
+            PIPE_ACCESS_DUPLEX,  # 0x3
             PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-            1, 65536, 65536, 0, None
+            1,
+            65536,
+            65536,
+            0,
+            None,
         )
 
-        if self._win_in_handle == INVALID_HANDLE_VALUE or self._win_out_handle == INVALID_HANDLE_VALUE:
+        if (
+            self._win_in_handle == INVALID_HANDLE_VALUE
+            or self._win_out_handle == INVALID_HANDLE_VALUE
+        ):
             raise RuntimeError(f"Failed to create Dual Named Pipes")
 
         # SIGNAL READY
         self.listening_event.set()
-        logger.info(f"Mojo IPC listening on Dual Pipes: {self.pipe_path_base} (-in/-out)")
+        logger.info(
+            f"Mojo IPC listening on Dual Pipes: {self.pipe_path_base} (-in/-out)"
+        )
 
         # BLOCK until client connects to BOTH
         # Electron must connect to IN (Reader) then OUT (Writer)
@@ -97,18 +110,20 @@ class ChromeIPCServer:
         conn_res_in = ctypes.windll.kernel32.ConnectNamedPipe(self._win_in_handle, None)
         if conn_res_in == 0:
             err = ctypes.GetLastError()
-            if err != 535: # ERROR_PIPE_CONNECTED
-                 logger.error(f"ConnectNamedPipe (IN) failed with error {err}")
-                 return
+            if err != 535:  # ERROR_PIPE_CONNECTED
+                logger.error(f"ConnectNamedPipe (IN) failed with error {err}")
+                return
 
         # Connect OUT
         logger.info("Waiting for Electron to connect to OUT pipe...")
-        conn_res_out = ctypes.windll.kernel32.ConnectNamedPipe(self._win_out_handle, None)
+        conn_res_out = ctypes.windll.kernel32.ConnectNamedPipe(
+            self._win_out_handle, None
+        )
         if conn_res_out == 0:
             err = ctypes.GetLastError()
-            if err != 535: # ERROR_PIPE_CONNECTED
-                 logger.error(f"ConnectNamedPipe (OUT) failed with error {err}")
-                 return
+            if err != 535:  # ERROR_PIPE_CONNECTED
+                logger.error(f"ConnectNamedPipe (OUT) failed with error {err}")
+                return
 
         self.connected = True
         logger.info("Mojo Shell connected via Dual Pipes")
@@ -154,13 +169,15 @@ class ChromeIPCServer:
         self.connected = False
         # Cleanup
         if self.is_windows:
-             if self._win_in_handle:
-                 ctypes.windll.kernel32.CloseHandle(self._win_in_handle)
-             if self._win_out_handle:
-                 ctypes.windll.kernel32.CloseHandle(self._win_out_handle)
+            if self._win_in_handle:
+                ctypes.windll.kernel32.CloseHandle(self._win_in_handle)
+            if self._win_out_handle:
+                ctypes.windll.kernel32.CloseHandle(self._win_out_handle)
         if not self.is_windows and self.pipe_path_base:
-             try: os.remove(self.pipe_path_base)
-             except: pass
+            try:
+                os.remove(self.pipe_path_base)
+            except:
+                pass
 
     def _recv_bytes(self, n):
         if self.is_windows:
@@ -178,11 +195,11 @@ class ChromeIPCServer:
                 else:
                     logger.warning(f"Pipe Disconnected (ERROR_BROKEN_PIPE).")
                 return None
-            
+
             if read.value != n:
-                 logger.error(f"ReadFile checking Partial Read: Got {read.value} / {n}")
-                 return None
-                 
+                logger.error(f"ReadFile checking Partial Read: Got {read.value} / {n}")
+                return None
+
             return buf.raw
         else:
             # Unix Socket
@@ -208,7 +225,11 @@ class ChromeIPCServer:
                     written = ctypes.c_ulong(0)
                     # Write to IN handle
                     ctypes.windll.kernel32.WriteFile(
-                        self._win_in_handle, full_msg, len(full_msg), ctypes.byref(written), None
+                        self._win_in_handle,
+                        full_msg,
+                        len(full_msg),
+                        ctypes.byref(written),
+                        None,
                     )
                 else:
                     self.conn.sendall(full_msg)
@@ -246,8 +267,10 @@ class ChromeAdapter:
         app_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "shell"))
 
         # FIX: Pass current working directory as root for pytron:// protocol
-        pipe_arg = self.ipc.pipe_path_base if self.ipc.is_windows else self.ipc.pipe_path_base
-        
+        pipe_arg = (
+            self.ipc.pipe_path_base if self.ipc.is_windows else self.ipc.pipe_path_base
+        )
+
         cmd = [
             self.binary_path,
             app_path,
@@ -324,10 +347,10 @@ class ChromeAdapter:
                 msg = self._queue.pop(0)
                 try:
                     # Log the critical 'show' or 'init' commands to verify order
-                    action = msg.get('action') if isinstance(msg, dict) else 'unknown'
-                    if action in ['init', 'show', 'navigate']:
+                    action = msg.get("action") if isinstance(msg, dict) else "unknown"
+                    if action in ["init", "show", "navigate"]:
                         logger.info(f"Flushing critical command: {action}")
-                    
+
                     self.ipc.send(msg)
                     flushed += 1
                     # Reduced sleep to 0, relying on OS buffering

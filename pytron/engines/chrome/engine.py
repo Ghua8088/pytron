@@ -143,7 +143,7 @@ class ChromeWebView(Webview):
                     f"{exe_name}.exe",
                     f"{exe_name}-Renderer.exe",
                     f"{exe_name}-Engine.exe",
-                    "electron.exe" # Fallback for un-renamed inside package
+                    "electron.exe",  # Fallback for un-renamed inside package
                 ]
 
                 # Current Exe Dir (Flat Layout)
@@ -152,32 +152,42 @@ class ChromeWebView(Webview):
                 std_dir = os.path.join(base_dir, "pytron", "dependancies", "chrome")
                 # Also check sys._MEIPASS if available (PyInstaller OneFile - though Chrome uses OneDir usually)
                 mei_dir = getattr(sys, "_MEIPASS", None)
-                
+
                 search_roots = [base_dir]
-                if std_dir: search_roots.append(std_dir)
-                if mei_dir: search_roots.append(os.path.join(mei_dir, "pytron", "dependancies", "chrome"))
+                if std_dir:
+                    search_roots.append(std_dir)
+                if mei_dir:
+                    search_roots.append(
+                        os.path.join(mei_dir, "pytron", "dependancies", "chrome")
+                    )
 
                 for root in search_roots:
-                    if not os.path.exists(root): continue
+                    if not os.path.exists(root):
+                        continue
                     for candidate in candidates:
                         candidate_path = os.path.join(root, candidate)
                         if os.path.exists(candidate_path):
                             # Don't pick ourselves if we are the main git exe and looking at .
-                            if os.path.abspath(candidate_path) == os.path.abspath(sys.executable):
+                            if os.path.abspath(candidate_path) == os.path.abspath(
+                                sys.executable
+                            ):
                                 continue
                             renamed_engine = candidate_path
                             break
-                    if renamed_engine: break
-            
+                    if renamed_engine:
+                        break
+
             if renamed_engine:
                 shell_path = renamed_engine
             else:
                 # B. Global Engine Path (Forge / User Home)
-                global_path = os.path.expanduser("~/.pytron/engines/chrome/electron.exe")
+                global_path = os.path.expanduser(
+                    "~/.pytron/engines/chrome/electron.exe"
+                )
                 if os.path.exists(global_path):
                     shell_path = global_path
                 else:
-                     # C. Local Workspace Path (Dev - e.g. running from source)
+                    # C. Local Workspace Path (Dev - e.g. running from source)
                     search_path = os.path.abspath(
                         os.path.join(
                             os.getcwd(),
@@ -191,7 +201,9 @@ class ChromeWebView(Webview):
                         shell_path = search_path
                     else:
                         # D. Auto-Provision (Last Resort)
-                        self.logger.warning("Chrome Engine not found. Auto-provisioning...")
+                        self.logger.warning(
+                            "Chrome Engine not found. Auto-provisioning..."
+                        )
                         forge = ChromeForge()
                         shell_path = forge.provision()
 
