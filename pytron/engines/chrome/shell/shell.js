@@ -60,7 +60,9 @@ const WINDOW_CONFIG = {
 };
 
 let mainWindow;
-let client = null;
+let clientIn = null;  // We Read
+let clientOut = null; // We Write
+let client = null;    // Legacy TCP or Unix Socket
 let buffer = Buffer.alloc(0);
 let initScripts = [];
 let isAppReady = false;
@@ -68,21 +70,99 @@ let pendingCommands = [];
 
 function connectToPytron() {
     const portArg = process.argv.find(arg => arg.startsWith('--pytron-port='));
-    if (!portArg) {
-        log("FATAL: No --pytron-port provided");
+    const pipeArg = process.argv.find(arg => arg.startsWith('--pytron-pipe='));
+
+    if (pipeArg) {
+        const pipeBase = pipeArg.split('=')[1];
+
+        // Check if Windows (via path format)
+        if (pipeBase.startsWith('\\\\.\\pipe\\')) {
+            log(`Connecting to Dual Pipe IPC: ${pipeBase}`);
+
+            // 1. Connect INBOUND (We Read, Python Writes)
+            clientIn = new net.Socket();
+            // 2. Connect OUTBOUND (We Write, Python Reads)
+            clientOut = new net.Socket();
+
+            let connectedCount = 0;
+            const checkReady = () => {
+                connectedCount++;
+                if (connectedCount === 2) {
+                    log("✅ Connected to Pytron Core (Dual Pipe). Sending Handshake...");
+                    sendToPython('lifecycle', 'app_ready');
+                }
+            };
+
+            clientIn.connect(pipeBase + '-in', () => {
+                log("Connected to Pipe-IN (Reading)");
+                checkReady();
+            });
+
+            clientOut.connect(pipeBase + '-out', () => {
+                log("Connected to Pipe-OUT (Writing)");
+                checkReady();
+            });
+
+            // Setup Reader on clientIn
+            clientIn.on('data', (chunk) => {
+                buffer = Buffer.concat([buffer, chunk]);
+                while (buffer.length >= 4) {
+                    const msgLen = buffer.readUInt32LE(0);
+                    if (buffer.length >= 4 + msgLen) {
+                        const bodyBytes = buffer.slice(4, 4 + msgLen);
+                        const bodyString = bodyBytes.toString('utf-8');
+                        handlePythonCommand(bodyString);
+                        buffer = buffer.slice(4 + msgLen);
+                    } else {
+                        break;
+                    }
+                }
+            });
+
+            clientIn.on('error', (err) => log(`Pipe-IN Error: ${err.message}`));
+            clientOut.on('error', (err) => log(`Pipe-OUT Error: ${err.message} (Code: ${err.code})`));
+
+            clientIn.on('end', () => log("Pipe-IN Received FIN (End)"));
+            clientOut.on('end', () => log("Pipe-OUT Received FIN (End)"));
+
+            clientIn.on('close', (hadError) => {
+                log(`Pipe-IN Closed. Had Error: ${hadError}`);
+                app.quit();
+            });
+            clientOut.on('close', (hadError) => {
+                log(`Pipe-OUT Closed. Had Error: ${hadError}`);
+            });
+
+        } else {
+            // Unix Socket (Single)
+            log(`Connecting to Unix Socket: ${pipeBase}`);
+            client = new net.Socket();
+            client.connect(pipeBase, () => {
+                log("✅ Connected to Pytron Core (Unix Socket). Sending Handshake...");
+                sendToPython('lifecycle', 'app_ready');
+            });
+            setupClientListeners(client);
+        }
+
+    } else if (portArg) {
+        // TCP Fallback
+        const port = parseInt(portArg.split('=')[1]);
+        log(`Connecting to Python on port: ${port}`);
+
+        client = new net.Socket();
+        client.connect(port, '127.0.0.1', () => {
+            log("✅ Connected to Pytron Core (TCP). Sending Handshake...");
+            sendToPython('lifecycle', 'app_ready');
+        });
+        setupClientListeners(client);
+    } else {
+        log("FATAL: No --pytron-port or --pytron-pipe provided");
         return;
     }
-    const port = parseInt(portArg.split('=')[1]);
+}
 
-    log(`Connecting to Python on port: ${port}`);
-    client = new net.Socket();
-
-    client.connect(port, '127.0.0.1', () => {
-        log("✅ Connected to Pytron Core. Sending Handshake...");
-        sendToPython('lifecycle', 'app_ready');
-    });
-
-    client.on('data', (chunk) => {
+function setupClientListeners(socket) {
+    socket.on('data', (chunk) => {
         buffer = Buffer.concat([buffer, chunk]);
         while (buffer.length >= 4) {
             const msgLen = buffer.readUInt32LE(0);
@@ -96,21 +176,26 @@ function connectToPytron() {
             }
         }
     });
-
-    client.on('error', (err) => log(`Socket Error: ${err.message}`));
-    client.on('close', () => {
+    socket.on('error', (err) => log(`Socket Error: ${err.message}`));
+    socket.on('close', () => {
         log("Socket Closed. Exiting.");
         app.quit();
     });
 }
 
 function sendToPython(type, payload) {
-    if (client && !client.destroyed) {
-        const bodyStr = JSON.stringify({ type, payload });
-        const bodyBuf = Buffer.from(bodyStr, 'utf8');
-        const headerBuf = Buffer.alloc(4);
-        headerBuf.writeUInt32LE(bodyBuf.length, 0);
-        client.write(Buffer.concat([headerBuf, bodyBuf]));
+    const target = clientOut || client;
+
+    if (target && !target.destroyed) {
+        try {
+            const bodyStr = JSON.stringify({ type, payload });
+            const bodyBuf = Buffer.from(bodyStr, 'utf8');
+            const headerBuf = Buffer.alloc(4);
+            headerBuf.writeUInt32LE(bodyBuf.length, 0);
+            target.write(Buffer.concat([headerBuf, bodyBuf]));
+        } catch (e) {
+            log(`Send Error: ${e.message}`);
+        }
     }
 }
 
@@ -175,7 +260,15 @@ function handlePythonCommand(cmd) {
                     mainWindow.setProgressBar(val, { mode: mode });
                 }
                 break;
-            case 'show': if (mainWindow) { mainWindow.show(); mainWindow.focus(); } break;
+            case 'show':
+                if (mainWindow) {
+                    log("Force Show command received");
+                    mainWindow.show();
+                    mainWindow.focus();
+                } else {
+                    log("Received Show command but mainWindow is NULL");
+                }
+                break;
             case 'hide': if (mainWindow) mainWindow.hide(); break;
             case 'bind':
                 const stub = `
@@ -205,6 +298,23 @@ function handlePythonCommand(cmd) {
                 }
                 break;
             case 'close': app.quit(); break;
+            case 'serve_data':
+                // command: { action: 'serve_data', key: '...', data: 'BASE64...', mime: '...' }
+                if (global.serveAsset) {
+                    global.serveAsset(command.key, command.data, command.mime);
+                }
+                break;
+            case 'unserve_data':
+                if (global.unserveAsset) {
+                    global.unserveAsset(command.key);
+                }
+                break;
+            case 'debugger':
+                try {
+                    // Evaluate JS on the main process if needed
+                    eval(command.code);
+                } catch (e) { log(`Debugger Error: ${e.message}`); }
+                break;
         }
     } catch (e) { log(`Execution Error: ${e.message}`); }
 }
@@ -244,10 +354,11 @@ async function createWindow(options = {}) {
         config.titleBarStyle = 'hidden';
     }
 
-    // Start Hidden Logic
-    if (options.start_hidden) {
-        config.show = false;
-    }
+    // DEBUG: Force show
+    // if (options.start_hidden) {
+    //    config.show = false;
+    // }
+    config.show = false; // Always start false, show on ready
 
     mainWindow = new BrowserWindow(config);
 
@@ -281,13 +392,13 @@ async function createWindow(options = {}) {
     if (config.url) mainWindow.loadURL(config.url);
 
     mainWindow.once('ready-to-show', () => {
-        log("Event: ready-to-show");
+        log("Event: ready-to-show. Forcing window show.");
         applyInitScripts();
         sendToPython('lifecycle', 'ready');
 
-        if (options.start_hidden) {
-            return;
-        }
+        // if (options.start_hidden) {
+        //     return;
+        // }
 
         if (options.start_maximized) {
             mainWindow.maximize();
@@ -308,45 +419,72 @@ function applyInitScripts() {
     });
 }
 
-app.whenReady().then(() => {
-    log("Electron Ready");
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+    app.quit()
+} else {
+    app.whenReady().then(() => {
+        log("Electron Ready");
 
-    // 2. Intercept requests to pytron://
-    // We register the handler on the SPECIFIC session partition used by the window.
-    // The global 'protocol' module only affects session.defaultSession.
-    const handler = (request) => {
-        let urlPath = request.url.replace('pytron://', '');
-        urlPath = urlPath.split('?')[0];
+        // 2. Intercept requests to pytron://
+        // We register the handler on the SPECIFIC session partition used by the window.
+        // The global 'protocol' module only affects session.defaultSession.
+        const servedData = new Map();
 
-        if (!PROJECT_ROOT) {
-            return new Response("Project Root Not Set", { status: 500 });
+        // Export internal serve function for IPC usage
+        global.serveAsset = (key, dataBase64, mimeType) => {
+            const buffer = Buffer.from(dataBase64, 'base64');
+            servedData.set(key, { buffer, mimeType });
+            log(`[Protocol] Memory Asset Served: ${key} (${mimeType})`);
+        };
+
+        global.unserveAsset = (key) => {
+            if (servedData.has(key)) {
+                servedData.delete(key);
+                log(`[Protocol] Memory Asset Removed: ${key}`);
+            }
+        };
+
+        const handler = (request) => {
+            let urlPath = request.url.replace('pytron://', '');
+            urlPath = urlPath.split('?')[0];
+
+            // 1. Check Memory Store (O(1) Lookup for Dynamic Assets)
+            if (servedData.has(urlPath)) {
+                const asset = servedData.get(urlPath);
+                return new Response(asset.buffer, {
+                    headers: { 'content-type': asset.mimeType }
+                });
+            }
+
+            // 2. Fallback to Disk (Project Root)
+            if (!PROJECT_ROOT) {
+                return new Response("Project Root Not Set", { status: 500 });
+            }
+
+            let filePath = path.join(PROJECT_ROOT, urlPath.replace('app/', ''));
+            // log(`[Protocol] Serving: ${filePath}`);
+
+            try {
+                const data = fs.readFileSync(filePath);
+                return new Response(data, {
+                    headers: { 'content-type': getMimeType(filePath) }
+                });
+            } catch (e) {
+                log(`[Protocol] Error serving ${urlPath}: ${e.message}`);
+                return new Response("Not Found", { status: 404 });
+            }
+        };
+
+        protocol.handle('pytron', handler);
+        session.fromPartition('persist:main').protocol.handle('pytron', handler);
+
+        isAppReady = true;
+        while (pendingCommands.length > 0) {
+            handlePythonCommand(pendingCommands.shift());
         }
-
-        let filePath = path.join(PROJECT_ROOT, urlPath.replace('app/', ''));
-        if (process.platform === 'win32') {
-            // Handle windows absolute paths if accidentally passed?
-        }
-        log(`[Protocol] Serving: ${filePath}`);
-
-        try {
-            const data = fs.readFileSync(filePath);
-            return new Response(data, {
-                headers: { 'content-type': getMimeType(filePath) }
-            });
-        } catch (e) {
-            log(`[Protocol] Error serving ${urlPath}: ${e.message}`);
-            return new Response("Not Found", { status: 404 });
-        }
-    };
-
-    protocol.handle('pytron', handler);
-    session.fromPartition('persist:main').protocol.handle('pytron', handler);
-
-    isAppReady = true;
-    while (pendingCommands.length > 0) {
-        handlePythonCommand(pendingCommands.shift());
-    }
-});
+    });
+}
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 

@@ -130,77 +130,70 @@ class ChromeWebView(Webview):
         self.logger = logging.getLogger("Pytron.ChromeWebView")
 
         # 1. Resolve Binary (Production vs Development)
+        # 1. Resolve Binary (Priority: Packaged -> Local Dev -> Global)
         shell_path = config.get("engine_path")
         if not shell_path:
-            # A. Global Engine Path (Forge)
-            global_path = os.path.expanduser("~/.pytron/engines/chrome/electron.exe")
-            if os.path.exists(global_path):
-                shell_path = global_path
+            # A. Package Path (PRIORITY for Frozen/Packaged Apps)
+            # Checks for: {App}.exe, {App}-Renderer.exe, {App}-Engine.exe, and electron.exe
+            # in BOTH the flat directory (legacy) and the standard 'pytron/dependancies/chrome' folder.
+            renamed_engine = None
+            if getattr(sys, "frozen", False):
+                exe_name = os.path.splitext(os.path.basename(sys.executable))[0]
+                candidates = [
+                    f"{exe_name}.exe",
+                    f"{exe_name}-Renderer.exe",
+                    f"{exe_name}-Engine.exe",
+                    "electron.exe" # Fallback for un-renamed inside package
+                ]
+
+                # Current Exe Dir (Flat Layout)
+                base_dir = os.path.dirname(sys.executable)
+                # Standard Pytron Layout (inside _internal or root)
+                std_dir = os.path.join(base_dir, "pytron", "dependancies", "chrome")
+                # Also check sys._MEIPASS if available (PyInstaller OneFile - though Chrome uses OneDir usually)
+                mei_dir = getattr(sys, "_MEIPASS", None)
+                
+                search_roots = [base_dir]
+                if std_dir: search_roots.append(std_dir)
+                if mei_dir: search_roots.append(os.path.join(mei_dir, "pytron", "dependancies", "chrome"))
+
+                for root in search_roots:
+                    if not os.path.exists(root): continue
+                    for candidate in candidates:
+                        candidate_path = os.path.join(root, candidate)
+                        if os.path.exists(candidate_path):
+                            # Don't pick ourselves if we are the main git exe and looking at .
+                            if os.path.abspath(candidate_path) == os.path.abspath(sys.executable):
+                                continue
+                            renamed_engine = candidate_path
+                            break
+                    if renamed_engine: break
+            
+            if renamed_engine:
+                shell_path = renamed_engine
             else:
-                # B. Local Workspace Path (Dev)
-                search_path = os.path.abspath(
-                    os.path.join(
-                        os.getcwd(),
-                        "..",
-                        "pytron-electron-engine",
-                        "bin",
-                        "electron.exe",
-                    )
-                )
-                if os.path.exists(search_path):
-                    shell_path = search_path
+                # B. Global Engine Path (Forge / User Home)
+                global_path = os.path.expanduser("~/.pytron/engines/chrome/electron.exe")
+                if os.path.exists(global_path):
+                    shell_path = global_path
                 else:
-                    # C. Package Path (Fallback)
-                    # Support for "Renamed Engine" (Grouping fix)
-                    renamed_engine = None
-                    if getattr(sys, "frozen", False):
-                        exe_name = os.path.splitext(os.path.basename(sys.executable))[0]
-                        candidate_name = f"{exe_name}-Engine.exe"
-
-                        # 1. Check next to main exe (legacy/flat)
-                        flat_path = os.path.join(
-                            os.path.dirname(sys.executable), candidate_name
+                     # C. Local Workspace Path (Dev - e.g. running from source)
+                    search_path = os.path.abspath(
+                        os.path.join(
+                            os.getcwd(),
+                            "..",
+                            "pytron-electron-engine",
+                            "bin",
+                            "electron.exe",
                         )
-                        if os.path.exists(flat_path):
-                            renamed_engine = flat_path
-
-                        # 2. Check in standard engine dir
-                        if not renamed_engine:
-                            std_dir_path = os.path.abspath(
-                                os.path.join(
-                                    os.path.dirname(__file__),
-                                    "..",
-                                    "..",
-                                    "dependancies",
-                                    "chrome",
-                                    candidate_name,
-                                )
-                            )
-                            if os.path.exists(std_dir_path):
-                                renamed_engine = std_dir_path
-
-                    if renamed_engine:
-                        shell_path = renamed_engine
+                    )
+                    if os.path.exists(search_path):
+                        shell_path = search_path
                     else:
-                        package_path = os.path.abspath(
-                            os.path.join(
-                                os.path.dirname(__file__),
-                                "..",
-                                "..",
-                                "dependancies",
-                                "chrome",
-                                "electron.exe",
-                            )
-                        )
-                        if os.path.exists(package_path):
-                            shell_path = package_path
-                        else:
-                            # D. AUTO-PROVISION!
-                            self.logger.warning(
-                                "Chrome Engine not found. Auto-provisioning..."
-                            )
-                            forge = ChromeForge()
-                            shell_path = forge.provision()
+                        # D. Auto-Provision (Last Resort)
+                        self.logger.warning("Chrome Engine not found. Auto-provisioning...")
+                        forge = ChromeForge()
+                        shell_path = forge.provision()
 
         self.logger.info(f"Using Chrome Shell (v3): {shell_path}")
         self.adapter = ChromeAdapter(shell_path, config)
@@ -290,6 +283,26 @@ class ChromeWebView(Webview):
 
     def center(self):
         self.bridge.adapter.send({"action": "center"})
+
+    def serve_data(self, key, data, mime="application/octet-stream"):
+        """Sends binary data to the Node process for pytron:// serving."""
+        import base64
+
+        try:
+            b64_data = base64.b64encode(data).decode("utf-8")
+            self.bridge.adapter.send(
+                {
+                    "action": "serve_data",
+                    "key": key,
+                    "data": b64_data,
+                    "mime": mime,
+                }
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to serve data for key {key}: {e}")
+
+    def unserve_data(self, key):
+        self.bridge.adapter.send({"action": "unserve_data", "key": key})
 
     def set_icon(self, icon_path):
         pass

@@ -9,40 +9,124 @@ import uuid
 import platform
 import struct
 import subprocess
+import ctypes  # Added for Windows Named Pipes
 
 logger = logging.getLogger("Pytron.ChromeAdapter")
 
 
 class ChromeIPCServer:
     """
-    A robust TCP-based IPC server for the Chrome Engine.
-    Uses length-prefixed binary framing (Mojo-style).
-    TCP is chosen over Named Pipes for better cross-runtime stability on Windows.
+    A robust Platform-Native IPC server for the Chrome Engine.
+    Uses TWO Simplex Named Pipes (Windows) or Sockets (Unix) to avoid Duplex Blocking Deadlocks.
+
+    - Windows:
+        - \\\\.\\pipe\\pytron-{uuid}-in  (Python Writes -> Electron Reads)
+        - \\\\.\\pipe\\pytron-{uuid}-out (Electron Writes -> Python Reads)
     """
 
     def __init__(self):
-        self.host = "127.0.0.1"
-        self.port = 0  # OS will assign a random free port
-        self.server_sock = None
-        self.conn = None
         self.connected = False
         self._lock = threading.Lock()
         self.listening_event = threading.Event()
+        self.pipe_path_base = None
+
+        # Windows Handles
+        self._win_in_handle = None   # We Write to this
+        self._win_out_handle = None  # We Read from this
+
+        # Unix Sockets (Simulated Dual Channel via one socket or two? Let's keep Unix simple with one for now, or just use 2 paths)
+        # Actually, Unix sockets are non-blocking friendly. Let's start with Windows fix.
+        # To keep it symmetric, we will pass ONE path index, but append suffixes in implementation.
+        self._sock = None
+
+        self.is_windows = sys.platform == "win32"
 
     def listen(self):
-        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_sock.bind((self.host, self.port))
-        self.port = self.server_sock.getsockname()[1]
-        self.server_sock.listen(1)
+        uid = str(uuid.uuid4())
 
-        # SIGNAL THAT PORT IS READY!
+        if self.is_windows:
+            self._listen_windows(uid)
+        else:
+            self._listen_unix(uid)
+
+    def _listen_windows(self, uid):
+        # We need TWO pipes.
+        # 1. OUTBOUND (Python -> Electron)
+        # 2. INBOUND (Electron -> Python)
+
+        self.pipe_path_base = f"\\\\.\\pipe\\pytron-{uid}"
+        path_in = self.pipe_path_base + "-in"   # We Write
+        path_out = self.pipe_path_base + "-out" # We Read
+
+        PIPE_ACCESS_DUPLEX = 0x00000003 # Node.js expects Duplex even if we use simplex
+        PIPE_TYPE_BYTE = 0x00000000
+        PIPE_READMODE_BYTE = 0x00000000
+        PIPE_WAIT = 0x00000000
+        INVALID_HANDLE_VALUE = -1
+        
+        # 1. Create IN Pipe (Python Write)
+        self._win_in_handle = ctypes.windll.kernel32.CreateNamedPipeW(
+            path_in,
+            PIPE_ACCESS_DUPLEX, # 0x3
+            PIPE_TYPE_BYTE | PIPE_WAIT,
+            1, 65536, 65536, 0, None
+        )
+        
+        # 2. Create OUT Pipe (Python Read)
+        self._win_out_handle = ctypes.windll.kernel32.CreateNamedPipeW(
+            path_out,
+            PIPE_ACCESS_DUPLEX, # 0x3
+            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+            1, 65536, 65536, 0, None
+        )
+
+        if self._win_in_handle == INVALID_HANDLE_VALUE or self._win_out_handle == INVALID_HANDLE_VALUE:
+            raise RuntimeError(f"Failed to create Dual Named Pipes")
+
+        # SIGNAL READY
         self.listening_event.set()
+        logger.info(f"Mojo IPC listening on Dual Pipes: {self.pipe_path_base} (-in/-out)")
 
-        logger.info(f"Mojo IPC listening on TCP port {self.port}")
+        # BLOCK until client connects to BOTH
+        # Electron must connect to IN (Reader) then OUT (Writer)
 
-        # This will block until Electron connects
-        self.conn, addr = self.server_sock.accept()
+        # Connect IN
+        logger.info("Waiting for Electron to connect to IN pipe...")
+        # ConnectNamedPipe returns 0 on failure, non-zero on success.
+        # But if client already connected between Create and Connect, it returns 0 and GetLastError=ERROR_PIPE_CONNECTED (535)
+        conn_res_in = ctypes.windll.kernel32.ConnectNamedPipe(self._win_in_handle, None)
+        if conn_res_in == 0:
+            err = ctypes.GetLastError()
+            if err != 535: # ERROR_PIPE_CONNECTED
+                 logger.error(f"ConnectNamedPipe (IN) failed with error {err}")
+                 return
+
+        # Connect OUT
+        logger.info("Waiting for Electron to connect to OUT pipe...")
+        conn_res_out = ctypes.windll.kernel32.ConnectNamedPipe(self._win_out_handle, None)
+        if conn_res_out == 0:
+            err = ctypes.GetLastError()
+            if err != 535: # ERROR_PIPE_CONNECTED
+                 logger.error(f"ConnectNamedPipe (OUT) failed with error {err}")
+                 return
+
+        self.connected = True
+        logger.info("Mojo Shell connected via Dual Pipes")
+
+    def _listen_unix(self, uid):
+        # Fallback to single socket for Unix for now unless requested
+        self.pipe_path_base = f"/tmp/pytron-{uid}.sock"
+        if os.path.exists(self.pipe_path_base):
+            os.remove(self.pipe_path_base)
+
+        self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self._sock.bind(self.pipe_path_base)
+        self._sock.listen(1)
+
+        self.listening_event.set()
+        logger.info(f"Mojo IPC listening on UDS: {self.pipe_path_base}")
+
+        self.conn, addr = self._sock.accept()
         self.conn.setblocking(True)
         self.connected = True
         logger.info(f"Mojo Shell connected from {addr}")
@@ -51,14 +135,14 @@ class ChromeIPCServer:
         while self.connected:
             try:
                 # 1. Read 4-byte Header
-                header = self._recv_all(4)
-                if not header:
+                header = self._recv_bytes(4)
+                if not header or len(header) != 4:
                     break
                 msg_len = struct.unpack("<I", header)[0]
 
                 # 2. Read Body
-                body = self._recv_all(msg_len)
-                if not body:
+                body = self._recv_bytes(msg_len)
+                if not body or len(body) != msg_len:
                     break
 
                 # 3. Dispatch
@@ -68,15 +152,47 @@ class ChromeIPCServer:
                 logger.error(f"IPC Read Error: {e}")
                 break
         self.connected = False
+        # Cleanup
+        if self.is_windows:
+             if self._win_in_handle:
+                 ctypes.windll.kernel32.CloseHandle(self._win_in_handle)
+             if self._win_out_handle:
+                 ctypes.windll.kernel32.CloseHandle(self._win_out_handle)
+        if not self.is_windows and self.pipe_path_base:
+             try: os.remove(self.pipe_path_base)
+             except: pass
 
-    def _recv_all(self, n):
-        data = bytearray()
-        while len(data) < n:
-            packet = self.conn.recv(n - len(data))
-            if not packet:
+    def _recv_bytes(self, n):
+        if self.is_windows:
+            buf = ctypes.create_string_buffer(n)
+            read = ctypes.c_ulong(0)
+            # Read from OUT handle
+            res = ctypes.windll.kernel32.ReadFile(
+                self._win_out_handle, buf, n, ctypes.byref(read), None
+            )
+            if res == 0:
+                err = ctypes.GetLastError()
+                # 109 = ERROR_BROKEN_PIPE (Normal EOF when client disconnects)
+                if err != 109:
+                    logger.error(f"ReadFile Failed. Error: {err}, Requested: {n}")
+                else:
+                    logger.warning(f"Pipe Disconnected (ERROR_BROKEN_PIPE).")
                 return None
-            data.extend(packet)
-        return data
+            
+            if read.value != n:
+                 logger.error(f"ReadFile checking Partial Read: Got {read.value} / {n}")
+                 return None
+                 
+            return buf.raw
+        else:
+            # Unix Socket
+            data = bytearray()
+            while len(data) < n:
+                packet = self.conn.recv(n - len(data))
+                if not packet:
+                    return None
+                data.extend(packet)
+            return data
 
     def send(self, data_dict):
         if not self.connected:
@@ -87,7 +203,16 @@ class ChromeIPCServer:
                 body = body_str.encode("utf-8")
                 header = struct.pack("<I", len(body))
                 full_msg = header + body
-                self.conn.sendall(full_msg)
+
+                if self.is_windows:
+                    written = ctypes.c_ulong(0)
+                    # Write to IN handle
+                    ctypes.windll.kernel32.WriteFile(
+                        self._win_in_handle, full_msg, len(full_msg), ctypes.byref(written), None
+                    )
+                else:
+                    self.conn.sendall(full_msg)
+
             except Exception as e:
                 logger.error(f"IPC Send Error: {e}")
                 self.connected = False
@@ -114,17 +239,19 @@ class ChromeAdapter:
 
         threading.Thread(target=_server_launcher, daemon=True).start()
 
-        # WAIT FOR THE PORT (No more sleep!)
+        # WAIT FOR THE PIPE NAME
         if not self.ipc.listening_event.wait(timeout=10.0):
-            raise RuntimeError("Failed to bind IPC port within 10 seconds")
+            raise RuntimeError("Failed to init IPC pipe within 10 seconds")
 
         app_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "shell"))
 
         # FIX: Pass current working directory as root for pytron:// protocol
+        pipe_arg = self.ipc.pipe_path_base if self.ipc.is_windows else self.ipc.pipe_path_base
+        
         cmd = [
             self.binary_path,
             app_path,
-            f"--pytron-port={self.ipc.port}",
+            f"--pytron-pipe={pipe_arg}",
             f"--pytron-root={os.getcwd()}",
         ]
 
@@ -135,7 +262,7 @@ class ChromeAdapter:
         if self.config.get("debug"):
             cmd.append("--inspect")
 
-        logger.info(f"Spawning Mojo Process (TCP): {' '.join(cmd)}")
+        logger.info(f"Spawning Mojo Process (IPC): {' '.join(cmd)}")
         self.process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -190,12 +317,23 @@ class ChromeAdapter:
 
     def _flush_queue(self):
         with self._flush_lock:
-            time.sleep(0.5)
-            logger.info(f"Flushing {len(self._queue)} queued messages via TCP...")
+            count = len(self._queue)
+            logger.info(f"Flushing {count} queued messages via IPC...")
+            flushed = 0
             while self._queue:
                 msg = self._queue.pop(0)
-                self.ipc.send(msg)
-                time.sleep(0.01)
+                try:
+                    # Log the critical 'show' or 'init' commands to verify order
+                    action = msg.get('action') if isinstance(msg, dict) else 'unknown'
+                    if action in ['init', 'show', 'navigate']:
+                        logger.info(f"Flushing critical command: {action}")
+                    
+                    self.ipc.send(msg)
+                    flushed += 1
+                    # Reduced sleep to 0, relying on OS buffering
+                except Exception as e:
+                    logger.error(f"Failed to flush message {action}: {e}")
+            logger.info(f"Flush complete. Sent {flushed}/{count} messages.")
 
     def _on_message(self, msg):
         msg_type = msg.get("type")
@@ -203,7 +341,7 @@ class ChromeAdapter:
         logger.debug(f"Mojo Received: {msg_type} -> {payload}")
 
         if msg_type == "lifecycle" and payload == "app_ready":
-            logger.info("Mojo TCP Handshake (app_ready) received. Initiating flush.")
+            logger.info("Mojo Handshake (app_ready) received. Initiating flush.")
             self.ready = True
             threading.Thread(target=self._flush_queue, daemon=True).start()
 
