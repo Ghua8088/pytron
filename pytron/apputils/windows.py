@@ -177,8 +177,8 @@ class WindowMixin:
             if os.path.isdir(path):
                 try:
                     shutil.rmtree(path, ignore_errors=True)
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.logger.debug(f"Failed to cleanup temp dir {path}: {e}")
 
     def register_protocol(self, scheme="pytron"):
         try:
@@ -244,16 +244,16 @@ class WindowMixin:
             for window in self.windows:
                 try:
                     window.hide()
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.logger.debug(f"Failed to hide window {window}: {e}")
 
     def show(self):
         if self.windows:
             for window in self.windows:
                 try:
                     window.show()
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.logger.debug(f"Failed to show window {window}: {e}")
 
     @property
     def is_visible(self):
@@ -267,8 +267,8 @@ class WindowMixin:
             for window in self.windows:
                 try:
                     window.notify(title, message, type, duration)
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.logger.debug(f"Failed to notify window {window}: {e}")
 
     def quit(self):
         for window in self.windows:
