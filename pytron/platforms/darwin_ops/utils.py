@@ -66,19 +66,21 @@ def str_to_nsstring(s):
     if not libs.objc:
         return None
     cls = get_class("NSString")
-    sel = libs.objc.sel_registerName("stringWithUTF8String:".encode("utf-8"))
-    f = ctypes.CFUNCTYPE(
-        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_char_p
-    )(libs.objc.objc_msgSend)
-    return f(cls, sel, s.encode("utf-8"))
+    return msg_send(
+        cls,
+        "stringWithUTF8String:",
+        s.encode("utf-8"),
+        argtypes=[ctypes.c_char_p]
+    )
 
 
 def bool_to_nsnumber(b):
     if not libs.objc:
         return None
     cls = get_class("NSNumber")
-    sel = libs.objc.sel_registerName("numberWithBool:".encode("utf-8"))
-    f = ctypes.CFUNCTYPE(
-        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool
-    )(libs.objc.objc_msgSend)
-    return f(cls, sel, b)
+    return msg_send(
+        cls,
+        "numberWithBool:",
+        b,
+        argtypes=[ctypes.c_bool]
+    )
