@@ -114,13 +114,13 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
                 npm_proc = subprocess.Popen(
                     [provider_bin, "run", "dev"],
                     cwd=str(frontend_dir),
-                    shell=(sys.platform == "win32"),
+                    shell=False,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     env=proc_env,
                     text=True,
                     bufsize=1,
-                )
+                )  # nosec B603
 
                 # Scan for URL in a background thread
                 import threading
@@ -208,8 +208,8 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
                 npm_proc = subprocess.Popen(
                     [provider_bin] + args,
                     cwd=str(frontend_dir),
-                    shell=(sys.platform == "win32"),
-                )
+                    shell=False,
+                )  # nosec B603
         else:
             log(f"{provider} not found, skipping frontend watch.", style="warning")
 

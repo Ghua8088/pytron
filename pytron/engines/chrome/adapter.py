@@ -132,6 +132,7 @@ class ChromeIPCServer:
     def _listen_unix(self, uid):
         # Fallback to single socket for Unix for now unless requested
         self.pipe_path_base = os.path.join(tempfile.gettempdir(), f"pytron-{uid}.sock")
+        if os.path.exists(self.pipe_path_base):
             os.remove(self.pipe_path_base)
 
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

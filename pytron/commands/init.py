@@ -157,9 +157,7 @@ def cmd_init(args: argparse.Namespace) -> int:
             cmd = [c for c in cmd if c]
 
             # log output while keeping progress bar alive
-            run_command_with_output(
-                cmd, cwd=str(target), shell=(sys.platform == "win32")
-            )
+            run_command_with_output(cmd, cwd=str(target), shell=False)
 
             progress.update(task, description="Configuring Next.js...", completed=40)
             # Configure Next.js for static export
@@ -225,7 +223,7 @@ export default nextConfig;
                     args.template,
                 ],
                 cwd=str(target),
-                shell=(sys.platform == "win32"),
+                shell=False,
             )
             if ret != 0:
                 raise subprocess.CalledProcessError(ret, "create-vite")
@@ -274,7 +272,7 @@ export default nextConfig;
             ret = run_command_with_output(
                 [provider, "install"],
                 cwd=str(target / "frontend"),
-                shell=(sys.platform == "win32"),
+                shell=False,
             )
             if ret != 0:
                 log(

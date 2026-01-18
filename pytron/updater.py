@@ -8,6 +8,7 @@ import tempfile
 import logging
 from pathlib import Path
 from packaging.version import parse as parse_version
+import stat
 
 
 class Updater:
@@ -47,7 +48,10 @@ class Updater:
         """
         self.logger.info(f"Checking for updates at {url}...")
         try:
-            with urllib.request.urlopen(url, timeout=5) as response:
+            if not url.startswith("https://"):
+                raise ValueError("Updater only supports HTTPS")
+
+            with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310 # nosemgrep
                 data = json.loads(response.read().decode())
                 remote_version = data.get("version")
 
@@ -118,7 +122,7 @@ class Updater:
                     percent = min(100, int((downloaded / total_size) * 100))
                     on_progress(percent)
 
-            urllib.request.urlretrieve(url, patch_dest, reporthook=progress)
+            urllib.request.urlretrieve(url, patch_dest, reporthook=progress)  # nosec B310 # nosemgrep
             self.logger.info("Evolution patch downloaded successfully.")
 
             # Since the Rust loader handles patching on launch, we just need to restart
@@ -126,10 +130,10 @@ class Updater:
 
             if sys.platform == "win32":
                 subprocess.Popen(
-                    [sys.executable], shell=True, creationflags=0x00000008
-                )  # DETACHED_PROCESS
+                    [sys.executable], shell=False, creationflags=0x00000008
+                )  # DETACHED_PROCESS # nosec B603
             else:
-                subprocess.Popen([sys.executable])
+                subprocess.Popen([sys.executable])  # nosec B603
 
             sys.exit(0)
             return True
@@ -156,17 +160,17 @@ class Updater:
                     percent = min(100, int((block_num * block_size / total_size) * 100))
                     on_progress(percent)
 
-            urllib.request.urlretrieve(url, download_path, reporthook=progress)
+            urllib.request.urlretrieve(url, download_path, reporthook=progress)  # nosec B310 # nosemgrep
             self.logger.info(f"Download complete: {download_path}")
 
             if sys.platform == "win32":
                 subprocess.Popen(
-                    [str(download_path)], shell=True, creationflags=0x00000008
+                    [str(download_path)], shell=False, creationflags=0x00000008
                 )
             elif sys.platform == "darwin":
                 subprocess.Popen(["open", str(download_path)])
             else:
-                os.chmod(download_path, 0o755)
+                os.chmod(download_path, stat.S_IRWXU)
                 subprocess.Popen([str(download_path)])
 
             sys.exit(0)

@@ -350,7 +350,7 @@ def install_dependencies(plugin_path: Path):
                 # Most managers use 'install', but we should be safe
                 install_cmd = "install"
                 subprocess.check_call(
-                    [provider_bin, install_cmd], cwd=target_dir, shell=(os.name == "nt")
+                    [provider_bin, install_cmd], cwd=target_dir, shell=False
                 )  # nosec B603
 
     except subprocess.CalledProcessError as e:

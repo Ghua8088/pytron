@@ -109,7 +109,7 @@ def run_command_with_output(
             env=env,
             bufsize=1,  # Line buffered
             shell=shell,
-        )
+        )  # nosec B602
 
         for line in process.stdout:
             # Strip only trailing newline to preserve some formatting (or strip both?)

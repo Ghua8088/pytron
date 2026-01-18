@@ -51,15 +51,18 @@ def sync_android_project(project_root: str, native: bool = False) -> None:
                     style="dim",
                 )
                 subprocess.run(
-                    f"{provider_bin} install", shell=True, cwd=frontend_dir, check=True
-                )
+                    [provider_bin, "install"], shell=False, cwd=frontend_dir, check=True
+                )  # nosec B603
 
             config = get_config()
             provider = config.get("frontend_provider", "npm")
             provider_bin = shutil.which(provider) or provider
             subprocess.run(
-                f"{provider_bin} run build", shell=True, cwd=frontend_dir, check=True
-            )
+                [provider_bin, "run", "build"],
+                shell=False,
+                cwd=frontend_dir,
+                check=True,
+            )  # nosec B603
             console.print("  [Frontend] Build successful.", style="success")
         except subprocess.CalledProcessError as e:
             console.print(f"  [Frontend] Build failed: {e}", style="error")

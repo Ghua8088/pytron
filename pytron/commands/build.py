@@ -23,5 +23,5 @@ def cmd_build_frontend(args: argparse.Namespace) -> int:
     return subprocess.call(
         [provider_bin, "run", "build"],
         cwd=str(folder),
-        shell=(sys.platform == "win32"),
-    )
+        shell=False,
+    )  # nosec B603

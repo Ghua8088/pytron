@@ -106,7 +106,9 @@ class NativeMixin:
                     window.system_notification(title, message, icon=icon)
                     break
                 except Exception as e:
-                    self.logger.debug(f"Failed to send notification via window {window}: {e}")
+                    self.logger.debug(
+                        f"Failed to send notification via window {window}: {e}"
+                    )
 
     def copy_to_clipboard(self, text: str):
         """Copies text to the system clipboard."""

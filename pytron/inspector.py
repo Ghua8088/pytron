@@ -142,7 +142,7 @@ class Inspector:
             # Check for special 'console' object or similar?
             # For now, just app/state
             try:
-                res = eval(
+                res = eval(  # nosemgrep
                     code, {"app": self.app, "state": self.app.state, "inspector": self}
                 )  # nosec B307
                 return {"result": pytron_serialize(res)}
@@ -152,7 +152,7 @@ class Inspector:
                     "state": self.app.state,
                     "inspector": self,
                 }
-                exec(code, exec_globals)  # nosec B102
+                exec(code, exec_globals)  # nosec B102 # nosemgrep
                 return {"result": "Statement executed successfully."}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}

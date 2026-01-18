@@ -17,11 +17,10 @@ def check_command(cmd, version_args=["--version", "-v", "version"]):
     # Try common version flags
     for arg in version_args:
         try:
-            # We use shell=True on Windows for command like 'npm' if they are batch files
-            use_shell = sys.platform == "win32"
+            # We use shell=False for better security
             result = subprocess.run(
-                [cmd, arg], capture_output=True, text=True, timeout=3, shell=use_shell
-            )
+                [cmd, arg], capture_output=True, text=True, timeout=3, shell=False
+            )  # nosec B603
             output = (result.stdout + result.stderr).strip()
             if output:
                 # Keep only the first line of version output
