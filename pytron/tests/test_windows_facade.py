@@ -5,6 +5,7 @@ from pytron.platforms.windows import WindowsImplementation
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows only tests")
 
+
 @pytest.fixture
 def windows_impl():
     with patch("ctypes.windll.user32"), patch("ctypes.windll.shcore"):
