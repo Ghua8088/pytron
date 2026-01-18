@@ -55,8 +55,8 @@ class Inspector:
 
             self._proc = psutil.Process(os.getpid())
             self._proc.cpu_percent()
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug(f"Failed to init psutil: {e}")
 
     def log_ipc(self, name, args, result=None, error=None, duration=0):
         """Called by the bridge when an IPC call occurs."""
@@ -107,8 +107,8 @@ class Inspector:
                 try:
                     if hasattr(w, "is_visible") and callable(w.is_visible):
                         is_vis = w.is_visible()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug(f"Failed to check visibility for window {i}: {e}")
 
                 # Use config for more accurate metadata
                 config = getattr(w, "config", {})
@@ -144,7 +144,7 @@ class Inspector:
             try:
                 res = eval(
                     code, {"app": self.app, "state": self.app.state, "inspector": self}
-                )
+                )  # nosec B307
                 return {"result": pytron_serialize(res)}
             except SyntaxError:
                 exec_globals = {
@@ -152,7 +152,7 @@ class Inspector:
                     "state": self.app.state,
                     "inspector": self,
                 }
-                exec(code, exec_globals)
+                exec(code, exec_globals)  # nosec B102
                 return {"result": "Statement executed successfully."}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}

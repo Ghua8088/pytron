@@ -9,6 +9,7 @@ import uuid
 import platform
 import struct
 import subprocess
+import tempfile
 import ctypes  # Added for Windows Named Pipes
 
 logger = logging.getLogger("Pytron.ChromeAdapter")
@@ -130,8 +131,7 @@ class ChromeIPCServer:
 
     def _listen_unix(self, uid):
         # Fallback to single socket for Unix for now unless requested
-        self.pipe_path_base = f"/tmp/pytron-{uid}.sock"
-        if os.path.exists(self.pipe_path_base):
+        self.pipe_path_base = os.path.join(tempfile.gettempdir(), f"pytron-{uid}.sock")
             os.remove(self.pipe_path_base)
 
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -335,8 +335,8 @@ class ChromeAdapter:
                     # STDERR usually contains Chromium warnings
                     logger.warning(f"[Electron-Err] {content}")
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Log proxy error: {e}")
 
     def _flush_queue(self):
         with self._flush_lock:
