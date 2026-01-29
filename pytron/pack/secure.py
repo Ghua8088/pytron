@@ -11,6 +11,169 @@ from ..commands.helpers import get_python_executable, get_venv_site_packages
 from ..commands.harvest import generate_nuclear_hooks
 
 from .metadata import MetadataEditor
+from .pipeline import BuildModule, BuildContext
+
+
+class SecurityModule(BuildModule):
+    def __init__(self):
+        self.key_bytes = None
+        self.boot_key_hex = None
+        self.original_script = None
+        self.build_dir = Path("build") / "secure_build"
+
+    def prepare(self, context: BuildContext):
+        log("Rust Bootloader: Initializing Secure Packaging...", style="info")
+        
+        # 1. GENERATE OR LOAD KEY
+        env_path = context.script_dir / ".env"
+        self.boot_key_hex = None
+
+        if env_path.exists():
+            with open(env_path, "r") as f:
+                for line in f:
+                    if line.startswith("PYTRON_SHIELD_KEY="):
+                        self.boot_key_hex = line.strip().split("=")[1]
+                        break
+
+        if not self.boot_key_hex:
+            self.key_bytes = secrets.token_bytes(32)
+            self.boot_key_hex = self.key_bytes.hex()
+            with open(env_path, "a" if env_path.exists() else "w") as f:
+                f.write(
+                    f"\n# Pytron Secure Shield Key - DO NOT SHARE\nPYTRON_SHIELD_KEY={self.boot_key_hex}\n"
+                )
+            log(f"Generated new unique shield key and saved to .env", style="success")
+        else:
+            log(f"Using existing shield key from .env", style="dim")
+            self.key_bytes = bytes.fromhex(self.boot_key_hex)
+
+        # 2. GENERATE BOOTSTRAP SCRIPT
+        if self.build_dir.exists():
+            shutil.rmtree(self.build_dir)
+        self.build_dir.mkdir(parents=True, exist_ok=True)
+        
+        bootstrap_path = self.build_dir / "bootstrap_env.py"
+        script_stem = context.script.stem
+        bootstrap_content = f"""
+import sys, os, json, logging, threading, asyncio, textwrap, re, socket, ssl, ctypes, hashlib, time, base64, mimetypes
+from collections import deque
+import pytron
+
+try:
+    import {script_stem}
+except Exception:
+    pass
+
+print("Secure Environment Ready")
+"""
+        bootstrap_path.write_text(bootstrap_content)
+        
+        # 3. MODIFY CONTEXT FOR WRAPPED BUILD
+        self.original_script = context.script
+        context.script = bootstrap_path
+        
+        # Ensure cryptography is included
+        if 'cryptography' not in context.hidden_imports:
+            context.hidden_imports.append('cryptography')
+
+    def build_wrapper(self, context: BuildContext, build_func):
+        # We need to change the output name for the "base" build
+        # so it doesn't collide with the final loader
+        original_out_name = context.out_name
+        context.out_name = f"{original_out_name}_base"
+        
+        # Run the actual build (PyInstaller / Nuitka)
+        ret_code = build_func(context)
+        
+        # Restore name
+        context.out_name = original_out_name
+        
+        if ret_code != 0:
+            return ret_code
+
+        # 4. ENCRYPT APP SCRIPT
+        log("Forging AES-256-GCM Shield...", style="cyan")
+        
+        base_dist = Path("dist") / f"{original_out_name}_base"
+        final_dist = Path("dist") / original_out_name
+        
+        if final_dist.exists():
+            try:
+                shutil.rmtree(final_dist)
+            except Exception:
+                # If we can't delete it (maybe a terminal is open there), 
+                # try to at least clear it or use a temp name
+                log(f"Warning: Could not clear {final_dist}. Some files may be locked.", style="warning")
+        
+        final_dist.mkdir(parents=True, exist_ok=True)
+        
+        # Instead of moving the whole directory (which includes the locked webview.dll)
+        # We copy the _internal folder or dependencies we need.
+        # Note: In one-dir mode, PyInstaller puts everything in _internal or the root.
+        
+        log("Assembling secure distribution...", style="dim")
+        for item in base_dist.iterdir():
+            target = final_dist / item.name
+            try:
+                if item.is_dir():
+                    if target.exists(): shutil.rmtree(target)
+                    shutil.copytree(item, target)
+                else:
+                    shutil.copy2(item, target)
+            except Exception as e:
+                # If it's the webview.dll, we don't care because the loader 
+                # will use its own or we can side-load it.
+                if "webview.dll" in str(e).lower():
+                    log("Note: Skipping locked engine DLL (will be managed by loader)", style="dim")
+                else:
+                    log(f"Warning: Could not copy {item.name}: {e}", style="warning")
+
+        payload_dest = final_dist / "app.pytron"
+        with open(self.original_script, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        aesgcm = AESGCM(self.key_bytes)
+        nonce = os.urandom(12)
+        encrypted_code = aesgcm.encrypt(nonce, code.encode("utf-8"), None)
+
+        with open(payload_dest, "wb") as f:
+            f.write(nonce + encrypted_code)
+
+        # 5. DEPLOY RUST LOADER
+        log("Hardening Loader...", style="info")
+        ext = ".exe" if sys.platform == "win32" else ""
+        loader_name = f"pytron_rust_bootloader{ext}"
+        precompiled_bin = (
+            context.package_dir
+            / "pytron"
+            / "pack"
+            / "secure_loader"
+            / "bin"
+            / loader_name
+        )
+
+        final_loader = final_dist / f"{original_out_name}{ext}"
+        shutil.copy(precompiled_bin, final_loader)
+        
+        # 6. SEAL BINARY
+        if not append_key_footer(final_loader, self.key_bytes, context.settings):
+            return 1
+            
+        # Cleanup dummy base exe if it exists
+        base_exe = final_dist / f"{original_out_name}_base{ext}"
+        if base_exe.exists():
+            try:
+                os.remove(base_exe)
+            except Exception:
+                pass
+        
+        # Try to remove the temp base dist if possible
+        try:
+            shutil.rmtree(base_dist, ignore_errors=True)
+        except Exception:
+            pass
+
+        return 0
 
 
 # The placeholder that exists in the precompiled binary

@@ -210,6 +210,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generate a binary patch against a previous app.pytron payload",
     )
     p_pkg.add_argument(
+        "--fortress",
+        action="store_true",
+        help="Enable Fortress Architecture (Hardened Core + Static Shield + Aggressive Pruning)",
+    )
+    p_pkg.add_argument(
+        "--no-cython",
+        action="store_true",
+        help="Disable Cythonization during Fortress build.",
+    )
+    p_pkg.add_argument(
         "--one-file",
         action="store_true",
         help="Package into a single executable file (default for Nuitka)",
