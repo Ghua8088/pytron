@@ -27,7 +27,7 @@ def mock_context(tmp_path):
     context.settings = {"title": "MyApp", "version": "1.0"}
     context.app_icon = None
     context.package_dir = tmp_path
-    context.add_data = [] # List of strings "src=dst"
+    context.add_data = []  # List of strings "src=dst"
     context.hidden_imports = []
     context.binaries = []
     context.runtime_hooks = []
@@ -38,7 +38,7 @@ def mock_context(tmp_path):
     # Defaults
     context.is_onefile = True
     context.is_secure = False
-    
+
     # Mock package/pytron/dependencies path for tests
     (tmp_path / "pytron" / "dependancies").mkdir(parents=True, exist_ok=True)
     return context
@@ -54,8 +54,12 @@ def test_run_nuitka_build(mock_run, mock_context):
         # Mock sys.platform to ensure Windows flags are tested
         with patch("sys.platform", "win32"):
             # Mock get_python_executable/get_venv to avoid path errors
-             with patch("pytron.pack.nuitka.get_python_executable", return_value="python"):
-                 with patch("pytron.pack.nuitka.get_venv_site_packages", return_value=Path(".")):
+            with patch(
+                "pytron.pack.nuitka.get_python_executable", return_value="python"
+            ):
+                with patch(
+                    "pytron.pack.nuitka.get_venv_site_packages", return_value=Path(".")
+                ):
                     run_nuitka_build(mock_context)
 
     mock_run.assert_called()
@@ -74,16 +78,18 @@ def test_run_pyinstaller_build(mock_run_pyi, mock_context):
     mock_context.settings["console"] = True
     mock_context.is_onefile = False
 
-    # Mock cleanup_dist 
+    # Mock cleanup_dist
     with patch("pytron.pack.pyinstaller.cleanup_dist"):
         # Mock build_installer
         with patch("pytron.pack.pyinstaller.build_installer"):
-             # Mock helpers
-             with patch("pytron.pack.pyinstaller.get_python_executable", return_value="python"):
-                 # Mock harvest hooks to avoid real file lookup
-                 with patch("pytron.pack.pyinstaller.generate_nuclear_hooks"):
-                     # Mock Path.exists to pass the spec file check
-                     with patch("pathlib.Path.exists", return_value=True):
+            # Mock helpers
+            with patch(
+                "pytron.pack.pyinstaller.get_python_executable", return_value="python"
+            ):
+                # Mock harvest hooks to avoid real file lookup
+                with patch("pytron.pack.pyinstaller.generate_nuclear_hooks"):
+                    # Mock Path.exists to pass the spec file check
+                    with patch("pathlib.Path.exists", return_value=True):
                         run_pyinstaller_build(mock_context)
 
     # Should call run_command_with_output twice: once for makespec, once for build
@@ -95,7 +101,7 @@ def test_run_pyinstaller_build(mock_run_pyi, mock_context):
     assert "--name" in cmd_makespec
     assert "MyApp" in cmd_makespec
     assert "--console" in cmd_makespec
-    assert "--onedir" in cmd_makespec # context.is_onefile = False
+    assert "--onedir" in cmd_makespec  # context.is_onefile = False
 
     # Check build command
     cmd_build = mock_run_pyi.call_args_list[1][0][0]

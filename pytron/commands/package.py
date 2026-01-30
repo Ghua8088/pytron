@@ -135,15 +135,15 @@ def cmd_package(args: argparse.Namespace) -> int:
     # --- Modular Build Pipeline ---
     from ..pack.pipeline import BuildContext, Pipeline
     from ..pack.modules import (
-        AssetModule, 
-        EngineModule, 
-        MetadataModule, 
-        InstallerModule, 
-        PluginModule, 
+        AssetModule,
+        EngineModule,
+        MetadataModule,
+        InstallerModule,
+        PluginModule,
         HookModule,
-        IconModule
+        IconModule,
     )
-    
+
     # Initialize Context
     ctx = BuildContext(
         script=script,
@@ -155,9 +155,9 @@ def cmd_package(args: argparse.Namespace) -> int:
         is_nuitka=args.nuitka,
         is_onefile=args.one_file,
         progress=progress,
-        task_id=task
+        task_id=task,
     )
-    
+
     # Pass through some CLI flags to context for module use
     ctx.smart_assets = args.smart_assets
     ctx.build_installer = args.installer
@@ -168,29 +168,38 @@ def cmd_package(args: argparse.Namespace) -> int:
 
     # Initialize Pipeline
     pipeline = Pipeline(ctx)
-    
+
     # Add Modules
     pipeline.add_module(IconModule())
     pipeline.add_module(AssetModule())
     pipeline.add_module(HookModule())
     pipeline.add_module(EngineModule())
-    pipeline.add_module(PluginModule()) # Important: Plugin module handles custom add_data
-    
+    pipeline.add_module(
+        PluginModule()
+    )  # Important: Plugin module handles custom add_data
+
     if args.secure:
         from ..pack.secure import SecurityModule
+
         pipeline.add_module(SecurityModule())
-        
+
     if args.fortress:
         try:
             from fortress import FortressModule
-            pipeline.add_module(FortressModule(
-                use_cython=not args.no_cython,
-                use_optimization=not args.no_shake,
-                patch_from=args.patch_from
-            ))
+
+            pipeline.add_module(
+                FortressModule(
+                    use_cython=not args.no_cython,
+                    use_optimization=not args.no_shake,
+                    patch_from=args.patch_from,
+                )
+            )
             log("Fortress Architecture enabled.", style="cyan")
         except ImportError:
-            log("Error: 'pytron-fortress' package not found. Run 'pip install -e pytron-suite/fortress' to use this feature.", style="error")
+            log(
+                "Error: 'pytron-fortress' package not found. Run 'pip install -e pytron-suite/fortress' to use this feature.",
+                style="error",
+            )
             return 1
 
     pipeline.add_module(MetadataModule())
@@ -199,12 +208,14 @@ def cmd_package(args: argparse.Namespace) -> int:
     # Run Pipeline with Core Compiler
     if args.nuitka:
         from ..pack.nuitka import run_nuitka_build
+
         # TODO: Refactor Nuitka to use BuildContext too for full parity
         # For now, we'll call it with a compatible shim if possible or just original args
         # But let's prioritize PyInstaller for this refactor
         ret_code = pipeline.run(run_nuitka_build)
     else:
         from ..pack.pyinstaller import run_pyinstaller_build
+
         ret_code = pipeline.run(run_pyinstaller_build)
 
     progress.stop()

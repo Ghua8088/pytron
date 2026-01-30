@@ -99,7 +99,11 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         # Load Plugins
         # We must use the script/exe directory (sys.path[0]), NOT cwd, because cwd changes to AppData
         if getattr(sys, "frozen", False):
-            base_dir = os.path.dirname(os.path.abspath(sys.executable))
+            # Senior Fix: Use sys._MEIPASS for internal assets/plugins in frozen builds.
+            # Fallback to sys.executable dir if _MEIPASS is somehow missing.
+            base_dir = getattr(
+                sys, "_MEIPASS", os.path.dirname(os.path.abspath(sys.executable))
+            )
         else:
             # Prefer the directory of the actual main script if possible
             main_script = (
@@ -118,16 +122,33 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
 
         self.app_root = base_dir
 
-        plugins_dir = self.config.get("plugins_dir")
-        if plugins_dir:
-            # If relative, resolve against base_dir BEFORE we trust os.path.exists
-            if not os.path.isabs(plugins_dir):
-                plugins_dir = os.path.join(base_dir, plugins_dir)
-            self.load_plugins(plugins_dir)
+        # Plugin Discovery: Check both bundled (internal) and drop-in (external) paths
+        candidate_dirs = []
+        if getattr(sys, "frozen", False):
+            # 1. Bundled plugins inside _internal
+            if hasattr(sys, "_MEIPASS"):
+                candidate_dirs.append(os.path.join(sys._MEIPASS, "plugins"))
+            # 2. Drop-in plugins next to the EXE
+            exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+            candidate_dirs.append(os.path.join(exe_dir, "plugins"))
         else:
-            default_plugins = os.path.join(base_dir, "plugins")
-            if os.path.exists(default_plugins):
-                self.load_plugins(default_plugins)
+            # Local dev plugins next to the script
+            candidate_dirs.append(os.path.join(base_dir, "plugins"))
+
+        custom_plugins_dir = self.config.get("plugins_dir")
+        if custom_plugins_dir:
+            if not os.path.isabs(custom_plugins_dir):
+                custom_plugins_dir = os.path.join(base_dir, custom_plugins_dir)
+            candidate_dirs.append(custom_plugins_dir)
+
+        # Remove duplicates and resolve
+        seen = set()
+        for p_dir in candidate_dirs:
+            p_dir = os.path.abspath(p_dir)
+            if p_dir not in seen and os.path.exists(p_dir):
+                self.logger.info(f"Scanning for plugins in: {p_dir}")
+                self.load_plugins(p_dir)
+                seen.add(p_dir)
 
     def on_exit(self, func):
         """

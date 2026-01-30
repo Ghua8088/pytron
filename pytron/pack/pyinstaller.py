@@ -19,7 +19,9 @@ def run_pyinstaller_build(context: BuildContext):
     """
     try:
         log("Generating spec file...", style="info")
-        context.progress.update(context.task_id, description="Generating Spec...", completed=30)
+        context.progress.update(
+            context.task_id, description="Generating Spec...", completed=30
+        )
 
         # 1. Resolve Platform-Specific Libs
         dll_name = "webview.dll"
@@ -61,38 +63,38 @@ def run_pyinstaller_build(context: BuildContext):
 
         # Add Core Webview DLL
         makespec_cmd.append(f"--add-binary={dll_src}{os.pathsep}{dll_dest}")
-        
+
         # Add Scripts
         # For secure builds, we add BOTH the bootstrap and the original script
         # PyInstaller will analyze both for dependencies, but bootstrap (first)
         # stays as the primary entry point script.
         makespec_cmd.append(str(context.script))
-        
+
         if context.is_secure and hasattr(context, "original_script"):
-             makespec_cmd.append(str(context.original_script))
+            makespec_cmd.append(str(context.original_script))
 
         # Add Runtime Hooks
         if sys.platform == "win32":
             utf8_hook = context.package_dir / "pytron" / "utf8_hook.py"
             if utf8_hook.exists():
                 makespec_cmd.append(f"--runtime-hook={utf8_hook}")
-        
+
         for hook in context.runtime_hooks:
             makespec_cmd.append(f"--runtime-hook={hook}")
 
         # Add Assets (from Modules)
         for item in context.add_data:
             makespec_cmd.extend(["--add-data", item])
-            
+
         for item in context.binaries:
             makespec_cmd.extend(["--add-binary", item])
 
         for imp in context.hidden_imports:
             makespec_cmd.append(f"--hidden-import={imp}")
-            
+
         for ex in context.excludes:
             makespec_cmd.append(f"--exclude-module={ex}")
-            
+
         for p in context.pathex:
             makespec_cmd.append(f"--paths={p}")
 
@@ -113,9 +115,14 @@ def run_pyinstaller_build(context: BuildContext):
             return 1
 
         # Fortress / Spec Optimization Hook
-        if context.settings.get("optimize_spec") or context.is_secure or hasattr(context, "fortress_active"):
+        if (
+            context.settings.get("optimize_spec")
+            or context.is_secure
+            or hasattr(context, "fortress_active")
+        ):
             try:
                 from fortress import SpecOptimizer
+
                 optimizer = SpecOptimizer(spec_file)
                 optimizer.optimize()
                 log("Fortress: Spec optimization applied.", style="dim")
@@ -134,11 +141,13 @@ def run_pyinstaller_build(context: BuildContext):
             str(spec_file),
         ]
 
-        context.progress.update(context.task_id, description="Compiling...", completed=50)
+        context.progress.update(
+            context.task_id, description="Compiling...", completed=50
+        )
         log(f"Building from Spec: {' '.join(build_cmd)}", style="dim")
 
         ret_code = run_command_with_output(build_cmd, style="dim")
-        
+
         if ret_code == 0:
             # Cleanup
             has_splash = bool(context.settings.get("splash_image"))

@@ -135,7 +135,7 @@ def cmd_init(args: argparse.Namespace) -> int:
                 runner = "bunx"
             elif provider == "pnpm":
                 runner = "pnpx"
-            
+
             # Resolve full path for Windows compatibility (npx.cmd)
             runner_path = shutil.which(runner)
             if runner_path:

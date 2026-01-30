@@ -20,16 +20,21 @@ from .utils import cleanup_dist
 def cython_compile(script_path: Path, build_dir: Path):
     """Compiles a python script into a .pyd/.so using Cython and Zig (cc)."""
     python_exe = get_python_executable()
-    
+
     # 0. Check for Cython
     try:
-        subprocess.run([python_exe, "-c", "import Cython"], check=True, capture_output=True)
+        subprocess.run(
+            [python_exe, "-c", "import Cython"], check=True, capture_output=True
+        )
     except subprocess.CalledProcessError:
         log("Cython missing in build environment. Installing...", style="info")
         try:
             subprocess.run([python_exe, "-m", "pip", "install", "Cython"], check=True)
         except subprocess.CalledProcessError:
-            log("Failed to install Cython automatically. Please install it manually in your venv.", style="error")
+            log(
+                "Failed to install Cython automatically. Please install it manually in your venv.",
+                style="error",
+            )
             return None
 
     # Determine Zig presence
@@ -38,26 +43,36 @@ def cython_compile(script_path: Path, build_dir: Path):
         # Check if ziglang package is installed and use its binary
         try:
             import ziglang
+
             zig_bin = os.path.join(os.path.dirname(ziglang.__file__), "bin", "zig")
             if sys.platform == "win32":
                 zig_bin += ".exe"
             if not os.path.exists(zig_bin):
                 # Try sibling bin directory for some installations
-                zig_bin = os.path.join(os.path.dirname(os.path.dirname(ziglang.__file__)), "bin", "zig")
-                if sys.platform == "win32": zig_bin += ".exe"
-            
+                zig_bin = os.path.join(
+                    os.path.dirname(os.path.dirname(ziglang.__file__)), "bin", "zig"
+                )
+                if sys.platform == "win32":
+                    zig_bin += ".exe"
+
             if not os.path.exists(zig_bin):
                 zig_bin = None
         except ImportError:
             zig_bin = None
 
     if not zig_bin:
-        log("Zig compiler ('zig') not found. Falling back to default C compiler...", style="warning")
+        log(
+            "Zig compiler ('zig') not found. Falling back to default C compiler...",
+            style="warning",
+        )
     else:
         log(f"Using Zig compiler at: {zig_bin}", style="dim")
 
-    log(f"Shield: Compiling {script_path.name} logic into native binary...", style="cyan")
-    
+    log(
+        f"Shield: Compiling {script_path.name} logic into native binary...",
+        style="cyan",
+    )
+
     # 0. PRE-PROCESS: Force the 'main' block to execute when imported as a module
     # (Since the Rust loader imports 'app' instead of running it as __main__)
     try:
@@ -66,8 +81,8 @@ def cython_compile(script_path: Path, build_dir: Path):
         pattern = r'if\s+__name__\s*==\s*[\'"]__main__[\'"]\s*:'
         if re.search(pattern, content):
             log("  + Patching entry point for native execution...", style="dim")
-            content = re.sub(pattern, 'if True: # Shield Redirect', content)
-        
+            content = re.sub(pattern, "if True: # Shield Redirect", content)
+
         # Always write to 'app.py' in build_dir so Cython generates 'PyInit_app'
         # which matches what the Rust loader expects.
         target_script = build_dir / "app.py"
@@ -78,22 +93,29 @@ def cython_compile(script_path: Path, build_dir: Path):
 
     # 1. TRANSLATE TO C using Cython (CLI mode to avoid auto-compilation)
     c_file = build_dir / "app.c"
-    
+
     try:
         log("  + Generating C source with Cython...", style="dim")
         # We run Cython as a subprocess to ensure it JUST generates the .c file
-        process = subprocess.run([
-            python_exe, "-m", "cython", 
-            "-3", 
-            "--fast-fail",
-            str(target_script),
-            "-o", str(c_file)
-        ], capture_output=True, text=True)
-        
+        process = subprocess.run(
+            [
+                python_exe,
+                "-m",
+                "cython",
+                "-3",
+                "--fast-fail",
+                str(target_script),
+                "-o",
+                str(c_file),
+            ],
+            capture_output=True,
+            text=True,
+        )
+
         if process.returncode != 0:
             log(f"Cython generation failed: {process.stderr}", style="error")
             return None
-            
+
     except Exception as e:
         log(f"Cythonization error: {e}", style="error")
         return None
@@ -105,33 +127,59 @@ def cython_compile(script_path: Path, build_dir: Path):
     # 2. COMPILE C TO PYD/SO using Zig
     ext = ".pyd" if sys.platform == "win32" else ".so"
     output_bin = build_dir / f"app{ext}"
-    
+
     # Get Python build constants from the target executable
     def get_py_info(cmd_part):
-        res = subprocess.run([python_exe, "-c", f"import sysconfig; print(sysconfig.get_path('{cmd_part}'))"], 
-                             capture_output=True, text=True)
+        res = subprocess.run(
+            [
+                python_exe,
+                "-c",
+                f"import sysconfig; print(sysconfig.get_path('{cmd_part}'))",
+            ],
+            capture_output=True,
+            text=True,
+        )
         return res.stdout.strip()
 
     py_include = get_py_info("include")
-    
+
     # Get version for the lib name
-    res_ver = subprocess.run([python_exe, "-c", "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')"], 
-                             capture_output=True, text=True)
-    py_ver_str = res_ver.stdout.strip() or f"{sys.version_info.major}{sys.version_info.minor}"
-    
+    res_ver = subprocess.run(
+        [
+            python_exe,
+            "-c",
+            "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    py_ver_str = (
+        res_ver.stdout.strip() or f"{sys.version_info.major}{sys.version_info.minor}"
+    )
+
     # On Windows, libraries are usually in {base_prefix}/libs
-    res_prefix = subprocess.run([python_exe, "-c", "import sys; print(sys.base_prefix)"], 
-                                capture_output=True, text=True)
+    res_prefix = subprocess.run(
+        [python_exe, "-c", "import sys; print(sys.base_prefix)"],
+        capture_output=True,
+        text=True,
+    )
     base_prefix = res_prefix.stdout.strip() or sys.base_prefix
-    
+
     if sys.platform == "win32":
         py_lib_dir = os.path.join(base_prefix, "libs")
     else:
         # For non-windows we usually need the LIBDIR from sysconfig
-        res_libdir = subprocess.run([python_exe, "-c", "import sysconfig; print(sysconfig.get_config_var('LIBDIR') or '')"], 
-                                     capture_output=True, text=True)
+        res_libdir = subprocess.run(
+            [
+                python_exe,
+                "-c",
+                "import sysconfig; print(sysconfig.get_config_var('LIBDIR') or '')",
+            ],
+            capture_output=True,
+            text=True,
+        )
         py_lib_dir = res_libdir.stdout.strip() or os.path.join(base_prefix, "lib")
-    
+
     if zig_bin:
         # Determine target architecture
         machine = platform.machine().lower()
@@ -141,24 +189,32 @@ def cython_compile(script_path: Path, build_dir: Path):
             arch = "aarch64"
         else:
             arch = "x86"
-            
-        target = f"{arch}-windows" if sys.platform == "win32" else f"{arch}-{sys.platform}"
+
+        target = (
+            f"{arch}-windows" if sys.platform == "win32" else f"{arch}-{sys.platform}"
+        )
         # Some platforms need specific suffixes (like gnu or musl for linux)
         if sys.platform == "linux":
-            target += "-gnu" # Default to gnu for compatibility
-            
-        log(f"  + Compiling {output_bin.name} with Zig CC (Target: {target})...", style="dim")
-        
+            target += "-gnu"  # Default to gnu for compatibility
+
+        log(
+            f"  + Compiling {output_bin.name} with Zig CC (Target: {target})...",
+            style="dim",
+        )
+
         compile_cmd = [
-            zig_bin, "cc",
-            "-target", target,
-            "-O3", 
-            "-shared", 
-            "-o", str(output_bin),
+            zig_bin,
+            "cc",
+            "-target",
+            target,
+            "-O3",
+            "-shared",
+            "-o",
+            str(output_bin),
             str(c_file),
-            f"-I{py_include}"
+            f"-I{py_include}",
         ]
-        
+
         if sys.platform == "win32":
             compile_cmd.append(f"-L{py_lib_dir}")
             lib_name = f"python{py_ver_str}"
@@ -176,9 +232,11 @@ def cython_compile(script_path: Path, build_dir: Path):
         except Exception as e:
             log(f"Zig encountered an error: {e}", style="error")
             return cython_compile_fallback(script_path, build_dir)
-            
+
         if output_bin.exists():
-            log(f"Successfully compiled to {output_bin.name} using Zig", style="success")
+            log(
+                f"Successfully compiled to {output_bin.name} using Zig", style="success"
+            )
             return output_bin
 
     return cython_compile_fallback(script_path, build_dir)
@@ -202,9 +260,11 @@ setup(
 """
     setup_path.write_text(setup_content)
     cmd = [python_exe, "setup_compile.py", "build_ext", "--inplace"]
-    
+
     try:
-        subprocess.run(cmd, cwd=str(build_dir), capture_output=True, text=True, check=True)
+        subprocess.run(
+            cmd, cwd=str(build_dir), capture_output=True, text=True, check=True
+        )
     except Exception as e:
         log(f"Standard compilation failed: {e}", style="error")
         return None
@@ -217,7 +277,8 @@ setup(
     if compiled_files:
         pyd_path = compiled_files[0]
         final_pyd = build_dir / f"app{ext}"
-        if final_pyd.exists(): os.remove(final_pyd)
+        if final_pyd.exists():
+            os.remove(final_pyd)
         shutil.move(str(pyd_path), str(final_pyd))
         return final_pyd
     return None
@@ -230,8 +291,11 @@ class SecurityModule(BuildModule):
         self.compiled_pyd = None
 
     def prepare(self, context: BuildContext):
-        log("Shield: Initializing Secure Packaging (Binary Compilation)...", style="info")
-        
+        log(
+            "Shield: Initializing Secure Packaging (Binary Compilation)...",
+            style="info",
+        )
+
         # 1. CYTHON COMPILATION
         if self.build_dir.exists():
             shutil.rmtree(self.build_dir)
@@ -262,40 +326,55 @@ if __name__ == "__main__":
         # 2. CONFIGURE SHIELDED ANALYSIS
         self.original_script = context.script
         context.script = bootstrap_path
-        
+
         # Store original for PyInstaller module to pick up (Dual Analysis)
         context.original_script = self.original_script
-        
+
         # Add the compiled binary to the build context binaries
         # CRITICAL: We EXCLUDE the original script from being bundled as source
         if self.original_script.stem not in context.excludes:
-             context.excludes.append(self.original_script.stem)
-        
+            context.excludes.append(self.original_script.stem)
+
         # Add to pathex so PyInstaller finds the .pyd during analysis of bootstrap
         if str(self.build_dir.resolve()) not in context.pathex:
             context.pathex.append(str(self.build_dir.resolve()))
-        
+
         context.binaries.append(f"{self.compiled_pyd.resolve()}{os.pathsep}.")
-        
+
         # 4. FORCE NO-ARCHIVE (Required for our custom fusion process)
         if "--debug" not in context.extra_args:
             context.extra_args.extend(["--debug", "noarchive"])
 
     def compact_library(self, dist_path: Path, bundle_path: Path):
         """Fuses all loose .pyc files into a single safeguarded app.bundle,
-           preserving the physical integrity of 'Special' packages (Native/Resource-heavy)."""
+        preserving the physical integrity of 'Special' packages (Native/Resource-heavy).
+        """
         import zipfile
+
         internal_dir = dist_path / "_internal"
-        
+
         if not internal_dir.exists():
             return
 
-        log(f"Fusing Python library into {bundle_path.name} (Surgical Preservation)...", style="cyan")
-        
+        log(
+            f"Fusing Python library into {bundle_path.name} (Surgical Preservation)...",
+            style="cyan",
+        )
+
         # 1. DISCOVERY: Identify 'Special' packages that MUST stay loose
         preserving_packages = set()
-        special_exts = (".pyd", ".so", ".dll", ".lib", ".pem", ".onnx", ".prototxt", ".bin", ".pb")
-        
+        special_exts = (
+            ".pyd",
+            ".so",
+            ".dll",
+            ".lib",
+            ".pem",
+            ".onnx",
+            ".prototxt",
+            ".bin",
+            ".pb",
+        )
+
         for root, _, files in os.walk(internal_dir):
             if any(f.endswith(special_exts) for f in files):
                 # Identify the top-level package name in _internal
@@ -303,15 +382,18 @@ if __name__ == "__main__":
                 if rel_parts:
                     preserving_packages.add(rel_parts[0])
 
-        log(f"  + Preserving physical package domains: {', '.join(preserving_packages)}", style="dim")
+        log(
+            f"  + Preserving physical package domains: {', '.join(preserving_packages)}",
+            style="dim",
+        )
 
         to_remove = []
         # USE ZIP_STORED for zero-latency imports
-        with zipfile.ZipFile(bundle_path, 'w', zipfile.ZIP_STORED) as bundle:
+        with zipfile.ZipFile(bundle_path, "w", zipfile.ZIP_STORED) as bundle:
             # 2. Merge standard base_library
             base_zip = internal_dir / "base_library.zip"
             if base_zip.exists():
-                with zipfile.ZipFile(base_zip, 'r') as bzip:
+                with zipfile.ZipFile(base_zip, "r") as bzip:
                     for name in bzip.namelist():
                         bundle.writestr(name, bzip.read(name))
                 to_remove.append(base_zip)
@@ -319,10 +401,10 @@ if __name__ == "__main__":
             # 3. Process the rest of _internal
             for root, _, files in os.walk(internal_dir):
                 rel_parts = Path(root).relative_to(internal_dir).parts
-                
+
                 # If this is inside a preserved package, skip fusion entirely
                 if rel_parts and rel_parts[0] in preserving_packages:
-                    continue 
+                    continue
 
                 for f in files:
                     # Capture code only for fused packages to keep them clean
@@ -338,7 +420,7 @@ if __name__ == "__main__":
                 os.remove(p)
             except Exception:
                 pass
-        
+
         # 5. PRUNING: Recursive remove empty directory skeletons
         for root, dirs, _ in os.walk(internal_dir, topdown=False):
             for d in dirs:
@@ -349,43 +431,50 @@ if __name__ == "__main__":
                 except Exception:
                     pass
 
-        log(f"  + Shielded {len(to_remove)} modules into bundle. Logic is safeguarded.", style="dim")
+        log(
+            f"  + Shielded {len(to_remove)} modules into bundle. Logic is safeguarded.",
+            style="dim",
+        )
 
     def build_wrapper(self, context: BuildContext, build_func):
         # We need to change the output name for the "base" build
         # so it doesn't collide with the final loader
         original_out_name = context.out_name
         context.out_name = f"{original_out_name}_base"
-        
+
         # Run the actual build
         ret_code = build_func(context)
-        
+
         # Restore name
         context.out_name = original_out_name
-        
+
         if ret_code != 0:
             return ret_code
 
         # 4. ASSEMBLE SECURE DISTRIBUTION
         log("Hardening Distribution...", style="cyan")
-        
+
         base_dist = Path("dist") / f"{original_out_name}_base"
         final_dist = Path("dist") / original_out_name
-        
+
         if final_dist.exists():
             try:
                 shutil.rmtree(final_dist)
             except Exception:
-                log(f"Warning: Could not clear {final_dist}. Some files may be locked.", style="warning")
-        
+                log(
+                    f"Warning: Could not clear {final_dist}. Some files may be locked.",
+                    style="warning",
+                )
+
         final_dist.mkdir(parents=True, exist_ok=True)
-        
+
         log("Assembling secure distribution...", style="dim")
         for item in base_dist.iterdir():
             target = final_dist / item.name
             try:
                 if item.is_dir():
-                    if target.exists(): shutil.rmtree(target)
+                    if target.exists():
+                        shutil.rmtree(target)
                     shutil.copytree(item, target)
                 else:
                     shutil.copy2(item, target)
@@ -398,7 +487,10 @@ if __name__ == "__main__":
             bundle_path = final_dist / "_internal" / "app.bundle"
             self.compact_library(final_dist, bundle_path)
         else:
-            log("Skipping aggressive library bundling for stability (Safe Mode).", style="dim")
+            log(
+                "Skipping aggressive library bundling for stability (Safe Mode).",
+                style="dim",
+            )
             log("Use --bundled to group Python modules into app.bundle.", style="dim")
 
         # 7. DEPLOY RUST LOADER
@@ -416,7 +508,7 @@ if __name__ == "__main__":
 
         final_loader = final_dist / f"{original_out_name}{ext_exe}"
         shutil.copy(precompiled_bin, final_loader)
-        
+
         # Cleanup dummy base exe if it exists
         base_exe = final_dist / f"{original_out_name}_base{ext_exe}"
         if base_exe.exists():
@@ -427,7 +519,7 @@ if __name__ == "__main__":
 
         # 8. FINAL OPTIMIZATION
         cleanup_dist(final_dist)
-        
+
         # Try to remove the temp base dist if possible
         try:
             shutil.rmtree(base_dist, ignore_errors=True)
@@ -449,7 +541,9 @@ def get_webview_lib():
 from .utils import cleanup_dist as prune_junk_folders
 
 
-def apply_metadata_to_binary(binary_path, icon_path, settings, dist_dir, package_dir=None):
+def apply_metadata_to_binary(
+    binary_path, icon_path, settings, dist_dir, package_dir=None
+):
     editor = MetadataEditor(package_dir=package_dir)
     return editor.update(binary_path, icon_path, settings, dist_dir)
 
@@ -471,6 +565,9 @@ def run_secure_build(
     """
     # This function is now mostly a wrapper for the SecurityModule pipeline logic
     # but kept for backward compatibility if called directly.
-    log("Secure Build started via legacy entry point. Using SecurityModule internally.", style="info")
+    log(
+        "Secure Build started via legacy entry point. Using SecurityModule internally.",
+        style="info",
+    )
     # For now, we'll let the pipeline handle it as the preferred route.
     return 0
