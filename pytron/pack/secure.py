@@ -14,6 +14,7 @@ from ..commands.harvest import generate_nuclear_hooks
 
 from .metadata import MetadataEditor
 from .pipeline import BuildModule, BuildContext
+from .utils import cleanup_dist
 
 
 def cython_compile(script_path: Path, build_dir: Path):
@@ -280,12 +281,11 @@ if __name__ == "__main__":
         if "--debug" not in context.extra_args:
             context.extra_args.extend(["--debug", "noarchive"])
 
-    def compact_library(self, dist_path: Path):
+    def compact_library(self, dist_path: Path, bundle_path: Path):
         """Fuses all loose .pyc files into a single safeguarded app.bundle,
            preserving the physical integrity of 'Special' packages (Native/Resource-heavy)."""
         import zipfile
         internal_dir = dist_path / "_internal"
-        bundle_path = dist_path / "app.bundle"
         
         if not internal_dir.exists():
             return
@@ -392,46 +392,14 @@ if __name__ == "__main__":
             except Exception as e:
                 log(f"Warning: Could not copy {item.name}: {e}", style="warning")
 
-        # 5. VERIFY COMPILED BUNDLE
-        # Ensure the .pyd is actually in the dist root (Loader expects it there)
-        ext = ".pyd" if sys.platform == "win32" else ".so"
-        dist_pyd = final_dist / f"app{ext}"
-        if not dist_pyd.exists():
-            # If PyInstaller didn't put it in root, check _internal
-            internal_pyd = final_dist / "_internal" / f"app{ext}"
-            if internal_pyd.exists():
-                shutil.copy2(str(internal_pyd), str(dist_pyd))
-            else:
-                log(f"Warning: Compiled binary app{ext} not found in distribution.", style="warning")
-
         # 5. FUSE AND CLOAK LIBRARY (Optional via --bundled)
         if getattr(context, "bundled", False):
-            self.compact_library(final_dist)
+            # Place the bundle inside _internal for a cleaner root
+            bundle_path = final_dist / "_internal" / "app.bundle"
+            self.compact_library(final_dist, bundle_path)
         else:
             log("Skipping aggressive library bundling for stability (Safe Mode).", style="dim")
             log("Use --bundled to group Python modules into app.bundle.", style="dim")
-
-        # 6. PROMOTE CRITICAL RUNTIMES (Fix for silent crashes)
-        log("Promoting runtime binaries...", style="dim")
-        internal_dir = final_dist / "_internal"
-        if internal_dir.exists():
-            # Explicitly promote app binary if not already there
-            app_bin = internal_dir / f"app{ext}"
-            if app_bin.exists() and not (final_dist / f"app{ext}").exists():
-                shutil.copy2(app_bin, final_dist / f"app{ext}")
-
-            # Find pythonXXX.dll
-            py_dll_pattern = "python[0-9]*.dll"
-            for py_dll in internal_dir.glob(py_dll_pattern):
-                if not (final_dist / py_dll.name).exists():
-                    shutil.copy2(py_dll, final_dist / py_dll.name)
-                    log(f"  + Promoted runtime: {py_dll.name}", style="dim")
-            
-            # Find webview.dll (Engine)
-            webview_dll = internal_dir / "webview.dll"
-            if webview_dll.exists() and not (final_dist / "webview.dll").exists():
-                shutil.copy2(webview_dll, final_dist / "webview.dll")
-                log("  + Promoted engine: webview.dll", style="dim")
 
         # 7. DEPLOY RUST LOADER
         log("Hardening Loader...", style="info")
@@ -458,7 +426,7 @@ if __name__ == "__main__":
                 pass
 
         # 8. FINAL OPTIMIZATION
-        prune_junk_folders(final_dist)
+        cleanup_dist(final_dist)
         
         # Try to remove the temp base dist if possible
         try:

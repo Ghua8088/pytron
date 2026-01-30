@@ -78,14 +78,12 @@ def cleanup_dist(dist_path: Path, preserve_tk: bool = False):
 
         # 2. PRUNE FILES
         for f in files:
-            should_remove = f in remove_names or f.endswith((".pdb", ".pyi", ".txt"))
+            # We remove common clutter names and development artifacts like .pdb and .pyi
+            # We DON'T remove all .txt files globally because they are often legitimate assets (e.g. certificates, data).
+            should_remove = f in remove_names or f.endswith((".pdb", ".pyi"))
             
-            # Special case for .txt files - keep those in 'engines' but remove others
-            if f.endswith(".txt") and "pytron/engines" in root.replace("\\", "/"):
-                should_remove = False
-
             if should_remove:
-                # SAFETY: Protect critical entry points
+                # SAFETY: Protect critical entry points in embedded engines
                 if f == "package.json" and "pytron/engines/chrome/shell" in root.replace("\\", "/"):
                     continue
 

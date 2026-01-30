@@ -65,14 +65,28 @@ fn main() -> PyResult<()> {
     );
     set_app_id(&app_id);
     
-    let app_bundle = root_dir.join("app.bundle");
+    let app_bundle = internal_dir.join("app.bundle");
+
+    // 2. DLL Discovery (Windows Fix for 'Everything in _internal')
+    #[cfg(windows)]
+    unsafe {
+        if let Ok(lib) = libloading::Library::new("kernel32.dll") {
+            let func: Result<libloading::Symbol<unsafe extern "system" fn(*const u16) -> i32>, _> = lib.get(b"SetDllDirectoryW");
+            if let Ok(set_dll_dir) = func {
+                use std::os::windows::ffi::OsStrExt;
+                let mut path_v: Vec<u16> = internal_dir.as_os_str().encode_wide().collect();
+                path_v.push(0);
+                set_dll_dir(path_v.as_ptr());
+            }
+        }
+    }
 
     // 2. Strict Environment Isolation
     env::remove_var("PYTHONPATH");
     env::remove_var("PYTHONHOME");
     
-    // For bundled apps, root_dir is usually best for HOME
-    env::set_var("PYTHONHOME", &root_dir);
+    // Everything is now in _internal, so we point HOME there
+    env::set_var("PYTHONHOME", &internal_dir);
     
     let path_sep = if cfg!(windows) { ";" } else { ":" };
     let python_path = if app_bundle.exists() {

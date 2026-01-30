@@ -45,6 +45,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install build
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Rust Loader
+        run: python pytron/pack/secure_loader/build_loader.py
+
       - name: Build package
         run: python -m build
 
