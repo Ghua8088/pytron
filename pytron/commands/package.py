@@ -141,9 +141,7 @@ def cmd_package(args: argparse.Namespace) -> int:
         InstallerModule, 
         PluginModule, 
         HookModule,
-        IconModule,
-        CompileModule,
-        MetadataCleaningModule,
+        IconModule
     )
     
     # Initialize Context
@@ -163,6 +161,7 @@ def cmd_package(args: argparse.Namespace) -> int:
     # Pass through some CLI flags to context for module use
     ctx.smart_assets = args.smart_assets
     ctx.build_installer = args.installer
+    ctx.bundled = args.bundled
     ctx.collect_all = getattr(args, "collect_all", False)
     ctx.force_hooks = getattr(args, "force_hooks", False)
     ctx.add_data = args.add_data or []
@@ -195,8 +194,6 @@ def cmd_package(args: argparse.Namespace) -> int:
             return 1
 
     pipeline.add_module(MetadataModule())
-    pipeline.add_module(CompileModule())
-    pipeline.add_module(MetadataCleaningModule())
     pipeline.add_module(InstallerModule())
 
     # Run Pipeline with Core Compiler

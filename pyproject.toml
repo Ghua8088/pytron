@@ -34,7 +34,8 @@ dependencies = [
   "comtypes; sys_platform == 'win32'",
   "cryptography",
   "keyring",
-  "requests"
+  "requests",
+  "Cython"
 ]
 classifiers = [
   "Programming Language :: Python :: 3",

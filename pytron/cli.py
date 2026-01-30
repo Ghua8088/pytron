@@ -229,6 +229,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Package into a directory (default for PyInstaller, faster build)",
     )
+    p_pkg.add_argument(
+        "--bundled",
+        action="store_true",
+        help="Enable grouping of library modules into app.bundle (Cleaner dist, but potentially buggy for complex apps)",
+    )
     p_pkg.set_defaults(func=cmd_package)
     p_build = sub.add_parser(
         "build-frontend",

@@ -22,7 +22,7 @@ def cleanup_dist(dist_path: Path, preserve_tk: bool = False):
     if not target_path.exists():
         return
 
-    # Items to remove (names)
+    # Items to remove (exact names)
     remove_names = {
         "node_modules",
         "node.exe",
@@ -48,59 +48,49 @@ def cleanup_dist(dist_path: Path, preserve_tk: bool = False):
         "tests",
         "unit_test",
         "include",
-        "msvcrt.dll",  # Nuclear Pruning
+        "msvcrt.dll",
+        "LICENSE",
+        "README.md",
+        "CHANGELOG.md",
     }
 
     if not preserve_tk:
         remove_names.update({"tcl86t.dll", "tk86t.dll", "tcl", "tk", "tcl8.6", "tk8.6"})
-    else:
-        log("Preserving Tcl/Tk dependencies (required for splash screen)", style="info")
 
-    config = get_config()
-    exclude_patterns = config.get("exclude_patterns", [])
+    log(f"Aggressively optimizing: {target_path}")
 
-    log(f"Optimizing build directory: {target_path}")
-
-    # Walk top-down so we can modify dirs in-place to skip traversing removed dirs
     for root, dirs, files in os.walk(target_path, topdown=True):
-        # Remove directories
-        # Modify dirs in-place to avoid traversing into removed directories
-        dirs_to_remove = [d for d in dirs if d in remove_names]
+        # 1. PRUNE DIRECTORIES
+        dirs_to_remove = []
+        for d in dirs:
+            # Remove exact matches OR metadata patterns
+            if d in remove_names or d.endswith((".dist-info", ".egg-info")):
+                dirs_to_remove.append(d)
+        
         for d in dirs_to_remove:
             full_path = Path(root) / d
             try:
                 shutil.rmtree(full_path)
-                console.print(f"  - Removed directory: {d}", style="dim")
+                console.print(f"  - Pruned: {d}", style="dim")
                 dirs.remove(d)
-            except Exception as e:
-                console.print(f"  ! Failed to remove {d}: {e}", style="error")
+            except Exception:
+                pass
 
-        # Remove files
+        # 2. PRUNE FILES
         for f in files:
-            should_remove = f in remove_names or f.endswith(".pdb")
-
-            if not should_remove and exclude_patterns:
-                for pat in exclude_patterns:
-                    if fnmatch.fnmatch(f, pat):
-                        should_remove = True
-                        break
+            should_remove = f in remove_names or f.endswith((".pdb", ".pyi", ".txt"))
+            
+            # Special case for .txt files - keep those in 'engines' but remove others
+            if f.endswith(".txt") and "pytron/engines" in root.replace("\\", "/"):
+                should_remove = False
 
             if should_remove:
-                # SAFETY: Protect Electron Shell package.json
-                # The Chrome engine REQUIRES package.json in its shell folder to boot.
-                if f == "package.json":
-                    # Check consistency of path
-                    norm_root = os.path.normpath(root).replace("\\", "/")
-                    # If we are inside the chrome shell directory, DO NOT DELETE.
-                    if "pytron/engines/chrome/shell" in norm_root:
-                        console.print(
-                            f"  - Preserved critical entry point: {f}", style="dim"
-                        )
-                        continue
+                # SAFETY: Protect critical entry points
+                if f == "package.json" and "pytron/engines/chrome/shell" in root.replace("\\", "/"):
+                    continue
 
                 full_path = Path(root) / f
                 try:
                     os.remove(full_path)
-                    console.print(f"  - Removed file: {f}", style="dim")
-                except Exception as e:
-                    console.print(f"  ! Failed to remove {f}: {e}", style="error")
+                except Exception:
+                    pass

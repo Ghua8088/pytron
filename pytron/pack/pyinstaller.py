@@ -63,7 +63,13 @@ def run_pyinstaller_build(context: BuildContext):
         makespec_cmd.append(f"--add-binary={dll_src}{os.pathsep}{dll_dest}")
         
         # Add Scripts
+        # For secure builds, we add BOTH the bootstrap and the original script
+        # PyInstaller will analyze both for dependencies, but bootstrap (first)
+        # stays as the primary entry point script.
         makespec_cmd.append(str(context.script))
+        
+        if context.is_secure and hasattr(context, "original_script"):
+             makespec_cmd.append(str(context.original_script))
 
         # Add Runtime Hooks
         if sys.platform == "win32":
@@ -83,6 +89,12 @@ def run_pyinstaller_build(context: BuildContext):
 
         for imp in context.hidden_imports:
             makespec_cmd.append(f"--hidden-import={imp}")
+            
+        for ex in context.excludes:
+            makespec_cmd.append(f"--exclude-module={ex}")
+            
+        for p in context.pathex:
+            makespec_cmd.append(f"--paths={p}")
 
         makespec_cmd.extend(context.extra_args)
 

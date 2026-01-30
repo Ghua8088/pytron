@@ -18,6 +18,8 @@ class BuildContext:
     add_data: List[str] = field(default_factory=list)
     binaries: List[str] = field(default_factory=list)
     hidden_imports: List[str] = field(default_factory=list)
+    excludes: List[str] = field(default_factory=list)
+    pathex: List[str] = field(default_factory=list)
     extra_args: List[str] = field(default_factory=list)
     runtime_hooks: List[str] = field(default_factory=list)
     

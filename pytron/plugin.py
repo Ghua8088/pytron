@@ -359,12 +359,7 @@ class Plugin:
                                 f"Applying manual configuration to '{self.name}': {list(manual_config.keys())}"
                             )
 
-                        # Merge config: manual overrides manifest config
-                        final_config = self.config.copy()
-                        final_config.update(manual_config)
-                        
-                        # Pass config as kwargs if the function signature accepts them
-                        self.instance = entry_obj(supervised_app, **final_config)
+                        self.instance = entry_obj(supervised_app, **manual_config)
 
                     # 2. If it's a class, instantiate it with `supervised_app`
                     elif isinstance(entry_obj, type):
@@ -383,11 +378,7 @@ class Plugin:
                                 f"Applying manual configuration to '{self.name}': {list(manual_config.keys())}"
                             )
 
-                        # Merge config: manual overrides manifest config
-                        final_config = self.config.copy()
-                        final_config.update(manual_config)
-
-                        self.instance = entry_obj(supervised_app, **final_config)
+                        self.instance = entry_obj(supervised_app, **manual_config)
 
                         # If the class has a 'setup' method, call it
                         if hasattr(self.instance, "setup"):

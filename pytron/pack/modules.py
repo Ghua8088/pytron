@@ -4,7 +4,7 @@ import json
 import shutil
 from pathlib import Path
 from .pipeline import BuildModule, BuildContext
-from ..console import log, run_command_with_output
+from ..console import log
 from .assets import get_smart_assets
 from .metadata import MetadataEditor
 
@@ -125,20 +125,34 @@ class PluginModule(BuildModule):
         if not plugins_dir.exists():
             return
 
+        # Automatically bundle the plugins directory
+        log(f"Bundling plugins directory: {plugins_dir.name}", style="dim")
+        context.add_data.append(f"{plugins_dir}{os.pathsep}plugins")
+
         log("Evaluating plugins for packaging hooks...", style="dim")
         plugin_objs = discover_plugins(str(plugins_dir))
 
         # Robust mock app for hook context
+        class MockObject:
+            def __call__(self, *args, **kwargs): return self
+            def __iter__(self): return iter([])
+            def __bool__(self): return False
+            def __getattr__(self, name): return self
+            def __getitem__(self, key): return self
+            def __len__(self): return 0
+            def to_dict(self): return {}
+
         class PackageAppMock:
-            class MockState:
-                def __getattr__(self, name): return None
-                def __setattr__(self, name, value): pass
             def __init__(self, settings_data, folder):
                 self.config = settings_data
                 self.app_root = folder
                 self.storage_path = str(folder / "build" / "storage")
                 self.logger = log
-                self.state = self.MockState()
+                self.state = MockObject()
+            
+            def __getattr__(self, name):
+                return MockObject()
+                
             def expose(self, *args, **kwargs): pass
             def broadcast(self, *args, **kwargs): pass
             def publish(self, *args, **kwargs): pass
@@ -161,10 +175,20 @@ class PluginModule(BuildModule):
 
         for p in plugin_objs:
             try:
+                # 1. Load Plugin for Hooks
                 p.load(mock_app)
                 p.invoke_package_hook(package_context)
+                
+                # 2. Auto-Harvest Dependencies (Crucial for Frozen Apps)
+                # Since plugin code is loaded dynamically, PyInstaller won't see its imports.
+                # We must explicitly tell it to bundle the declared dependencies.
+                deps = p.python_dependencies
+                if deps:
+                    log(f"  + Auto-injecting dependencies for {p.name}: {deps}", style="dim")
+                    package_context["hidden_imports"].extend(deps)
+
             except Exception as e:
-                log(f"Warning: Build hook for plugin '{p.name}' skipped: {e}", style="warning")
+                log(f"Warning: Build analysis for plugin '{p.name}' failed: {e}", style="warning")
 
         # Sync back modified values
         context.out_name = package_context["out_name"]
@@ -287,232 +311,6 @@ class IconModule(BuildModule):
             # Already an ICO, ICNS, etc.
             context.app_icon = str(icon_path.resolve())
 
+        # 4. Auto-include icon in bundle (so tray icons work)
         if context.app_icon and os.path.exists(context.app_icon):
             context.add_data.append(f"{context.app_icon}{os.pathsep}.")
-
-class CompileModule(BuildModule):
-    """
-    Compiles any remaining .py files in the dist directory to .pyd/.so extensions
-    using Cython, providing stronger protection than standard bytecode.
-    """
-    def post_build(self, context: BuildContext):
-        if context.is_onefile:
-            return
-
-        target_dir = context.dist_dir
-        if not target_dir.exists():
-            return
-
-        # Check for Cython availability
-        try:
-            import Cython.Build
-        except ImportError:
-            log("Warning: Cython not installed. Skipping binary compilation.", style="warning")
-            log("To enable .pyd compilation, run: pip install Cython", style="dim")
-            return
-
-        log("Compiling source files to native binaries...", style="dim")
-
-        # 1. Identify Target Files
-        py_files = []
-        for root, dirs, files in os.walk(target_dir):
-            for file in files:
-                if file.endswith(".py"):
-                    # Skip __init__.py usually to avoid package issues, or compile them carefully.
-                    # Compiling __init__.py is possible but sometimes tricky with finding packages.
-                    # For now, we compile everything.
-                    py_files.append(Path(root) / file)
-        
-        if not py_files:
-            return
-
-        # 2. Setup Build Environment (Detect Compiler)
-        env = os.environ.copy()
-        
-        # Check if we should use a portable compiler (Zig)
-        # This allows avoiding massive MSVC downloads on Windows.
-        try:
-           import shutil
-           zig_exe = shutil.which("zig")
-           if not zig_exe and sys.platform == "win32":
-               # Check standard Scripts location for 'pip install ziglang'
-               try:
-                   scripts = Path(sys.executable).parent / "Scripts"
-                   candidate = scripts / "zig.exe"
-                   if candidate.exists():
-                       zig_exe = str(candidate)
-               except Exception:
-                   pass
-           
-           if zig_exe:
-               log(f"Using portable compiler: {zig_exe}", style="dim")
-               # Configure generic CC/CXX for setuptools
-               # Zig cc acts 'cl-like' enough or 'gcc-like' enough depending on context.
-               # Setuptools on Windows usually defaults to MSVC. We need to trick it.
-               
-               env["CC"] = f'"{zig_exe}" cc'
-               env["CXX"] = f'"{zig_exe}" c++'
-               env["LDSHARED"] = f'"{zig_exe}" cc -shared'
-               
-               if sys.platform == "win32":
-                   # Force distutils to think we are using MinGW logic but with our compiler
-                   # We pass --compiler=mingw32 to setup later, but we must ensure
-                   # setup does not fail on "missing gcc". CC override handles the binary.
-                   pass
-        except Exception:
-            pass
-
-        # 3. Generate Build Script
-        # We use a temporary setup.py within the target directory to ensure relative path resolution works.
-        setup_script = """
-import os
-import sys
-from setuptools import setup
-from Cython.Build import cythonize
-
-# Avoid recursively finding the script itself
-ignore_files = {os.path.basename(__file__)}
-
-targets = []
-for root, dirs, files in os.walk("."):
-    for file in files:
-        if file.endswith(".py") and file not in ignore_files:
-            targets.append(os.path.join(root, file))
-
-if targets:
-    try:
-        setup(
-            ext_modules=cythonize(
-                targets, 
-                compiler_directives={'language_level': "3", 'always_allow_keywords': True},
-                force=True
-            ),
-        )
-    except Exception as e:
-        print(f"Setup Error: {e}")
-        sys.exit(1)
-"""
-        build_script_path = target_dir / "build_pyd_auto.py"
-        try:
-            build_script_path.write_text(setup_script)
-            
-            # 4. Execute Build
-            cmd = [sys.executable, str(build_script_path), "build_ext", "--inplace"]
-            
-            # If we are using Zig, we try to force 'mingw32' mode so setuptools generates
-            # standard flags instead of potentially incompatible MSVC /flags.
-            if env.get("CC") and "zig" in env["CC"] and sys.platform == "win32":
-                cmd.append("--compiler=mingw32")
-
-            # Use run_command_with_output to capture logs
-            ret_code = run_command_with_output(cmd, cwd=str(target_dir), env=env, style="dim")
-            
-            if ret_code != 0 and env.get("CC") and "zig" in env.get("CC", ""):
-                 log("Portable compilation failed. Retrying with default compiler...", style="warning")
-                 # Retry without forcing env
-                 cmd = [sys.executable, str(build_script_path), "build_ext", "--inplace"]
-                 ret_code = run_command_with_output(cmd, cwd=str(target_dir), style="dim")
-
-            if ret_code == 0:
-                # 5. Cleanup & Normalization
-                cleaned_count = 0
-                import shutil
-                
-                # Cleaning build artifacts
-                build_cache = target_dir / "build"
-                if build_cache.exists():
-                    shutil.rmtree(build_cache)
-                
-                for py_file in py_files:
-                    stem = py_file.stem
-                    parent = py_file.parent
-                    
-                    # Find generated extension
-                    # Windows: .cp310-win_amd64.pyd, Linux: .cpython-310-x86_64-linux-gnu.so
-                    extensions = list(parent.glob(f"{stem}.*.pyd")) + list(parent.glob(f"{stem}.*.so"))
-                    
-                    # Also check for simple names immediately
-                    if (parent / f"{stem}.pyd").exists():
-                        extensions.append(parent / f"{stem}.pyd")
-                    if (parent / f"{stem}.so").exists():
-                        extensions.append(parent / f"{stem}.so")
-
-                    if extensions:
-                        # Success: Remove original .py
-                        try:
-                            py_file.unlink()
-                            cleaned_count += 1
-                        except Exception:
-                            pass
-                            
-                        # Remove generated .c file
-                        c_file = py_file.with_suffix(".c")
-                        if c_file.exists():
-                            try:
-                                c_file.unlink()
-                            except Exception:
-                                pass
-
-                        # Rename to simple name if complex (e.g. module.cp39-win.pyd -> module.pyd)
-                        # This ensures imports work simply without relying on the specific python tag,
-                        # though Python does support tagged imports. Simple names are cleaner.
-                        best_cand = extensions[0]
-                        simple_ext = ".pyd" if sys.platform == "win32" else ".so"
-                        simple_name = parent / f"{stem}{simple_ext}"
-                        
-                        if best_cand.name != simple_name.name:
-                            try:
-                                if simple_name.exists():
-                                    simple_name.unlink()
-                                best_cand.rename(simple_name)
-                            except Exception:
-                                pass
-                                
-                log(f" secured: {cleaned_count} modules compiled to native binaries.", style="dim")
-            
-            else:
-                log("Warning: Binary compilation failed.", style="warning")
-                if "zig" not in env.get("CC", ""):
-                     log("Tip: Install 'ziglang' for a portable 40mb compiler: pip install ziglang", style="dim")
-
-        except Exception as e:
-            log(f"Warning: Cython module failed: {e}", style="warning")
-        
-        finally:
-            if build_script_path.exists():
-                build_script_path.unlink()
-
-class MetadataCleaningModule(BuildModule):
-    """
-    Removes .dist-info directories from the build to reduce size and noise.
-    """
-    def post_build(self, context: BuildContext):
-        if context.is_onefile:
-            return
-
-        target_dir = context.dist_dir
-        if not target_dir.exists():
-            return
-
-        # Typically in _internal or just the root Lib site-packages depending on layout
-        # For PyInstaller: _internal
-        internal_dir = target_dir / "_internal"
-        if not internal_dir.exists():
-            # Sometimes it's just in the root if not using _internal feature or older pyinstaller
-            internal_dir = target_dir
-
-        log("Pruning package metadata (.dist-info)...", style="dim")
-        count = 0
-        for root, dirs, files in os.walk(internal_dir):
-            for d in dirs:
-                if d.endswith(".dist-info"):
-                    full_path = Path(root) / d
-                    try:
-                        import shutil
-                        shutil.rmtree(full_path)
-                        count += 1
-                    except Exception:
-                        pass
-        
-        if count > 0:
-            log(f"Cleaned {count} metadata directories.", style="dim")
