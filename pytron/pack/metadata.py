@@ -179,6 +179,12 @@ class MetadataEditor:
             ),
         }
 
+        # Merge user custom plist settings
+        custom_plist = settings.get("macos_plist")
+        if custom_plist and isinstance(custom_plist, dict):
+            info_plist.update(custom_plist)
+            log(f"Merged {len(custom_plist)} custom Info.plist overrides", style="dim")
+
         plist_path = contents_dir / "Info.plist"
         with open(plist_path, "wb") as f:
             plistlib.dump(info_plist, f)

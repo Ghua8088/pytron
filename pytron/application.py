@@ -466,3 +466,89 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
             except Exception as e:
                 self.logger.error(f"Error unloading plugin {plugin.name}: {e}")
         self.plugins.clear()
+
+    def audit_dependencies(self):
+        """
+        Packaging Heuristic:
+        Traverses all exposed functions to find hidden dependencies (imports inside functions).
+        Triggers sys.audit('import') events for found modules so packaging tools can capture them.
+        """
+        import inspect
+        import dis
+        import sys
+
+        visited = set()
+
+        def _report(name, file=None):
+            if name:
+                sys.audit("import", name, file, None, None, None)
+
+        def _inspect(func, depth=0):
+            if depth > 5:
+                return
+            try:
+                if func in visited:
+                    return
+                visited.add(func)
+            except:
+                return
+
+            try:
+                # 1. Handle Classes/Instances (if stored directly)
+                if inspect.isclass(func) or (
+                    not callable(func) and hasattr(func, "__dict__")
+                ):
+                    if hasattr(func, "__module__") and func.__module__:
+                        _report(func.__module__)
+                    for attr_name in dir(func):
+                        if attr_name.startswith("_"):
+                            continue
+                        try:
+                            val = getattr(func, attr_name)
+                            if inspect.isfunction(val) or inspect.ismethod(val):
+                                _inspect(val, depth + 1)
+                        except:
+                            pass
+                    return
+
+                # Report the module of the function itself
+                if hasattr(func, "__module__") and func.__module__:
+                    _report(func.__module__)
+
+                # Check method self if applicable
+                if inspect.ismethod(func) and hasattr(func, "__self__"):
+                    if hasattr(func.__self__, "__module__"):
+                        _report(func.__self__.__module__)
+
+                # 2. Inspect closures and globals
+                closures = inspect.getclosurevars(func)
+
+                for name, value in closures.globals.items():
+                    if inspect.ismodule(value):
+                        _report(value.__name__, getattr(value, "__file__", None))
+                    elif hasattr(value, "__module__") and value.__module__:
+                        _report(value.__module__)
+                        if inspect.isfunction(value) or inspect.isclass(value):
+                            _inspect(value, depth + 1)
+
+                for name, value in closures.nonlocals.items():
+                    if hasattr(value, "__module__") and value.__module__:
+                        _report(value.__module__)
+                        if inspect.isfunction(value):
+                            _inspect(value, depth + 1)
+
+                # 3. Bytecode Analysis
+                if hasattr(func, "__code__"):
+                    for instr in dis.get_instructions(func):
+                        if instr.opname == "IMPORT_NAME":
+                            _report(instr.argval)
+
+            except Exception:
+                pass
+
+        # Trigger inspection for all registered entry points
+        self.logger.info("Running Packaging Heuristic on exposed functions...")
+        for info in self._exposed_functions.values():
+            func = info.get("func")
+            if func:
+                _inspect(func)

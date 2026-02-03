@@ -48,7 +48,10 @@ class AssetModule(BuildModule):
         if getattr(context, "smart_assets", False):
             try:
                 smart = get_smart_assets(
-                    context.script_dir, frontend_dist=frontend_dist
+                    context.script_dir,
+                    frontend_dist=frontend_dist,
+                    include_patterns=context.settings.get("include_patterns"),
+                    exclude_patterns=context.settings.get("exclude_patterns"),
                 )
                 if smart:
                     context.add_data.extend(smart)
@@ -67,8 +70,8 @@ class EngineModule(BuildModule):
         global_engine_path = Path.home() / ".pytron" / "engines" / "chrome"
         if global_engine_path.exists():
             log(f"Auto-bundling Chrome Engine binaries", style="dim")
-            # Bundle into pytron/dependancies/chrome
-            dest_dep = os.path.join("pytron", "dependancies", "chrome")
+            # Bundle into pytron/dependencies/chrome
+            dest_dep = os.path.join("pytron", "dependencies", "chrome")
             context.add_data.append(f"{global_engine_path}{os.pathsep}{dest_dep}")
 
             # Bundle shell source
@@ -141,16 +144,26 @@ class PluginModule(BuildModule):
     def prepare(self, context: BuildContext):
         from ..plugin import discover_plugins
 
-        plugins_dir = context.script_dir / "plugins"
-        if not plugins_dir.exists():
+        plugins_dir_name = "plugins"
+        plugins_path = context.script_dir / plugins_dir_name
+
+        # Respect custom plugins_dir from settings
+        custom_plugins_dir = context.settings.get("plugins_dir")
+        if custom_plugins_dir:
+            # Resolve relative to script dir
+            plugins_path = context.script_dir / custom_plugins_dir
+            plugins_dir_name = Path(custom_plugins_dir).name
+
+        if not plugins_path.exists():
             return
 
         # Automatically bundle the plugins directory
-        log(f"Bundling plugins directory: {plugins_dir.name}", style="dim")
-        context.add_data.append(f"{plugins_dir}{os.pathsep}plugins")
+        log(f"Bundling plugins directory: {plugins_path.name}", style="dim")
+        # Always bundle into 'plugins' at root of dist so App can find them easily
+        context.add_data.append(f"{plugins_path}{os.pathsep}plugins")
 
         log("Evaluating plugins for packaging hooks...", style="dim")
-        plugin_objs = discover_plugins(str(plugins_dir))
+        plugin_objs = discover_plugins(str(plugins_path))
 
         # Robust mock app for hook context
         class MockObject:
@@ -245,10 +258,16 @@ class PluginModule(BuildModule):
 
 class HookModule(BuildModule):
     def prepare(self, context: BuildContext):
-        if not (
+        # Enable if:
+        # 1. --collect-all or --force-hooks CLI flag
+        # 2. "force_hooks": true in settings.json
+        should_run = (
             getattr(context, "collect_all", False)
             or getattr(context, "force_hooks", False)
-        ):
+            or context.settings.get("force_hooks", False)
+        )
+
+        if not should_run:
             return
 
         from .pipeline import log
@@ -264,10 +283,204 @@ class HookModule(BuildModule):
 
         collect_mode = getattr(context, "collect_all", False)
 
+        # Check for requirements.json to seed the whitelist
+        whitelist = None
+        req_file = context.script_dir / "requirements.json"
+
+        # If the user explicitly requested force_hooks without a list,
+        # or if they have collecting all mode on, we might default to everything (blacklist only).
+        # BUT, if requirements.json exists, we should probably use it to be smarter.
+
+        # NOTE: The user asked to use requirements.json specifically to "hard do hidden imports".
+        # So we prioritize that if it exists.
+
+        if req_file.exists():
+            # Check for Crystal Mode (Dynamic Audit)
+            crystal_active = context.settings.get("crystal_mode", False)
+
+            # --- VIRTUAL ENTRY POINT (VEP) GENERATION ---
+            # If enabled, we generate a synthetic root based on app.expose
+            use_vep = context.settings.get(
+                "virtual_entry_point", True
+            )  # Default to True for Crystal users
+
+            if crystal_active and use_vep:
+                try:
+                    from .virtual_root import VirtualRootGenerator
+
+                    vep_gen = VirtualRootGenerator(context.script_dir)
+                    vep_gen.scan()
+
+                    # Generate VEP file
+                    vep_path = context.script_dir / "_virtual_root.py"
+                    vep_gen.generate(vep_path)
+
+                    # CRITICAL: Switch the context script to the VEP!
+                    # This means audit AND build will focus on this file.
+                    log(
+                        f"Switched build target to Virtual Entry Point: {vep_path.name}",
+                        style="warning",
+                    )
+                    context.script = vep_path
+
+                except Exception as e:
+                    log(f"VEP Generation Failed: {e}", style="warning")
+
+            if crystal_active:
+                try:
+                    # UX: Warn the user that we are about to execute their code
+                    from rich.prompt import Confirm
+
+                    log(
+                        "[bold yellow]Crystal Mode Activated[/bold yellow]",
+                        style="none",
+                    )
+                    console.print(
+                        "Pytron needs to [bold red]EXECUTE[/bold red] your application to map the true dependency graph."
+                    )
+                    console.print(
+                        "This ensures 100% accuracy but requires trust in the code you are packaging."
+                    )
+
+                    if Confirm.ask("Proceed with execution audit?", default=True):
+                        from .crystal import AppAuditor
+
+                        auditor = AppAuditor(context.script)
+                        manifest = auditor.run_audit()
+                    else:
+                        log(
+                            "Audit skipped by user. Dependency detection may be incomplete.",
+                            style="warning",
+                        )
+                        manifest = None
+
+                    if manifest:
+                        live_modules = manifest.get("modules", [])
+                        live_files = manifest.get("files", [])
+
+                        log(
+                            f"Crystal Manifest Loaded: {len(live_modules)} modules confirmed alive.",
+                            style="info",
+                        )
+
+                        # Feed the Truth to PyInstaller
+                        # 1. Hidden Imports: Anything audit saw that isn't statically obvious
+                        # We just dump everything into hidden imports to be safe?
+                        # Or checking "top level" vs "submodule".
+                        # Safest is to ensure top-level packages are collected.
+
+                        # Also check for known tough guys in the live list
+                        audit_flags = []
+                        for mod in live_modules:
+                            # If we see skimage.feature._texture, we ensure 'skimage' is collected
+                            root = mod.split(".")[0]
+                            # Simple heuristic: if we see a module loaded, we can hint PyInstaller
+                            # context.hidden_imports.append(mod)
+                            # However, adding 5000 hidden imports might be slow.
+                            pass
+
+                        # For now, let's keep the Intelligent Introspection (Smart Harvest) running
+                        # as it's cleaner for flags, but let's use the Audit to VALIDATE or AUGMENT it.
+
+                        # Specifically for the user's issue:
+                        # If 'skimage' was seen in audit, we force collect it.
+                        seen_roots = {m.split(".")[0] for m in live_modules}
+                        for root in seen_roots:
+                            # If it matches a complex package, force collect
+                            if root in [
+                                "skimage",
+                                "pandas",
+                                "numpy",
+                                "scipy",
+                                "torch",
+                                "cv2",
+                            ]:
+                                flag = f"--collect-all={root}"
+                                if flag not in context.extra_args:
+                                    context.extra_args.append(flag)
+                                    log(
+                                        f"Crystal Audit: Saw {root} running -> Enforcing {flag}",
+                                        style="success",
+                                    )
+
+                except Exception as e:
+                    log(f"Crystal Audit Failed: {e}", style="warning")
+
+            # Use Intelligent Introspection (AI Oracle)
+            try:
+                from .graph import GraphBuilder, DependencyOracle
+
+                log("Spawning Dependency Oracle (ML Brain)...", style="info")
+                builder = GraphBuilder(context.script_dir)
+                graph = builder.scan_project()
+
+                oracle = DependencyOracle(graph)
+                oracle.predict()
+
+                smart_flags = []
+
+                # Convert Graph Predictions to PyInstaller Flags
+                for edge in graph.edges:
+                    if edge.type == "predicted":
+                        # Handle different prediction types
+                        if edge.target.endswith(".*"):
+                            # Wildcard -> Collect Submodules
+                            pkg = edge.target[:-2]
+                            flag = f"--collect-submodules={pkg}"
+                            smart_flags.append(flag)
+                        elif edge.target == "<resource_data>":
+                            # Generic Data -> Collect All (Safest for now)
+                            pkg = edge.source.split(".")[
+                                0
+                            ]  # Assuming source is module name
+                            flag = f"--collect-all={pkg}"
+                            smart_flags.append(flag)
+                        elif edge.target.startswith("collect_"):
+                            # Oracle explicit instruction "collect_all:pkg" etc
+                            # But our edge target usually is just the dependency
+                            pass
+                        else:
+                            # Standard hidden import
+                            flag = f"--hidden-import={edge.target}"
+                            smart_flags.append(flag)
+
+                # Deduplicate
+                smart_flags = list(set(smart_flags))
+
+                if smart_flags:
+                    log(
+                        f"Oracle: Predicted {len(smart_flags)} missing dependencies.",
+                        style="success",
+                    )
+                    for f in smart_flags:
+                        log(f"  + {f}", style="dim")
+                    context.extra_args.extend(smart_flags)
+
+                # We can still pass the whitelist to the nuclear hook generator if we want absolute redundancy,
+                # but --collect-all usually supersedes hook generation for specific packages.
+                # However, for non-collect-all packages, the hook generator is still useful for standard hidden imports.
+
+                # Let's rebuild the whitelist for the hook generator (standard safe fallback)
+                import json
+
+                if req_file.exists():
+                    data = json.loads(req_file.read_text())
+                    deps = data.get("dependencies", [])
+                    if deps:
+                        whitelist = set()
+                        for d in deps:
+                            clean = d.split("==")[0].split(">")[0].split("<")[0].strip()
+                            if "/" not in clean and "\\" not in clean and clean:
+                                whitelist.add(clean)
+                        whitelist = list(whitelist)
+            except Exception as e:
+                log(f"Oracle prediction failed: {e}", style="warning")
+
         generate_nuclear_hooks(
             temp_hooks_dir,
             collect_all_mode=collect_mode,
             search_path=site_packages,
+            whitelist=whitelist,
         )
 
         # PyInstaller expects hook paths. We'll pass it via extra_args or a dedicated field.
@@ -377,6 +590,15 @@ class IconModule(BuildModule):
             # Already an ICO, ICNS, etc.
             context.app_icon = str(icon_path.resolve())
 
-        # 4. Auto-include icon in bundle (so tray icons work)
+        # 4. Auto-include icon in bundle is dangerous because PyInstaller usually handles it.
+        # If we explicitly add it as data to '.' (root), and PyInstaller *also* puts it there or
+        # tries to use it as the exe icon, it causes the "File already exists" crash.
+        # PyInstaller automatically embeds the icon into the EXE metadata via --icon.
+        # If the user needs to load it at runtime (e.g., tray icon), they should use a different name
+        # or rely on the embedded resource.
+        # For now, let's DISABLE this implicit copy or rename it to avoid collision.
+
         if context.app_icon and os.path.exists(context.app_icon):
-            context.add_data.append(f"{context.app_icon}{os.pathsep}.")
+            # We rename it in the bundle to avoid collision with the directory or other files
+            # context.add_data.append(f"{context.app_icon}{os.pathsep}resources/app_icon.ico")
+            pass

@@ -197,13 +197,13 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 "libwebview.so" if platform.system() == "Linux" else "libwebview.dylib"
             )
         )
-        dll_path = pkg_root / "dependancies" / dll_name
+        dll_path = pkg_root / "dependencies" / dll_name
 
         if dll_path.exists():
             console.print(f"  [success]✓[/success] Native Bridge: {dll_name} found")
         else:
             console.print(
-                f"  [error]✗[/error] Native Bridge: {dll_name} MISSING from {pkg_root / 'dependancies'}"
+                f"  [error]✗[/error] Native Bridge: {dll_name} MISSING from {pkg_root / 'dependencies'}"
             )
 
     except Exception as e:

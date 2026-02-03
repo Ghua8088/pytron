@@ -34,8 +34,8 @@ def run_pyinstaller_build(context: BuildContext):
                 else "libwebview_x64.dylib"
             )
 
-        dll_src = context.package_dir / "pytron" / "dependancies" / dll_name
-        dll_dest = os.path.join("pytron", "dependancies")
+        dll_src = context.package_dir / "pytron" / "dependencies" / dll_name
+        dll_dest = os.path.join("pytron", "dependencies")
 
         # 2. Build Makespec Command
         makespec_cmd = [
@@ -98,10 +98,30 @@ def run_pyinstaller_build(context: BuildContext):
         for p in context.pathex:
             makespec_cmd.append(f"--paths={p}")
 
+        # Force Package (Collect All from Settings)
+        forced_pkgs = context.settings.get("force-package", [])
+        if forced_pkgs:
+            for pkg in forced_pkgs:
+                # Use collect-all to ensure data files (like .pyi stubs for lazy_loader) are included
+                makespec_cmd.append(f"--collect-all={pkg}")
+            log(f"Forcing collect-all for packages: {forced_pkgs}", style="dim")
+
         makespec_cmd.extend(context.extra_args)
 
         if context.app_icon:
             makespec_cmd.extend(["--icon", context.app_icon])
+
+        # Splash Screen
+        splash_image = context.settings.get("splash_image")
+        if splash_image:
+            splash_path = context.script_dir / splash_image
+            if splash_path.exists():
+                makespec_cmd.extend(["--splash", str(splash_path)])
+                log(f"Splash screen enabled: {splash_image}", style="dim")
+            else:
+                log(
+                    f"Warning: Splash image not found at {splash_path}", style="warning"
+                )
 
         # Run Makespec
         log(f"Running makespec: {' '.join(makespec_cmd)}", style="dim")

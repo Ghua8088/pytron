@@ -182,7 +182,12 @@ class ConfigMixin:
                 client.close()
             except Exception:
                 pass
-            sys.exit(0)
+            # Critical: Use os._exit(0) instead of sys.exit(0)
+            # sys.exit() raises SystemExit, which can be caught by the bootstrap wrapper
+            # or Cython, leading to a false positive "Shield Error".
+            # os._exit() terminates immediately at the OS level, which is safe here
+            # because we want to vanish instantly after forwarding the intent.
+            os._exit(0)
 
     def _setup_storage(self, safe_title):
         if sys.platform == "win32":

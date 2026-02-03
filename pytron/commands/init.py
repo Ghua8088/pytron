@@ -100,6 +100,8 @@ def cmd_init(args: argparse.Namespace) -> int:
         "plugins_dir": None,
         "plugins": [],
         # Packaging & Build
+        "crystal_mode": False,  # High-Security Runtime Audit
+        "virtual_entry_point": False,  # Synthesized Entry Point Strategy
         "splash_image": None,
         "force-package": [],
         "include_patterns": [],

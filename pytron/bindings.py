@@ -213,7 +213,7 @@ else:
     candidates = [
         os.path.join(app_root, "runtime", lib_name),
         os.path.join(app_root, "bin", lib_name),
-        os.path.join(os.path.dirname(__file__), "dependancies", lib_name),
+        os.path.join(os.path.dirname(__file__), "dependencies", lib_name),
     ]
 
     dll_path = candidates[-1]  # Default to internal
@@ -224,11 +224,11 @@ else:
 
     # Frozen app handling
     if hasattr(sys, "frozen") and hasattr(sys, "_MEIPASS"):
-        alt_path = os.path.join(sys._MEIPASS, "pytron", "dependancies", lib_name)
+        alt_path = os.path.join(sys._MEIPASS, "pytron", "dependencies", lib_name)
         if os.path.exists(alt_path):
             dll_path = alt_path
 
-    # Force Load dependancies for Windows
+    # Force Load dependencies for Windows
     if CURRENT_PLATFORM == "Windows" and os.path.dirname(dll_path) != os.path.dirname(
         __file__
     ):
@@ -246,7 +246,7 @@ else:
             print(f"[Pytron] Warning: Failed to set DLL directory: {e}")
 
     if not os.path.exists(dll_path):
-        dll_path = os.path.join(os.path.dirname(__file__), "dependancies", lib_name)
+        dll_path = os.path.join(os.path.dirname(__file__), "dependencies", lib_name)
 
     _raw_lib = None
     try:

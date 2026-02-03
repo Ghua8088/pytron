@@ -14,6 +14,7 @@ from .helpers import (
     get_python_executable,
     get_venv_site_packages,
 )
+from .utils import resolve_package_metadata
 from ..pack.assets import get_smart_assets
 from ..pack.installers import build_installer
 from ..pack.utils import cleanup_dist
@@ -99,38 +100,8 @@ def cmd_package(args: argparse.Namespace) -> int:
             log(f"App packaged successfully: dist/{out_name}", style="bold green")
         return ret_code
 
-    out_name = args.name
-    if not out_name:
-        # Try to get name from settings.json
-        try:
-            settings_path = script.parent / "settings.json"
-            if settings_path.exists():
-                settings = json.loads(settings_path.read_text())
-                title = settings.get("title")
-                if title:
-                    # Sanitize title to be a valid filename
-                    # Replace non-alphanumeric (except - and _) with _
-                    out_name = "".join(
-                        c if c.isalnum() or c in ("-", "_") else "_" for c in title
-                    )
-                    # Remove duplicate underscores and strip
-                    while "__" in out_name:
-                        out_name = out_name.replace("__", "_")
-                    out_name = out_name.strip("_")
-        except Exception:
-            pass
-
-    if not out_name:
-        out_name = script.stem
-
-    # Load settings early for context
-    settings = {}
-    try:
-        settings_path = script.parent / "settings.json"
-        if settings_path.exists():
-            settings = json.loads(settings_path.read_text())
-    except Exception:
-        pass
+    # Resolve output name and load settings
+    out_name, settings = resolve_package_metadata(script, args.name)
 
     # --- Modular Build Pipeline ---
     from ..pack.pipeline import BuildContext, Pipeline
@@ -166,6 +137,31 @@ def cmd_package(args: argparse.Namespace) -> int:
     ctx.force_hooks = getattr(args, "force_hooks", False)
     ctx.add_data = args.add_data or []
 
+    # --- Crystal Integrity Check ---
+    if getattr(args, "crystal", False):
+        from ..pack.crystal import AppAuditor
+
+        auditor = AppAuditor(script)
+        log(f"Running Crystal Integrity Check on {script}...", style="cyan")
+
+        # Run the audit (this generates requirements.lock.json)
+        manifest = auditor.run_audit()
+
+        if manifest:
+            # Inject discovered modules as hidden imports for the builder
+            discovered_modules = manifest.get("modules", [])
+            log(
+                f"Crystal detected {len(discovered_modules)} hidden dependencies.",
+                style="green",
+            )
+
+            current_hidden = settings.get("hidden_imports", [])
+            # Merge unique items
+            settings["hidden_imports"] = list(set(current_hidden + discovered_modules))
+
+            # Also ensure data files are tracked if needed (future expansion)
+            # data_files = manifest.get("files", [])
+
     # Initialize Pipeline
     pipeline = Pipeline(ctx)
 
@@ -178,7 +174,7 @@ def cmd_package(args: argparse.Namespace) -> int:
         PluginModule()
     )  # Important: Plugin module handles custom add_data
 
-    if args.secure:
+    if args.secure and ctx.engine != "rust":
         from ..pack.secure import SecurityModule
 
         pipeline.add_module(SecurityModule())
@@ -206,7 +202,14 @@ def cmd_package(args: argparse.Namespace) -> int:
     pipeline.add_module(InstallerModule())
 
     # Run Pipeline with Core Compiler
-    if args.nuitka:
+    if ctx.engine == "rust":
+        from ..pack.rust_engine import RustEngine
+
+        rust_engine = RustEngine()
+        # Rust Engine handles the entire build process natively
+        ret_code = pipeline.run(rust_engine.build)
+
+    elif args.nuitka:
         from ..pack.nuitka import run_nuitka_build
 
         # TODO: Refactor Nuitka to use BuildContext too for full parity

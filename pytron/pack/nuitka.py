@@ -86,9 +86,9 @@ def run_nuitka_build(context: BuildContext):
             else "libwebview_x64.dylib"
         )
 
-    dll_src = context.package_dir / "pytron" / "dependancies" / dll_name
+    dll_src = context.package_dir / "pytron" / "dependencies" / dll_name
     if dll_src.exists():
-        cmd.append(f"--include-data-file={dll_src}=pytron/dependancies/{dll_name}")
+        cmd.append(f"--include-data-file={dll_src}=pytron/dependencies/{dll_name}")
 
     for item in context.add_data:
         if os.pathsep in item:

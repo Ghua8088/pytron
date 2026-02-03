@@ -136,7 +136,7 @@ class ChromeWebView(Webview):
         if not shell_path:
             # A. Package Path (PRIORITY for Frozen/Packaged Apps)
             # Checks for: {App}.exe, {App}-Renderer.exe, {App}-Engine.exe, and electron.exe
-            # in BOTH the flat directory (legacy) and the standard 'pytron/dependancies/chrome' folder.
+            # in BOTH the flat directory (legacy) and the standard 'pytron/dependencies/chrome' folder.
             renamed_engine = None
             if getattr(sys, "frozen", False):
                 exe_name = os.path.splitext(os.path.basename(sys.executable))[0]
@@ -150,7 +150,7 @@ class ChromeWebView(Webview):
                 # Current Exe Dir (Flat Layout)
                 base_dir = os.path.dirname(sys.executable)
                 # Standard Pytron Layout (inside _internal or root)
-                std_dir = os.path.join(base_dir, "pytron", "dependancies", "chrome")
+                std_dir = os.path.join(base_dir, "pytron", "dependencies", "chrome")
                 # Also check sys._MEIPASS if available (PyInstaller OneFile - though Chrome uses OneDir usually)
                 mei_dir = getattr(sys, "_MEIPASS", None)
 
@@ -159,7 +159,7 @@ class ChromeWebView(Webview):
                     search_roots.append(std_dir)
                 if mei_dir:
                     search_roots.append(
-                        os.path.join(mei_dir, "pytron", "dependancies", "chrome")
+                        os.path.join(mei_dir, "pytron", "dependencies", "chrome")
                     )
 
                 for root in search_roots:
