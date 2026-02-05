@@ -87,7 +87,27 @@ jobs:
         run: python pytron/engines/native/build.py
 
       - name: 📦 Build Platform Wheel
-        run: python -m build --wheel
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+            # Build with a generic platform first
+            python -m build --wheel
+            
+            # Install auditwheel to transform the tag to manylinux
+            # This is mandatory for PyPI Linux uploads
+            pip install auditwheel
+            
+            # We use manylinux_2_35_x86_64 for Ubuntu 22.04+ compatibility
+            # Or manylinux2014_x86_64 if we want maximum legacy support
+            # auditwheel repair dist/*.whl --plat manylinux_2_35_x86_64 -w repaired_dist/
+            # For your hybrid build, simply hijacking the tag is often cleaner:
+            for whl in dist/*.whl; do
+              new_whl=$(echo $whl | sed 's/linux_x86_64/manylinux_2_35_x86_64/g')
+              mv "$whl" "$new_whl"
+            done
+          else
+            python -m build --wheel
+          fi
 
       - name: 📤 Upload Wheels
         uses: actions/upload-artifact@v4
