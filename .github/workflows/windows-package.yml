@@ -42,7 +42,7 @@ jobs:
         run: pytron package app.py --smart-assets --secure --installer
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: pytron-windows-build
           path: dist/
