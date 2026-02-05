@@ -22,12 +22,13 @@ try:
         def finalize_options(self):
             super().finalize_options()
             # This is the "Universal ABI3" tag
-            self.py_limited_api = "cp37" 
+            self.py_limited_api = "cp37"
 
         def get_tag(self):
             python, abi, plat = super().get_tag()
             # Force py3-none for any platform build
             return "py3", "none", plat
+
 except ImportError:
     bdist_wheel = None
 
