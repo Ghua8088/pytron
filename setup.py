@@ -19,12 +19,15 @@ try:
     from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 
     class bdist_wheel(_bdist_wheel):
+        def finalize_options(self):
+            super().finalize_options()
+            # This is the "Universal ABI3" tag
+            self.py_limited_api = "cp37" 
+
         def get_tag(self):
             python, abi, plat = super().get_tag()
-            # Since we use ABI3, we are compatible with any Python 3.x
-            if python.startswith("cp"):
-                return "py3", "none", plat
-            return python, abi, plat
+            # Force py3-none for any platform build
+            return "py3", "none", plat
 except ImportError:
     bdist_wheel = None
 
