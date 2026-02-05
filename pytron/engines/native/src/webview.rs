@@ -37,7 +37,9 @@ impl NativeWebview {
     pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool) -> PyResult<Self> {
         setup_panic_hook();
 
-        let safe_url = if url_str.starts_with("pytron://") {
+        let safe_url = if url_str == "about:blank" {
+             url_str
+        } else if url_str.starts_with("pytron://") {
              url_str
         } else if url_str.starts_with("http") {
              url_str
@@ -88,8 +90,75 @@ impl NativeWebview {
              builder = builder.with_https_scheme(true);
         }
 
+        let proxy_for_nav = proxy.clone();
+        builder = builder.with_navigation_handler(move |url: String| {
+            // Check if it's an internal application link or an external one
+            if !url.starts_with("pytron://") && !url.starts_with("https://pytron.") && url != "about:blank" {
+                // External! Send to system browser
+                let _ = proxy_for_nav.send_event(UserEvent::OpenExternal(url.clone()));
+                return false; // Prevent internal navigation
+            }
+            true // Allow internal navigation
+        });
+
+        let proxy_for_new_window = proxy.clone();
+        builder = builder.with_new_window_req_handler(move |url: String| {
+            // For new windows (target="_blank"), always prefer external browser
+            let _ = proxy_for_new_window.send_event(UserEvent::OpenExternal(url.clone()));
+            false // Prevent internal window creation
+        });
+
         builder = builder.with_initialization_script(r#"
             window.pytron_is_native = true;
+            
+            // --- DE-BROWSERIFY CORE ---
+            (function() {
+                const isDebug = window.location.search.includes('debug=true') || window.__PYTRON_DEBUG__;
+                
+                // 1. Kill Context Menu (Unless debugging)
+                if (!isDebug) {
+                    document.addEventListener('contextmenu', e => e.preventDefault());
+                }
+
+                // 2. Kill "Ghost" Drags (images/links flying around)
+                document.addEventListener('dragstart', e => {
+                    if (e.target.tagName === 'IMG' || e.target.tagName === 'A') e.preventDefault();
+                });
+
+                // 3. Kill Browser Shortcuts
+                window.addEventListener('keydown', e => {
+                    const forbidden = ['r', 'p', 's', 'j', 'u', 'f'];
+                    if (e.ctrlKey && forbidden.includes(e.key.toLowerCase())) e.preventDefault();
+                    if (e.key === 'F5' || e.key === 'F3' || (e.ctrlKey && e.key === 'f')) e.preventDefault();
+                    // Block Zoom
+                    if (e.ctrlKey && (e.key === '=' || e.key === '-' || e.key === '0')) e.preventDefault();
+                }, true);
+
+                // 4. Kill System UI Styles (Selection, Outlines, Rubber-banding)
+                const style = document.createElement('style');
+                style.textContent = `
+                    * { 
+                        -webkit-user-select: none; 
+                        user-select: none;
+                        -webkit-user-drag: none; 
+                        -webkit-tap-highlight-color: transparent;
+                        outline: none !important;
+                    }
+                    input, textarea, [contenteditable], [contenteditable] * { 
+                        -webkit-user-select: text !important; 
+                        user-select: text !important;
+                    }
+                    html, body {
+                        overscroll-behavior: none !important;
+                        cursor: default;
+                    }
+                    a, button, input[type="button"], input[type="submit"] {
+                        cursor: pointer;
+                    }
+                `;
+                document.head ? document.head.appendChild(style) : document.addEventListener('DOMContentLoaded', () => document.head.appendChild(style));
+            })();
+
             window.pytron = window.pytron || {};
             window.pytron.is_ready = true;
             window.__pytron_native_bridge = (method, args) => {
@@ -377,6 +446,30 @@ impl NativeWebview {
                                     if !seq.is_empty() {
                                         let js = format!(r#"if (window._rpc && window._rpc['{seq}']) {{ window._rpc['{seq}'].resolve({ret}); delete window._rpc['{seq}']; }}"#, seq=seq, ret=ret);
                                         let _ = state.webview.evaluate_script(&js);
+                                    }
+                                }
+
+                                UserEvent::OpenExternal(url) => {
+                                    #[cfg(target_os = "windows")]
+                                    {
+                                        // Use powershell to ensure the URL is handled correctly by the default browser
+                                        let _ = std::process::Command::new("powershell")
+                                            .arg("-NoProfile")
+                                            .arg("-Command")
+                                            .arg(format!("Start-Process '{}'", url))
+                                            .spawn();
+                                    }
+                                    #[cfg(target_os = "macos")]
+                                    {
+                                        let _ = std::process::Command::new("open")
+                                            .arg(&url)
+                                            .spawn();
+                                    }
+                                    #[cfg(target_os = "linux")]
+                                    {
+                                        let _ = std::process::Command::new("xdg-open")
+                                            .arg(&url)
+                                            .spawn();
                                     }
                                 }
 

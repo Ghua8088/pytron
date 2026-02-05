@@ -396,9 +396,16 @@ async function createWindow(options = {}) {
     // Simple Pruned Webview: Remove Menu
     mainWindow.setMenu(null);
 
-    // External Links: Open in Default Browser (Ditto webview behavior)
+    // External Links: Open in Default Browser (Maintain "Application" vibe)
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+        if (!url.startsWith('pytron://') && !url.startsWith('https://pytron.') && url !== 'about:blank') {
+            event.preventDefault();
+            shell.openExternal(url);
+        }
+    });
+
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-        if (url.startsWith('https:') || url.startsWith('http:')) {
+        if (!url.startsWith('pytron://') && !url.startsWith('https://pytron.') && url !== 'about:blank') {
             shell.openExternal(url);
             return { action: 'deny' };
         }

@@ -27,4 +27,5 @@ pub enum UserEvent {
     TrayMenuClick(String), // id
     SetDecorations(bool),
     MessageBox(String, String, String, String), // Title, Message, Level, Seq
+    OpenExternal(String),
 }
