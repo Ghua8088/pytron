@@ -185,7 +185,7 @@ def patch_pytron_app():
                 if func is not None:
                     try:
                         n = getattr(func, "__name__", str(func))
-                        print(f"[Crystal] Analyzing exposed: {n}")
+                        print(f"[Crystal] Analyzing exposed: {{n}}")
                         recursive_inspect(func)
                     except: pass
                 

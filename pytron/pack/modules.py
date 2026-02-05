@@ -4,7 +4,7 @@ import json
 import shutil
 from pathlib import Path
 from .pipeline import BuildModule, BuildContext
-from ..console import log
+from ..console import log, console
 from .assets import get_smart_assets
 from .metadata import MetadataEditor
 
