@@ -17,12 +17,19 @@ pub fn setup_panic_hook() {
     });
 }
 
-pub struct SendWrapper<T>(T);
+pub struct SendWrapper<T>(pub T);
 unsafe impl<T> Send for SendWrapper<T> {}
 unsafe impl<T> Sync for SendWrapper<T> {}
-impl<T> SendWrapper<T> { 
+
+impl<T> SendWrapper<T> {
     pub fn new(val: T) -> Self { Self(val) }
-    pub fn take(self) -> T { self.0 } 
+    pub fn take(self) -> T { self.0 }
+}
+
+impl<T: Clone> Clone for SendWrapper<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
 }
 
 pub fn load_icon(path: &std::path::Path) -> Result<tray_icon::Icon, Box<dyn std::error::Error>> {

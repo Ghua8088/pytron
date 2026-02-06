@@ -5,10 +5,13 @@ use wry::WebView;
 use tao::window::Window;
 use tray_icon::TrayIcon;
 
+use crate::store::NativeState;
+
 pub struct RuntimeState {
     pub webview: WebView,
     pub window: Window,
     pub callbacks: Arc<Mutex<HashMap<String, PyObject>>>,
     pub tray: Option<TrayIcon>,
     pub prevent_close: bool,
+    pub store: NativeState,
 }

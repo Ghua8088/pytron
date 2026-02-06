@@ -1,76 +1,129 @@
+import sys
+import os
+import json
 import threading
 
+def _get_global_store():
+    # Helper to access standard sys overrides
+    # (Used for Python-mock fallback if native fails)
+    SOVEREIGN_KEY = "_pytron_sovereign_state_store_"
+    store = getattr(sys, SOVEREIGN_KEY, None)
+    if store is None:
+        import builtins
+        store = getattr(builtins, SOVEREIGN_KEY, None)
+    return store
+
+def _set_global_store(store):
+    SOVEREIGN_KEY = "_pytron_sovereign_state_store_"
+    setattr(sys, SOVEREIGN_KEY, store)
+    import builtins
+    setattr(builtins, SOVEREIGN_KEY, store)
+
+def json_safe_dump(obj):
+    if isinstance(obj, (str, int, float, bool, type(None))): return obj
+    if isinstance(obj, dict): return {str(k): json_safe_dump(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)): return [json_safe_dump(x) for x in obj]
+    if hasattr(obj, "to_dict"):
+        try: return json_safe_dump(obj.to_dict())
+        except: pass
+    return str(obj)
+
+def log_shield(msg):
+    try:
+        if getattr(sys, "frozen", False):
+            # In frozen apps, stderr might be captured or lost, but it's safe
+            sys.stderr.write(f"[SHIELD] {msg}\n")
+            sys.stderr.flush()
+    except: pass
 
 class ReactiveState:
-    """
-    A magic object that syncs its attributes to the frontend automatically.
-    """
-
     def __init__(self, app):
-        # Use super().__setattr__ to avoid triggering our own hook for internal vars
-        super().__setattr__("_app", app)
-        super().__setattr__("_data", {})
-        # Re-entrant lock to allow nested access from same thread
-        super().__setattr__("_lock", threading.RLock())
+        object.__setattr__(self, "_app", app)
+        
+        # 1. Retrieve or Create the Global Store
+        store = _get_global_store()
+        
+        if store is None:
+            # TRY LOAD NATIVE via CANONICAL RESOLVER
+            from .utils import resolve_native_module
+            native_mod = resolve_native_module()
+            NativeState = getattr(native_mod, "NativeState", None) if native_mod else None
+            
+            if NativeState:
+                try:
+                    store = NativeState()
+                    mode = "Rust-Backed (Sovereign)"
+                except Exception as e:
+                    store = self._create_mock_store()
+                    mode = f"Mock-Fallback (Rust Error: {e})"
+            else:
+                store = self._create_mock_store()
+                mode = "Python-Mock"
+            
+            _set_global_store(store)
+            log_shield(f"Sovereign State Initialized (Mode: {mode})")
+        else:
+            log_shield("ReactiveState: Inherited Sovereign Anchor")
+
+        object.__setattr__(self, "_store", store)
+
+    def _create_mock_store(self):
+        class MockStore:
+            def __init__(self):
+                self.data = {}
+                self._lock = threading.RLock()
+            def set(self, k, v):
+                with self._lock: self.data[k] = v
+            def get(self, k):
+                with self._lock: return self.data.get(k)
+            def to_dict(self):
+                with self._lock: return dict(self.data)
+            def update(self, m):
+                with self._lock: self.data.update(m)
+        return MockStore()
 
     def __setattr__(self, key, value):
-        # Store the value and broadcast in a thread-safe manner to ensure order
-        with self._lock:
-            # Check if value actually changed to prevent redundant IPC
-            if self._data.get(key) == value:
-                return
-            self._data[key] = value
+        if key.startswith("_"):
+            object.__setattr__(self, key, value)
+            return
 
-            app_ref = getattr(self, "_app", None)
-            if app_ref and app_ref.is_running:
-                # PERFORMANCE: Only send the delta (key/value)
-                for window in list(app_ref.windows):
-                    try:
-                        window.emit("pytron:state-update", {"key": key, "value": value})
-                    except Exception as e:
-                        # Silently ignore errors during shutdown
-                        if app_ref.is_running:
-                            print(
-                                f"[Pytron] Error emitting state update for key '{key}': {e}"
-                            )
+        store = object.__getattribute__(self, "_store")
+        app_ref = object.__getattribute__(self, "_app")
+
+        try:
+            safe_val = json_safe_dump(value)
+            store.set(key, safe_val)
+            if app_ref and hasattr(app_ref, "config") and app_ref.config.get("debug"):
+                log_shield(f"State Update: {key}")
+        except Exception as e:
+            log_shield(f"State write error for '{key}': {e}")
+            pass
+
+        # Python-side propagation (legacy fallback, Iron Bridge handles native)
+        if app_ref:
+            try:
+                windows = getattr(app_ref, "windows", [])
+                for window in list(windows):
+                    try: window.emit("pytron:state-update", {"key": key, "value": safe_val})
+                    except: pass
+            except: pass
 
     def __getattr__(self, key):
-        lock = getattr(self, "_lock", None)
-        if lock is not None:
-            with lock:
-                return self._data.get(key)
-        return self._data.get(key)
+        if key.startswith("_"): return object.__getattribute__(self, key)
+        try: return object.__getattribute__(self, "_store").get(key)
+        except: return None
 
     def to_dict(self):
-        lock = getattr(self, "_lock", None)
-        if lock is not None:
-            with lock:
-                return dict(self._data)
-        return dict(self._data)
+        try:
+            store = object.__getattribute__(self, "_store")
+            return json_safe_dump(store.to_dict())
+        except Exception as e:
+            log_shield(f"to_dict failure: {e}")
+            return {}
 
     def update(self, mapping: dict):
-        """
-        Atomically update multiple keys and emit updates for each key.
-        Use this when you want to set multiple state values from another thread
-        without causing intermediate inconsistent states.
-        """
-        if not isinstance(mapping, dict):
-            raise TypeError("mapping must be a dict")
-
-        lock = getattr(self, "_lock", None)
-        if lock is not None:
-            with lock:
-                self._data.update(mapping)
-        else:
-            self._data.update(mapping)
-
-        app_ref = getattr(self, "_app", None)
-        if app_ref:
-            for key, value in mapping.items():
-                for window in list(app_ref.windows):
-                    try:
-                        window.emit("pytron:state-update", {"key": key, "value": value})
-                    except Exception as e:
-                        print(
-                            f"[Pytron] Error emitting state update for key '{key}': {e}"
-                        )
+        if not isinstance(mapping, dict): return
+        try:
+            store = object.__getattribute__(self, "_store")
+            store.update(json_safe_dump(mapping))
+        except: pass

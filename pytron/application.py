@@ -43,7 +43,16 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         # ConfigMixin setup
         self._setup_logging()
         self.router.logger = self.logger  # Share logger
+        
+        from .state import log_shield
+        log_shield(f"App __init__ called. Frozen={getattr(sys, 'frozen', False)}")
+        
         self.state = ReactiveState(self)
+        try:
+            log_shield(f"App State Mode: {self.state._store.__class__.__name__}")
+        except:
+            pass
+
         self._check_deep_link()
         self._load_config(config_file)
         _, safe_title = self._setup_identity()

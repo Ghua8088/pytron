@@ -109,12 +109,17 @@ class Webview:
             # bindings can be registered (via UserEvent::Bind) BEFORE the real app loads.
             # This prevents race conditions where IPC calls happen before callbacks are ready.
             self._start_url = final_url
+            
+            # Access the underlying NativeState for the Iron Bridge
+            store_instance = self.app.state._store if self.app and hasattr(self.app.state, "_store") else None
+            
             self.native = pytron_native.NativeWebview(
                 debug,
                 "about:blank",  # Start empty
                 root_path,
                 bool(resizable),
                 bool(frameless),
+                store_instance
             )
         except TypeError:
             # Fallback if pyd wasn't updated yet? No, we will rebuild.
@@ -234,7 +239,6 @@ class Webview:
         # 3. CLEAN ALIASES (Convenience for JS users, but can be overwritten)
         # Avoid logging for frequent state/asset syncs
         self._spammy_methods = {
-            "pytron_sync_state",
             "pytron_serve_asset",
             "__pytron_vap_get",
         }
@@ -434,9 +438,25 @@ class Webview:
     # serve_data is defined above to return the URL.
 
     def _sync_state(self):
+        # We use a direct import to ensure we get the sovereign log_shield
+        from .state import log_shield
         if self.app:
-            return self.app.state.to_dict()
-        return {}
+            try:
+                if self.config.get("debug"):
+                    log_shield("Received pytron_sync_state Request")
+                
+                state_dict = self.app.state.to_dict()
+                
+                if self.config.get("debug"):
+                    log_shield(f"Syncing state keys: {list(state_dict.keys())}")
+                
+                return state_dict
+            except Exception as e:
+                log_shield(f"SYNC FATAL ERROR: {e}")
+                return {}
+        else:
+            log_shield("SYNC ERROR: No App Instance in Webview")
+            return {}
 
     # --- Path Normalizer ---
     def normalize_path(self, config):

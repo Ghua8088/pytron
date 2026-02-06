@@ -19,6 +19,8 @@ use crate::state::RuntimeState;
 use crate::utils::{setup_panic_hook, SendWrapper, load_icon};
 use crate::protocol::handle_pytron_protocol;
 
+use crate::store::NativeState;
+
 #[pyclass]
 pub struct NativeWebview {
     pub proxy: EventLoopProxy<UserEvent>,
@@ -26,6 +28,7 @@ pub struct NativeWebview {
     state_ptr: Mutex<Option<usize>>, 
     hwnd: usize,
     callbacks: Arc<Mutex<HashMap<String, PyObject>>>,
+    store: NativeState,
 }
 
 unsafe impl Send for NativeWebview {}
@@ -34,7 +37,7 @@ unsafe impl Sync for NativeWebview {}
 #[pymethods]
 impl NativeWebview {
     #[new]
-    pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool) -> PyResult<Self> {
+    pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool, store: NativeState) -> PyResult<Self> {
         setup_panic_hook();
 
         let safe_url = if url_str == "about:blank" {
@@ -51,6 +54,9 @@ impl NativeWebview {
 
         let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
         let proxy = event_loop.create_proxy();
+        
+        // --- IRON BRIDGE: HOOK PROPAGATION ---
+        store._bind_proxy(proxy.clone());
         
         let window = WindowBuilder::new()
             .with_title("Pytron App")
@@ -179,6 +185,9 @@ impl NativeWebview {
             };
         "#);
 
+        let proxy_for_ipc = proxy.clone();
+        let store_for_ipc = store.clone();
+
         builder = builder.with_ipc_handler(move |request| {
             let msg = request.body().clone();
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&msg) {
@@ -193,6 +202,28 @@ impl NativeWebview {
                 }
                 if method == "pytron_close" || method == "close" || method == "app_quit" {
                     let _ = proxy_for_ipc.send_event(UserEvent::Quit);
+                    return;
+                }
+
+                // 2. AUTHORITATIVE NATIVE SYNC (Bypass Python Schism)
+                if method == "pytron_sync_state" {
+                    let mut state_json = String::from("{}");
+                    
+                    // ACCESS RUST STORE DIRECTLY
+                    let _ = Python::with_gil(|py| {
+                        if let Ok(dict) = store_for_ipc.to_dict(py) {
+                            if let Ok(json_mod) = py.import_bound("json") {
+                                if let Ok(res) = json_mod.call_method1("dumps", (dict,)) {
+                                    if let Ok(s) = res.extract::<String>() {
+                                        state_json = s;
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    println!("[SHIELD] Iron Bridge: sync_state (len={})", state_json.len());
+                    let _ = proxy_for_ipc.send_event(UserEvent::Return(seq, 0, state_json));
                     return;
                 }
 
@@ -251,7 +282,8 @@ impl NativeWebview {
             window, 
             callbacks: callbacks.clone(), 
             tray: None, 
-            prevent_close: false 
+            prevent_close: false,
+            store: store.clone()
         }));
 
         Ok(NativeWebview {
@@ -260,6 +292,7 @@ impl NativeWebview {
             state_ptr: Mutex::new(Some(state as usize)),
             hwnd,
             callbacks,
+            store: store.clone()
         })
     }
 
@@ -471,6 +504,11 @@ impl NativeWebview {
                                             .arg(&url)
                                             .spawn();
                                     }
+                                }
+
+                                UserEvent::StateUpdate(key, val) => {
+                                    let js = format!(r#"window.dispatchEvent(new CustomEvent('pytron:state-update', {{ detail: {{ key: '{}', value: {} }} }}));"#, key, val);
+                                    let _ = state.webview.evaluate_script(&js);
                                 }
 
                                 _ => {} 

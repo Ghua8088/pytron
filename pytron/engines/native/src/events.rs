@@ -28,4 +28,5 @@ pub enum UserEvent {
     SetDecorations(bool),
     MessageBox(String, String, String, String), // Title, Message, Level, Seq
     OpenExternal(String),
+    StateUpdate(String, String), // Key, Value (JSON)
 }
