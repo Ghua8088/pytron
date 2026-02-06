@@ -194,7 +194,7 @@ def dump_manifest():
             def __getitem__(self, key): return self
             
         def audit_exposed_functions_dynamic(app):
-            print(f"[Crystal] Running Dynamic Execution Audit on {len(app._exposed_functions)} functions...")
+            print(f"[Crystal] Running Dynamic Execution Audit on {{len(app._exposed_functions)}} functions...")
             for name, data in app._exposed_functions.items():
                 func = data['func']
                 try:
