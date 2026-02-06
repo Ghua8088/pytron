@@ -217,7 +217,9 @@ class Plugin:
                 self.logger.info(f"Python dependencies installed into {python_exe}")
             except subprocess.CalledProcessError as e:
                 self.logger.error(f"Failed to install Python dependencies: {e}")
-                raise PluginDependencyError(f"Python dependency installation failed: {e}")
+                raise PluginDependencyError(
+                    f"Python dependency installation failed: {e}"
+                )
 
         # 2. JS Dependencies
         js_deps = self.npm_dependencies

@@ -49,7 +49,9 @@ class Router:
         # Check for duplicates
         for route in self.routes:
             if route["pattern"] == clean_pattern:
-                raise RoutingError(f"Route pattern '{clean_pattern}' is already registered.")
+                raise RoutingError(
+                    f"Route pattern '{clean_pattern}' is already registered."
+                )
 
         # 2. Convert {param} to Regex Group (?P<param>[^/]+)
         # Escape special regex chars but leave our braces

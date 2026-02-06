@@ -193,7 +193,9 @@ class SystemTray:
             self._indicator = indicator
 
         except (ImportError, ValueError) as e:
-            raise TrayError(f"Linux Tray requires 'PyGObject' and 'libappindicator3': {e}") from e
+            raise TrayError(
+                f"Linux Tray requires 'PyGObject' and 'libappindicator3': {e}"
+            ) from e
         except Exception as e:
             raise TrayError(f"Failed to initialize Linux tray: {e}") from e
 
@@ -331,7 +333,9 @@ class SystemTray:
 
             res = shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid))
             if not res:
-                raise TrayError("Failed to add icon to system tray. Shell_NotifyIconW returned False.")
+                raise TrayError(
+                    "Failed to add icon to system tray. Shell_NotifyIconW returned False."
+                )
 
             # Signal that we are ready!
             ready_event.set()

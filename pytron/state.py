@@ -118,6 +118,14 @@ class ReactiveState:
 
         try:
             safe_val = json_safe_dump(value)
+
+            # Deduplication Check
+            # Only emit if the value actually changed.
+            # We must be careful with types, but json_safe_dump normalizes mostly.
+            current_val = store.get(key)
+            if current_val == safe_val:
+                return
+
             store.set(key, safe_val)
             if app_ref and hasattr(app_ref, "config") and app_ref.config.get("debug"):
                 log_shield(f"State Update: {key}")

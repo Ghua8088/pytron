@@ -55,7 +55,9 @@ class Updater:
                 remote_version = data.get("version")
 
                 if not remote_version:
-                    raise UpdateError(f"Invalid update manifest at {url}: missing 'version' field.")
+                    raise UpdateError(
+                        f"Invalid update manifest at {url}: missing 'version' field."
+                    )
 
                 # Compare versions
                 if parse_version(remote_version) > parse_version(self.current_version):

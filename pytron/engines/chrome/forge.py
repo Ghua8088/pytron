@@ -59,7 +59,9 @@ def download_electron(dest_path):
             TransferSpeedColumn(),
             transient=True,
         ) as progress:
-            task = progress.add_task("[cyan]Injecting Chromium Core...", total=total_size)
+            task = progress.add_task(
+                "[cyan]Injecting Chromium Core...", total=total_size
+            )
 
             with open(temp_zip, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -124,9 +126,13 @@ def perform_surgery(path):
             os.makedirs(app_path)
 
         # Source the shell files from our core
-        core_shell_src = os.path.abspath(os.path.join(os.path.dirname(__file__), "shell"))
+        core_shell_src = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "shell")
+        )
         for file in os.listdir(core_shell_src):
-            shutil.copy(os.path.join(core_shell_src, file), os.path.join(app_path, file))
+            shutil.copy(
+                os.path.join(core_shell_src, file), os.path.join(app_path, file)
+            )
     except Exception as e:
         raise ForgeError(f"Binary surgery failed: {e}")
 

@@ -134,7 +134,9 @@ class Webview:
                     "WebView2 Conflict (0x8007139F): The User Data Folder is locked or in an invalid state. \n"
                     "SOLUTIONS: \n"
                     "1. Close any ghost processes of this app in Task Manager. \n"
-                    "2. Try deleting the storage folder: " + str(getattr(self.app, 'storage_path', 'unknown')) + "\n"
+                    "2. Try deleting the storage folder: "
+                    + str(getattr(self.app, "storage_path", "unknown"))
+                    + "\n"
                     "3. Ensure your 'settings.json' has a unique 'title' to avoid conflicts with other Pytron apps."
                 ) from e
             raise NativeEngineError(f"Failed to initialize Native WebView: {e}") from e
@@ -253,7 +255,11 @@ class Webview:
             "pytron_set_slim_titlebar", self.set_slim_titlebar, run_in_thread=False
         )
         self.bind("pytron_set_bounds", self.set_bounds, run_in_thread=False)
-        self.bind("pytron_get_registered_shortcuts", self.get_registered_shortcuts, run_in_thread=True)
+        self.bind(
+            "pytron_get_registered_shortcuts",
+            self.get_registered_shortcuts,
+            run_in_thread=True,
+        )
 
         # 2. SYSTEM TOOLING / DIALOGS (Prefixed)
         self.bind("pytron_dialog_open_file", self.dialog_open_file, run_in_thread=True)
@@ -293,7 +299,11 @@ class Webview:
         self.bind("system_notification", self.system_notification, run_in_thread=True)
         self.bind("set_taskbar_progress", self.set_taskbar_progress, run_in_thread=True)
         self.bind("set_bounds", self.set_bounds, run_in_thread=False)
-        self.bind("get_registered_shortcuts", self.get_registered_shortcuts, run_in_thread=True)
+        self.bind(
+            "get_registered_shortcuts",
+            self.get_registered_shortcuts,
+            run_in_thread=True,
+        )
 
     def _serve_asset_callback(self, key):
         """Called by Native Engine Protocol Handler to fetch VAP assets."""
@@ -449,10 +459,10 @@ class Webview:
     def get_registered_shortcuts(self):
         """Returns a list of currently registered shortcut accelerators."""
         if self.app and hasattr(self.app, "shortcuts"):
-             # app.shortcuts is the shortcut manager instance
-             # It stores registered shortcuts in self.shortcuts dict
-             if hasattr(self.app.shortcuts, "shortcuts"):
-                 return list(self.app.shortcuts.shortcuts.keys())
+            # app.shortcuts is the shortcut manager instance
+            # It stores registered shortcuts in self.shortcuts dict
+            if hasattr(self.app.shortcuts, "shortcuts"):
+                return list(self.app.shortcuts.shortcuts.keys())
         return []
 
     def eval(self, js):
