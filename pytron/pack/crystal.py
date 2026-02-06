@@ -223,7 +223,7 @@ def dump_manifest():
                 audit_exposed_functions_dynamic(obj)
                 break
     except Exception as e:
-        print(f"[Crystal] Heuristic Scan Warning: {e}")
+        print(f"[Crystal] Heuristic Scan Warning: {{e}}")
 
     # 2. Load existing lock file to merge
     existing_data = {{"modules": [], "files": []}}
