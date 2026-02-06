@@ -163,7 +163,7 @@ jobs:
 
       - name: 🎁 Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
           name: Pytron Kit v${{ steps.get_version.outputs.version }} 🧊
