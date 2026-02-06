@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: 🔍 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 🚪 Check for Rust changes
         id: filter
@@ -118,7 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔍 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: 🐍 Set up Python
         uses: actions/setup-python@v5
         with:
@@ -145,7 +145,7 @@ jobs:
       url: https://pypi.org/p/pytron-kit
     steps:
       - name: 🔍 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 🏷️ Get Version
         id: get_version

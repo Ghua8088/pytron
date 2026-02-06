@@ -17,7 +17,7 @@ jobs:
         python-version: ["3.11"]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: 🚪 Check for Rust changes
       id: filter
