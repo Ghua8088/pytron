@@ -9,6 +9,75 @@ from .assets import get_smart_assets
 from .metadata import MetadataEditor
 
 
+class FrontendModule(BuildModule):
+    def prepare(self, context: BuildContext):
+        import subprocess
+
+        log("Checking for Frontend Build hooks...", style="dim")
+
+        # 1. Detect Frontend Directory
+        frontend_dir = context.script_dir / "frontend"
+
+        # Check if custom frontend dir is specified in settings
+        custom_front = context.settings.get("frontend_dir")
+        if custom_front:
+            frontend_dir = context.script_dir / custom_front
+
+        if not frontend_dir.exists() or not (frontend_dir / "package.json").exists():
+            return
+
+        # Sky is blue check
+        log(f"Detected frontend project at: {frontend_dir.name}", style="info")
+
+        # Detect Package Manager
+        manager = "npm"
+        if (frontend_dir / "yarn.lock").exists():
+            manager = "yarn"
+        elif (frontend_dir / "pnpm-lock.yaml").exists():
+            manager = "pnpm"
+        elif (frontend_dir / "bun.lockb").exists():
+            manager = "bun"
+
+        # Check if we should install dependencies
+        node_modules = frontend_dir / "node_modules"
+        force_install = context.settings.get("force_install", False)
+
+        if not node_modules.exists() or force_install:
+            log(f"Installing frontend dependencies ({manager})...", style="dim")
+            try:
+                cmd = f"{manager} install"
+                subprocess.run(cmd, cwd=str(frontend_dir), shell=True, check=True)
+            except Exception as e:
+                log(f"Frontend install failed: {e}", style="error")
+                return
+
+        # Run Build
+        log(f"Building frontend ({manager} run build)...", style="dim")
+
+        # Clean previous builds to ensure explicit freshness (User Request)
+        dist_candidates = [frontend_dir / "dist", frontend_dir / "build"]
+        for d in dist_candidates:
+            if d.exists() and d.is_dir():
+                try:
+                    import shutil
+
+                    shutil.rmtree(d)
+                    log(f"Cleaned stale artifact: {d.name}", style="dim")
+                except Exception:
+                    pass
+
+        try:
+            cmd = f"{manager} run build"
+            subprocess.run(cmd, cwd=str(frontend_dir), shell=True, check=True)
+            log("Frontend build completed.", style="success")
+        except Exception as e:
+            log(f"Frontend build failed: {e}", style="error")
+            log(
+                "Proceeding with packaging, but frontend might be stale/missing.",
+                style="warning",
+            )
+
+
 class AssetModule(BuildModule):
     def prepare(self, context: BuildContext):
         log("Gathering project assets...", style="dim")

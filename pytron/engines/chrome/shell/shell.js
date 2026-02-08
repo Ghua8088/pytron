@@ -145,7 +145,7 @@ function connectToPytron() {
             log(`Connecting to Unix Socket: ${pipeBase}`);
             client = new net.Socket();
             client.connect(pipeBase, () => {
-                log("✅ Connected to Pytron Core (Unix Socket). Sending Handshake...");
+                log("Connected to Pytron Core (Unix Socket). Sending Handshake...");
                 sendToPython('lifecycle', 'app_ready');
             });
             setupClientListeners(client);
@@ -158,7 +158,7 @@ function connectToPytron() {
 
         client = new net.Socket();
         client.connect(port, '127.0.0.1', () => {
-            log("✅ Connected to Pytron Core (TCP). Sending Handshake...");
+            log("Connected to Pytron Core (TCP). Sending Handshake...");
             sendToPython('lifecycle', 'app_ready');
         });
         setupClientListeners(client);
@@ -241,6 +241,9 @@ function handlePythonCommand(cmd) {
             case 'set_title':
                 if (mainWindow) mainWindow.setTitle(command.title);
                 break;
+            case 'set_icon':
+                if (mainWindow && command.icon) mainWindow.setIcon(command.icon);
+                break;
             case 'set_size':
                 if (mainWindow) {
                     mainWindow.setSize(command.width, command.height);
@@ -312,7 +315,15 @@ function handlePythonCommand(cmd) {
                     mainWindow.webContents.executeJavaScript(js).catch(() => { });
                 }
                 break;
-            case 'close': app.quit(); break;
+            case 'close':
+                if (mainWindow) {
+                    try {
+                        mainWindow.destroy(); // Force kill window (no events, no fade-out)
+                        mainWindow = null;
+                    } catch (e) { }
+                }
+                app.quit();
+                break;
             case 'serve_data':
                 // command: { action: 'serve_data', key: '...', data: 'BASE64...', mime: '...' }
                 if (global.serveAsset) {
@@ -342,7 +353,11 @@ async function createWindow(options = {}) {
 
     // Icon (Resolve absolute path if provided)
     if (options.icon) {
-        config.icon = options.icon; // Electron handles absolute paths fine
+        if (fs.existsSync(options.icon)) {
+            config.icon = options.icon; // Electron handles absolute paths fine
+        } else {
+            log(`Warning: Icon file not found: ${options.icon}`);
+        }
     }
 
     // Enhanced Window Configuration
@@ -397,15 +412,26 @@ async function createWindow(options = {}) {
     mainWindow.setMenu(null);
 
     // External Links: Open in Default Browser (Maintain "Application" vibe)
+    // External Links: Open in Default Browser (Maintain "Application" vibe)
+    // Relaxed for Dev Mode support (localhost/127.0.0.1)
+    const isSafeUrl = (url) => {
+        return url.startsWith('pytron://') ||
+            url.startsWith('https://pytron.') ||
+            url === 'about:blank' ||
+            url.startsWith('http://localhost') ||
+            url.startsWith('http://127.0.0.1') ||
+            url.startsWith('file://');
+    };
+
     mainWindow.webContents.on('will-navigate', (event, url) => {
-        if (!url.startsWith('pytron://') && !url.startsWith('https://pytron.') && url !== 'about:blank') {
+        if (!isSafeUrl(url)) {
             event.preventDefault();
             shell.openExternal(url);
         }
     });
 
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-        if (!url.startsWith('pytron://') && !url.startsWith('https://pytron.') && url !== 'about:blank') {
+        if (!isSafeUrl(url)) {
             shell.openExternal(url);
             return { action: 'deny' };
         }
@@ -439,6 +465,12 @@ async function createWindow(options = {}) {
     });
 
     mainWindow.on('close', () => sendToPython('lifecycle', 'close'));
+
+    // Prevent HTML <title> from overriding the Window Title
+    mainWindow.on('page-title-updated', (e) => {
+        e.preventDefault();
+    });
+
     ipcMain.on('pytron-message', (event, arg) => sendToPython('ipc', arg));
 }
 

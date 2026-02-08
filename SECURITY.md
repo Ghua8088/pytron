@@ -6,7 +6,7 @@ We only support security updates for the latest major version of Pytron.
 
 ## Security Changes
 
-We have recently added packaging with Nuitka and is the only safest way to package Pytron applications, *the default PyInstaller is not safe and can be exploited.*
+We have recently added packaging with Secure ,Nuitka pipeline and they are the only safest way to package Pytron applications, *the default PyInstaller is not safe and can be exploited.*
 
 ## Reporting a Vulnerability
 

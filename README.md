@@ -89,6 +89,9 @@ pytron package --engine rust --crystal
 *   **[Architecture](ARCHITECTURE.md)**: Deep dive into the internal engineering and philosophy.
 *   **[Roadmap](ROADMAP.md)**: Upcoming features.
 *   **[Contributing](CONTRIBUTING.md)**: How to help.
+*   **[Changelog](CHANGELOG.md)**: Version history.
+*   **[Support](SUPPORT.md)**: Get help.
+*   **[Credits](CREDITS.md)**: Third-party acknowledgments.
 
 ## License
-Apache License 2.0
+Apache License 2.0 with Commons Clause

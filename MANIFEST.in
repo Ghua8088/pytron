@@ -1,5 +1,10 @@
 
 include README.md
+include LICENSE
+include CREDITS.md
+include ARCHITECTURE.md
+include CHANGELOG.md
+include SUPPORT.md
 include pyproject.toml
 
 # 1. Include the core package

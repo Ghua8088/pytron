@@ -106,6 +106,7 @@ def cmd_package(args: argparse.Namespace) -> int:
     # --- Modular Build Pipeline ---
     from ..pack.pipeline import BuildContext, Pipeline
     from ..pack.modules import (
+        FrontendModule,
         AssetModule,
         EngineModule,
         MetadataModule,
@@ -166,6 +167,7 @@ def cmd_package(args: argparse.Namespace) -> int:
     pipeline = Pipeline(ctx)
 
     # Add Modules
+    pipeline.add_module(FrontendModule())
     pipeline.add_module(IconModule())
     pipeline.add_module(AssetModule())
     pipeline.add_module(HookModule())

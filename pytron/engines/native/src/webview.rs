@@ -98,8 +98,15 @@ impl NativeWebview {
 
         let proxy_for_nav = proxy.clone();
         builder = builder.with_navigation_handler(move |url: String| {
-            // Check if it's an internal application link or an external one
-            if !url.starts_with("pytron://") && !url.starts_with("https://pytron.") && url != "about:blank" {
+            // Relaxed for Dev Mode support (localhost/127.0.0.1)
+            let is_safe = url.starts_with("pytron://") 
+                || url.starts_with("https://pytron.") 
+                || url == "about:blank"
+                || url.starts_with("http://localhost")
+                || url.starts_with("http://127.0.0.1")
+                || url.starts_with("file://");
+
+            if !is_safe {
                 // External! Send to system browser
                 let _ = proxy_for_nav.send_event(UserEvent::OpenExternal(url.clone()));
                 return false; // Prevent internal navigation
@@ -200,12 +207,13 @@ impl NativeWebview {
                     let _ = proxy_for_ipc.send_event(UserEvent::DragWindow);
                     return;
                 }
+
+                // 2. AUTHORITATIVE NATIVE SYNC (Bypass Python Schism)
                 if method == "pytron_close" || method == "close" || method == "app_quit" {
                     let _ = proxy_for_ipc.send_event(UserEvent::Quit);
                     return;
                 }
 
-                // 2. AUTHORITATIVE NATIVE SYNC (Bypass Python Schism)
                 if method == "pytron_sync_state" {
                     let mut state_json = String::from("{}");
                     
@@ -341,7 +349,13 @@ impl NativeWebview {
                              }
                              
                              match ue {
-                                UserEvent::Quit => *control_flow = ControlFlow::Exit,
+                                UserEvent::Quit => {
+                                    // IMMEDIATE UX IMPROVEMENT: Move window off-screen + Hide
+                                    // This bypasses Windows DWM fade-out animations which can freeze
+                                    state.window.set_outer_position(tao::dpi::PhysicalPosition::new(-10000, -10000));
+                                    state.window.set_visible(false);
+                                    *control_flow = ControlFlow::Exit;
+                                }
                                 UserEvent::Eval(js) => { let _ = state.webview.evaluate_script(&js); }
                                 UserEvent::SetTitle(t) => { state.window.set_title(&t); }
                                 UserEvent::SetSize(w, h, _) => { state.window.set_inner_size(tao::dpi::LogicalSize::new(w, h)); }
@@ -559,6 +573,9 @@ impl NativeWebview {
                                  }
                                  *control_flow = ControlFlow::Wait;
                              } else {
+                                 // IMMEDIATE UX IMPROVEMENT: Hide + Zap off-screen
+                                 state.window.set_outer_position(tao::dpi::PhysicalPosition::new(-10000, -10000));
+                                 state.window.set_visible(false);
                                  *control_flow = ControlFlow::Exit; 
                              }
                         }

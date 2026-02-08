@@ -70,6 +70,9 @@ class ChromeBridge:
     def webview_set_title(self, w, title):
         self.adapter.send({"action": "set_title", "title": _to_str(title)})
 
+    def webview_set_icon(self, w, icon_path):
+        self.adapter.send({"action": "set_icon", "icon": str(icon_path)})
+
     def webview_set_size(self, w, width, height, hints):
         self.adapter.send({"action": "set_size", "width": width, "height": height})
 
@@ -143,15 +146,17 @@ class ChromeWebView(Webview):
         self.id = config.get("id") or str(int(__import__("time").time() * 1000))
 
         # 1. Resolve Root
-        if getattr(sys, "frozen", False):
+        self.app = config.get("__app__")
+
+        if self.app and hasattr(self.app, "app_root"):
+            self._app_root = __import__("pathlib").Path(self.app.app_root)
+        elif getattr(sys, "frozen", False):
             self._app_root = __import__("pathlib").Path(sys.executable).parent
             if hasattr(sys, "_MEIPASS"):
                 self._app_root = __import__("pathlib").Path(sys._MEIPASS)
         else:
             self._app_root = __import__("pathlib").Path.cwd()
 
-        # 2. Performance Init
-        self.app = config.get("__app__")
         if self.app:
             self.thread_pool = self.app.thread_pool
         else:
@@ -288,6 +293,19 @@ class ChromeWebView(Webview):
 
         # 6. Window Settings
         self.set_title(config.get("title", "Pytron App"))
+
+        # Robust Icon Resolution
+        icon_raw = config.get("icon")
+        if icon_raw:
+            # Check if absolute
+            if os.path.exists(icon_raw):
+                config["icon"] = os.path.abspath(icon_raw)
+            else:
+                # Try relative to root
+                possible = os.path.join(self._app_root, icon_raw)
+                if os.path.exists(possible):
+                    config["icon"] = os.path.abspath(possible)
+
         w, h = config.get("dimensions", [800, 600])
         self.set_size(w, h)
         if not config.get("start_hidden", False):
@@ -523,7 +541,7 @@ class ChromeWebView(Webview):
         self.bridge.adapter.send({"action": "unserve_data", "key": key})
 
     def set_icon(self, icon_path):
-        pass
+        self.bridge.webview_set_icon(self.w, icon_path)
 
     def minimize(self):
         self.bridge.adapter.send({"action": "minimize"})
