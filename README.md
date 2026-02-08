@@ -94,4 +94,4 @@ pytron package --engine rust --crystal
 *   **[Credits](CREDITS.md)**: Third-party acknowledgments.
 
 ## License
-Apache License 2.0 with Commons Clause
+Apache License 2.0

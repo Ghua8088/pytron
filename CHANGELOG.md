@@ -8,14 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.14] - 2026-02-08
 
 ### Added
-- **License Change**: Switched to Apache 2.0 with Commons Clause to protect against commercial resale.
 - **Credits & Acknowledgments**: Added `CREDITS.md` to honor third-party dependencies (Wry, Tao, Electron, etc.).
 - **Support Documentation**: Added `SUPPORT.md` for better community guidance.
 - **Improved Manifest**: Updated `MANIFEST.in` to include all documentation and internal architecture files.
 
 ### Changed
+- **License Rollback**: Reverted to pure Apache 2.0 based on community feedback. We value our open-source roots!
 - Refined the packaging pipeline documentation to clarify "Safe" vs "Unsafe" methods in `SECURITY.md`.
-- Updated repository metadata in `pyproject.toml` to reflect the new license status.
+- Updated repository metadata in `pyproject.toml` to reflect the current license status.
 
 ## [0.3.x] - Earlier Releases
 

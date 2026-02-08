@@ -16,7 +16,7 @@ version = "0.3.14"
 description = "An Electron-like library for Python to build Cross Platform Apps"
 readme = "README.md"
 requires-python = ">=3.7"
-license = { text = "Apache-2.0 with Commons Clause" }
+license = { text = "Apache-2.0" }
 keywords = ["electron", "app", "desktop", "android", "webview"]
 authors = [
   { name = "Ghua8088" }
@@ -42,7 +42,7 @@ dependencies = [
 ]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "License :: Other/Proprietary License",
+  "License :: OSI Approved :: Apache Software License",
   "Operating System :: Microsoft :: Windows",
   "Operating System :: POSIX :: Linux",
   "Operating System :: MacOS :: MacOS X",
