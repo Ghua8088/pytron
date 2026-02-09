@@ -14,7 +14,17 @@ use crate::patcher::check_and_apply_patches;
 use crate::ui::{alert, init_com, set_app_id};
 use crate::python_runtime::{find_internal_dir, run_python_and_payload};
 
-fn main() -> PyResult<()> {
+extern "C" {
+    fn PyInit_app() -> *mut pyo3::ffi::PyObject;
+}
+
+#[no_mangle]
+pub extern "C" fn main() -> i32 {
+    // 0. Static Link Registration (MUST be before any Python init)
+    unsafe {
+        pyo3::ffi::PyImport_AppendInittab("app\0".as_ptr() as *const i8, Some(PyInit_app));
+    }
+
     // 1. CLI Argument Parsing and Console Allocation
     let args: Vec<String> = env::args().collect();
     let debug_mode = args.iter().any(|arg| arg == "--debug");
@@ -37,24 +47,9 @@ fn main() -> PyResult<()> {
     
     check_and_apply_patches(&root_dir);
 
-    // Verify critical files (Compiled Payload)
-    let ext = if cfg!(windows) { "pyd" } else { "so" };
-    let payload_path = root_dir.join(format!("app.{}", ext));
+    // Note: 'app.pyd' check removed as it is now statically linked.
 
-    if !payload_path.exists() {
-        // Also check in _internal for standard onedir layouts
-        let internal_payload = internal_dir.join(format!("app.{}", ext));
-        if !internal_payload.exists() {
-            alert("Shield: Discovery Error", &format!(
-                "Critical compiled asset 'app.{}' missing.\nChecked: {}\n\nDistribution may be corrupted.",
-                ext, payload_path.display()
-            ));
-            std::process::exit(1);
-        }
-    }
-    
     // Load config from settings.json (which is now in _internal)
-    // The load_settings helper might need root_dir, but we point to internal_dir for search
     let settings = load_settings(&internal_dir, None);
     let app_title = settings.as_ref().and_then(|s| s.title.clone()).unwrap_or_else(|| "Pytron App".to_string());
     
@@ -99,7 +94,6 @@ fn main() -> PyResult<()> {
     env::set_var("PYTHONNOUSERSITE", "1");
     // Speed Optimizations
     env::set_var("PYTHONOPTIMIZE", "1");
-    env::set_var("PYTHONDONTWRITEBYTECODE", "1");
     // Unicode Stability
     env::set_var("PYTHONUTF8", "1");
 
@@ -107,6 +101,7 @@ fn main() -> PyResult<()> {
     let res = run_python_and_payload(&root_dir, &internal_dir, if app_bundle.exists() { Some(&app_bundle) } else { None });
     if let Err(e) = res {
         alert(&app_title, &format!("Fatal Engine Error:\n{}", e));
+        return 1;
     }
-    Ok(())
+    0
 }

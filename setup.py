@@ -36,7 +36,13 @@ setup(
     distclass=BinaryDistribution,
     cmdclass={"bdist_wheel": bdist_wheel} if bdist_wheel else {},
     package_data={
-        "pytron": ["dependencies/*", "dependencies/**/*", "installer/*", "manifests/*"],
+        "pytron": [
+            "dependencies/*", 
+            "dependencies/**/*", 
+            "installer/*", 
+            "manifests/*",
+            "pack/secure_loader/bin/*"
+        ],
     },
     include_package_data=True,
     zip_safe=False,

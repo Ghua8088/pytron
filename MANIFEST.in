@@ -8,8 +8,9 @@ include SUPPORT.md
 include pyproject.toml
 
 # 1. Include the core package
-recursive-include pytron *.py *.png *.ico *.exe *.md *.dll *.so *.pyd *.dylib *.lib
+recursive-include pytron *.py *.png *.ico *.exe *.md *.dll *.so *.pyd *.dylib *.lib *.a
 recursive-include pytron/dependencies *
+recursive-include pytron/pack/secure_loader/bin *
 
 # 2. Android Shell - The "Allow List"
 # We match specifically to avoid dragging in temp files
