@@ -37,11 +37,11 @@ setup(
     cmdclass={"bdist_wheel": bdist_wheel} if bdist_wheel else {},
     package_data={
         "pytron": [
-            "dependencies/*", 
-            "dependencies/**/*", 
-            "installer/*", 
+            "dependencies/*",
+            "dependencies/**/*",
+            "installer/*",
             "manifests/*",
-            "pack/secure_loader/bin/*"
+            "pack/secure_loader/bin/*",
         ],
     },
     include_package_data=True,

@@ -123,7 +123,9 @@ def cython_gen_c(script_path: Path, build_dir: Path, python_exe: str):
             f.write("#include <windows.h>\n")
             f.write("extern int main(int argc, char **argv);\n")
             f.write("int _fltused = 0;\n")
-            f.write("int WINAPI WinMain(HINSTANCE hI, HINSTANCE hP, LPSTR lp, int nS) {\n")
+            f.write(
+                "int WINAPI WinMain(HINSTANCE hI, HINSTANCE hP, LPSTR lp, int nS) {\n"
+            )
             f.write("    return main(__argc, __argv);\n")
             f.write("}\n")
             f.write("#endif\n")
@@ -192,7 +194,11 @@ def compile_c_to_executable(
         else:
             arch = "x86"
 
-        target = f"{arch}-windows-gnu" if sys.platform == "win32" else f"{arch}-{sys.platform}-gnu"
+        target = (
+            f"{arch}-windows-gnu"
+            if sys.platform == "win32"
+            else f"{arch}-{sys.platform}-gnu"
+        )
 
         log(
             f"  + Compiling {output_bin.name} (Static Link) with Zig (Target: {target})...",
@@ -206,7 +212,8 @@ def compile_c_to_executable(
             str(bootloader_lib),
             "-target",
             target,
-            "-O", "ReleaseFast",
+            "-O",
+            "ReleaseFast",
             f"-femit-bin={output_bin}",
             f"-I{py_include}",
             "-lc",
@@ -215,7 +222,7 @@ def compile_c_to_executable(
         if sys.platform == "win32":
             compile_cmd.extend(["--subsystem", "windows"])
             compile_cmd.append(f"-L{py_lib_dir}")
-            compile_cmd.append(f"-L{bootloader_lib.parent}") 
+            compile_cmd.append(f"-L{bootloader_lib.parent}")
             lib_name = f"python{py_ver_str}"
             compile_cmd.append(f"-l{lib_name}")
             # System libs required by Rust/Python
@@ -237,12 +244,13 @@ def compile_c_to_executable(
             # Linux
             if py_lib_dir:
                 compile_cmd.append(f"-L{py_lib_dir}")
-            
+
             # Python standard link
-            compile_cmd.append(f"-lpython{sys.version_info.major}.{sys.version_info.minor}")
+            compile_cmd.append(
+                f"-lpython{sys.version_info.major}.{sys.version_info.minor}"
+            )
             # System libs
             compile_cmd.extend(["-lpthread", "-ldl", "-lutil", "-lm"])
-
 
         try:
             res = subprocess.run(compile_cmd, capture_output=True, text=True)

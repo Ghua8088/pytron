@@ -63,9 +63,9 @@ def build_and_deploy():
         if candidate.exists():
             found_lib = candidate
             break
-            
+
     # Also check .deps or native directory if not found in root release? No, usually in release.
-    
+
     if found_lib and found_lib.exists():
         dest_lib = bin_dir / found_lib.name
         shutil.copy2(found_lib, dest_lib)

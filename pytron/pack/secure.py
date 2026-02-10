@@ -225,39 +225,66 @@ if __name__ == "__main__":
 
         # 7. COMPILE & LINK LOADER
         log("Compiling and Linking Static Loader...", style="info")
-        
+
         # Determine static lib name
-        lib_name = "pytron_rust_bootloader.lib" if sys.platform == "win32" else "libpytron_rust_bootloader.a"
-        if sys.platform == "win32" and not (context.package_dir / "pytron" / "pack" / "secure_loader" / "bin" / lib_name).exists():
+        lib_name = (
+            "pytron_rust_bootloader.lib"
+            if sys.platform == "win32"
+            else "libpytron_rust_bootloader.a"
+        )
+        if (
+            sys.platform == "win32"
+            and not (
+                context.package_dir
+                / "pytron"
+                / "pack"
+                / "secure_loader"
+                / "bin"
+                / lib_name
+            ).exists()
+        ):
             # Check for alternate name
-             if (context.package_dir / "pytron" / "pack" / "secure_loader" / "bin" / "libpytron_rust_bootloader.a").exists():
-                 lib_name = "libpytron_rust_bootloader.a"
+            if (
+                context.package_dir
+                / "pytron"
+                / "pack"
+                / "secure_loader"
+                / "bin"
+                / "libpytron_rust_bootloader.a"
+            ).exists():
+                lib_name = "libpytron_rust_bootloader.a"
 
         bootloader_lib = (
-            context.package_dir
-            / "pytron"
-            / "pack"
-            / "secure_loader"
-            / "bin"
-            / lib_name
+            context.package_dir / "pytron" / "pack" / "secure_loader" / "bin" / lib_name
         )
 
         if not bootloader_lib.exists():
-             raise ModuleError(f"Static Bootloader not found at {bootloader_lib}. Please run 'pytron build-loader'.", module_name="SecurityModule")
+            raise ModuleError(
+                f"Static Bootloader not found at {bootloader_lib}. Please run 'pytron build-loader'.",
+                module_name="SecurityModule",
+            )
 
         # Compile app.c and link with bootloader_lib
-        compiled_exe = cython_compile(self.original_script, self.build_dir, bootloader_lib)
-        
-        if not compiled_exe or not compiled_exe.exists():
-             raise ModuleError("Failed to compile fused executable.", module_name="SecurityModule")
+        compiled_exe = cython_compile(
+            self.original_script, self.build_dir, bootloader_lib
+        )
 
-        final_loader = final_dist / f"{original_out_name}.exe" if sys.platform == "win32" else final_dist / original_out_name
-        
+        if not compiled_exe or not compiled_exe.exists():
+            raise ModuleError(
+                "Failed to compile fused executable.", module_name="SecurityModule"
+            )
+
+        final_loader = (
+            final_dist / f"{original_out_name}.exe"
+            if sys.platform == "win32"
+            else final_dist / original_out_name
+        )
+
         if final_loader.exists():
             os.remove(final_loader)
-            
+
         shutil.copy2(compiled_exe, final_loader)
-        
+
         log(f"  + Generated Fused Executable: {final_loader.name}", style="success")
 
         # Cleanup dummy base exe if it exists
