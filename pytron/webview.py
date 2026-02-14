@@ -98,7 +98,9 @@ class Webview:
                 try:
                     # Map the URL relative to the Application Root for consistent routing
                     rel = path_obj.relative_to(pathlib.Path(root_path))
-                    final_url = f"{self._scheme}app/{urllib.parse.quote(rel.as_posix())}"
+                    final_url = (
+                        f"{self._scheme}app/{urllib.parse.quote(rel.as_posix())}"
+                    )
                 except ValueError:
                     # Fallback if the file is outside app_root (e.g. system file)
                     root_path = str(path_obj.parent)

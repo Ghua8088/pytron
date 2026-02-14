@@ -137,20 +137,41 @@ class Inspector:
     def log_console(self, cmd, result=None, error=None):
         """Injects a console interaction into the log stream."""
         if cmd:
-            self.handler.emit(logging.LogRecord(
-                name="pytron.console", level=logging.INFO, pathname="", lineno=0,
-                msg=f">>> {cmd}", args=None, exc_info=None
-            ))
+            self.handler.emit(
+                logging.LogRecord(
+                    name="pytron.console",
+                    level=logging.INFO,
+                    pathname="",
+                    lineno=0,
+                    msg=f">>> {cmd}",
+                    args=None,
+                    exc_info=None,
+                )
+            )
         if result is not None:
-            self.handler.emit(logging.LogRecord(
-                name="pytron.console", level=logging.DEBUG, pathname="", lineno=0,
-                msg=f"<- {result}", args=None, exc_info=None
-            ))
+            self.handler.emit(
+                logging.LogRecord(
+                    name="pytron.console",
+                    level=logging.DEBUG,
+                    pathname="",
+                    lineno=0,
+                    msg=f"<- {result}",
+                    args=None,
+                    exc_info=None,
+                )
+            )
         if error:
-            self.handler.emit(logging.LogRecord(
-                name="pytron.console", level=logging.ERROR, pathname="", lineno=0,
-                msg=f"Error: {error}", args=None, exc_info=None
-            ))
+            self.handler.emit(
+                logging.LogRecord(
+                    name="pytron.console",
+                    level=logging.ERROR,
+                    pathname="",
+                    lineno=0,
+                    msg=f"Error: {error}",
+                    args=None,
+                    exc_info=None,
+                )
+            )
 
     def eval_code(self, code):
         """Executes arbitrary Python code in the context of the app."""
