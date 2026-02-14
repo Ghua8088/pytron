@@ -134,6 +134,24 @@ class Inspector:
         """Returns the captured logs."""
         return list(self.handler.logs)
 
+    def log_console(self, cmd, result=None, error=None):
+        """Injects a console interaction into the log stream."""
+        if cmd:
+            self.handler.emit(logging.LogRecord(
+                name="pytron.console", level=logging.INFO, pathname="", lineno=0,
+                msg=f">>> {cmd}", args=None, exc_info=None
+            ))
+        if result is not None:
+            self.handler.emit(logging.LogRecord(
+                name="pytron.console", level=logging.DEBUG, pathname="", lineno=0,
+                msg=f"<- {result}", args=None, exc_info=None
+            ))
+        if error:
+            self.handler.emit(logging.LogRecord(
+                name="pytron.console", level=logging.ERROR, pathname="", lineno=0,
+                msg=f"Error: {error}", args=None, exc_info=None
+            ))
+
     def eval_code(self, code):
         """Executes arbitrary Python code in the context of the app."""
         try:
@@ -143,7 +161,9 @@ class Inspector:
                 res = eval(  # nosemgrep
                     code, {"app": self.app, "state": self.app.state, "inspector": self}
                 )  # nosec B307
-                return {"result": pytron_serialize(res)}
+                ser_res = pytron_serialize(res)
+                self.log_console(code, result=ser_res)
+                return {"result": ser_res}
             except SyntaxError:
                 exec_globals = {
                     "app": self.app,
@@ -151,9 +171,12 @@ class Inspector:
                     "inspector": self,
                 }
                 exec(code, exec_globals)  # nosec B102 # nosemgrep
+                self.log_console(code, result="Statement executed.")
                 return {"result": "Statement executed successfully."}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            err = traceback.format_exc()
+            self.log_console(code, error=str(e))
+            return {"error": str(e), "traceback": err}
 
     def _launch_inspector(self):
         """Internal: Runs the inspector window in specific thread."""

@@ -72,7 +72,12 @@ class Webview:
         raw_url = config.get("url", "")
         debug = config.get("debug", False)
 
-        root_path = str(self._app_root)
+        # Determine the definitive Application Root
+        if self.app and hasattr(self.app, "app_root"):
+            root_path = str(self.app.app_root)
+        else:
+            root_path = str(self._app_root)
+
         final_url = raw_url
 
         # Determine Scheme based on Platform (Native Engine behavior)
@@ -86,17 +91,20 @@ class Webview:
         if not raw_url.startswith(("http:", "https:", "pytron:", "data:")):
             path_obj = pathlib.Path(raw_url)
             if not path_obj.is_absolute():
-                path_obj = (self._app_root / path_obj).resolve()
+                # Resolve relative to determined root
+                path_obj = (pathlib.Path(root_path) / path_obj).resolve()
 
             if path_obj.exists():
-                # Valid local file found.
-                # Map its parent dir as the App Root.
-                root_path = str(path_obj.parent)
-                # URL becomes <scheme>app/<filename>
-                final_url = f"{self._scheme}app/{urllib.parse.quote(path_obj.name)}"
+                try:
+                    # Map the URL relative to the Application Root for consistent routing
+                    rel = path_obj.relative_to(pathlib.Path(root_path))
+                    final_url = f"{self._scheme}app/{urllib.parse.quote(rel.as_posix())}"
+                except ValueError:
+                    # Fallback if the file is outside app_root (e.g. system file)
+                    root_path = str(path_obj.parent)
+                    final_url = f"{self._scheme}app/{urllib.parse.quote(path_obj.name)}"
             else:
-                # Fallback
-                root_path = str(path_obj.parent)
+                # Fallback for missing files or legacy paths
                 final_url = f"{self._scheme}app/{urllib.parse.quote(path_obj.name)}"
 
         self.root_path = root_path  # Store for later navigations

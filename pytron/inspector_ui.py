@@ -7,503 +7,448 @@ INSPECTOR_HTML = r"""
     <title>Pytron Inspector</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #0d1117;
-            --surface: #161b22;
-            --border: #30363d;
-            --text: #c9d1d9;
-            --text-dim: #8b949e;
-            --accent: #58a6ff;
-            --success: #3fb950;
-            --error: #f85149;
-            --warning: #d29922;
-            --header-h: 40px; /* Slimmer header like Chrome DevTools */
+            --bg: #20232a;
+            --sidebar: #282c34;
+            --surface: #32363e;
+            --border: #3d424a;
+            --text: #ffffff;
+            --text-dim: #9da5b4;
+            --accent: #61dafb;
+            --success: #4caf50;
+            --error: #f44336;
+            --warning: #ff9800;
+            --header-h: 40px;
+            --font-main: 'Inter', -apple-system, sans-serif;
+            --font-code: 'JetBrains Mono', 'Fira Code', monospace;
         }
 
         * { box-sizing: border-box; }
         body {
-            margin: 0;
-            padding: 0;
+            margin: 0; padding: 0;
             background: var(--bg);
             color: var(--text);
-            font-family: 'Inter', -apple-system, sans-serif;
+            font-family: var(--font-main);
             overflow: hidden;
             display: flex;
             flex-direction: column;
             height: 100vh;
         }
 
-        /* Tabs bar - Chrome Style */
+        /* --- Header --- */
         header {
             height: var(--header-h);
-            background: #1f2428;
+            background: var(--sidebar);
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
-            padding: 0;
-            user-select: none;
+            padding: 0 12px;
+            z-index: 100;
         }
 
         .brand {
-            padding: 0 16px;
-            font-weight: 700;
-            font-size: 11px;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border-right: 1px solid var(--border);
-            height: 100%;
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--accent);
+            margin-right: 24px;
             display: flex;
             align-items: center;
+            gap: 8px;
         }
 
-        nav {
-            display: flex;
-            height: 100%;
-        }
-
+        nav { display: flex; height: 100%; }
         .nav-item {
             padding: 0 16px;
+            height: 100%;
             display: flex;
             align-items: center;
-            font-size: 12px;
-            cursor: pointer;
+            font-size: 13px;
             color: var(--text-dim);
-            border-right: 1px solid transparent;
-            border-left: 1px solid transparent;
-            height: 100%;
-            transition: all 0.1s;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: 0.1s;
         }
-
-        .nav-item:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+        .nav-item:hover { color: var(--text); }
         .nav-item.active {
-            color: var(--text);
-            background: var(--bg);
-            border-left: 1px solid var(--border);
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        /* --- Layout --- */
+        main { flex: 1; display: flex; overflow: hidden; }
+        .view { display: none; width: 100%; height: 100%; }
+        .view.active { display: flex; }
+
+        /* --- Elements / State View (React Style) --- */
+        .state-layout { display: flex; width: 100%; height: 100%; }
+        .state-tree-pane {
+            width: 40%;
             border-right: 1px solid var(--border);
-            border-bottom: 1px solid var(--bg);
-            margin-bottom: -1px;
-            z-index: 10;
+            overflow-y: auto;
+            background: var(--bg);
         }
-
-        main {
+        .state-props-pane {
             flex: 1;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .view {
-            display: none;
-            height: 100%;
-            width: 100%;
-            overflow: auto;
-        }
-
-        .view.active { display: flex; flex-direction: column; }
-
-        /* Generic Container */
-        .content-padding { padding: 16px; }
-
-        /* Dashboard Grid */
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 16px;
+            overflow-y: auto;
+            background: var(--sidebar);
             padding: 16px;
         }
 
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 12px;
-        }
-
-        .card-title {
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            margin-bottom: 12px;
+        .tree-node-wrap { padding: 2px 0; }
+        .tree-row {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-        }
-
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 6px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-family: var(--font-code);
             font-size: 12px;
+            border-radius: 4px;
+            margin: 0 4px;
         }
-
-        .stat-val { font-weight: 600; color: var(--accent); font-family: 'Fira Code', monospace; }
-
-        /* Badges */
-        .badge {
+        .tree-row:hover { background: var(--surface); }
+        .tree-row.selected { background: #373940; border-left: 2px solid var(--accent); }
+        
+        .toggle-icon {
+            width: 16px; height: 16px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-dim);
+            margin-right: 4px;
             font-size: 10px;
-            padding: 1px 6px;
-            border-radius: 10px;
-            font-weight: 600;
+        }
+
+        .tag-bracket { color: var(--text-dim); }
+        .tag-name { color: var(--accent); }
+        
+        /* --- Props Inspector --- */
+        .props-section { margin-bottom: 24px; }
+        .props-title {
+            font-size: 11px;
             text-transform: uppercase;
+            color: var(--text-dim);
+            font-weight: 700;
+            margin-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 4px;
         }
-        .badge-success { background: rgba(63, 185, 80, 0.15); color: var(--success); border: 1px solid rgba(63, 185,  green, 0.2); }
-        .badge-error { background: rgba(248, 81, 73, 0.15); color: var(--error); border: 1px solid rgba(248, 81, 73, 0.2); }
-
-        /* Console Style REPL & Logs */
-        .console-container {
-            flex: 1;
-            background: var(--bg);
+        .prop-row {
             display: flex;
-            flex-direction: column;
-            overflow: hidden;
+            font-family: var(--font-code);
+            font-size: 12px;
+            margin-bottom: 4px;
         }
+        .prop-key { color: #d2a8ff; margin-right: 8px; }
+        .prop-val { color: var(--text); }
+        .prop-val.string { color: #a5d6ff; }
+        .prop-val.number { color: #ffab70; }
+        .prop-val.boolean { color: #79c0ff; }
 
-        .console-output {
+        /* --- Console --- */
+        .console-view { flex-direction: column; background: #1e1e1e; }
+        #console-output {
             flex: 1;
             overflow-y: auto;
-            font-family: 'Fira Code', monospace;
-            font-size: 12px;
             padding: 8px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .console-line {
-            padding: 3px 6px;
-            border-bottom: 1px solid rgba(255,255,255,0.02);
             display: flex;
-            gap: 8px;
+            flex-direction: column;
         }
-        .console-line:hover { background: rgba(255,255,255,0.02); }
-        .line-time { color: var(--text-dim); min-width: 65px; }
-        .line-level { font-weight: 700; min-width: 50px; }
-        .level-DEBUG { color: var(--text-dim); }
-        .level-INFO { color: var(--accent); }
-        .level-WARNING { color: var(--warning); }
-        .level-ERROR { color: var(--error); }
-
+        .console-line {
+            display: flex;
+            padding: 4px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            font-family: var(--font-code);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .line-meta { color: var(--text-dim); width: 80px; font-size: 10px; flex-shrink: 0; }
+        .line-content { flex: 1; white-space: pre-wrap; }
+        
+        .level-ERROR { color: var(--error); border-left: 3px solid var(--error); background: rgba(244, 67, 54, 0.05); }
+        .level-WARNING { color: var(--warning); border-left: 3px solid var(--warning); }
+        
         .console-input-area {
-            height: 32px;
-            background: var(--surface);
+            height: 40px;
+            background: var(--sidebar);
+            border-top: 1px solid var(--border);
             display: flex;
             align-items: center;
-            padding: 0 8px;
-            gap: 8px;
+            padding: 0 12px;
         }
-        .console-prompt { color: var(--accent); font-weight: 700; font-size: 13px; margin-top: -2px; }
-        .console-input {
+        .prompt { color: var(--accent); margin-right: 8px; font-weight: 700; }
+        #console-input {
             flex: 1;
             background: transparent;
             border: none;
             color: var(--text);
-            font-family: 'Fira Code', monospace;
+            font-family: var(--font-code);
             font-size: 12px;
             outline: none;
         }
 
-        /* IPC List */
-        .ipc-table { width: 100%; border-collapse: collapse; font-family: 'Fira Code', monospace; font-size: 11px; }
-        .ipc-table th { text-align: left; padding: 6px 12px; background: #1f2428; color: var(--text-dim); border-bottom: 1px solid var(--border); }
-        .ipc-table td { padding: 4px 12px; border-bottom: 1px solid var(--border); }
-        .ipc-status-ok { color: var(--success); }
-        .ipc-status-err { color: var(--error); }
-
-        /* Utility */
-        .btn { background: var(--border); border: 1px solid #444c56; color: var(--text); font-size: 11px; padding: 2px 8px; border-radius: 3px; cursor: pointer; }
-        .btn:hover { background: #444c56; }
+        /* --- IPC / Network --- */
+        .table-wrap { padding: 16px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th { text-align: left; padding: 12px 8px; color: var(--text-dim); border-bottom: 2px solid var(--border); text-transform: uppercase; font-size: 10px; }
+        td { padding: 10px 8px; border-bottom: 1px solid var(--border); font-family: var(--font-code); }
         
+        /* --- Stats Widgets --- */
+        .dashboard-view { padding: 16px; overflow-y: auto; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+        .card { background: var(--sidebar); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+        .card-header { font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-bottom: 16px; }
+        
+        .progress-bg { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin: 8px 0; }
+        .progress-fill { height: 100%; background: var(--accent); transition: 0.3s; }
+
+        /* --- Scrollbar --- */
         ::-webkit-scrollbar { width: 10px; height: 10px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 5px; border: 2px solid var(--bg); }
-        ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+        ::-webkit-scrollbar-thumb { background: #3e4451; border-radius: 5px; border: 2px solid var(--bg); }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5262; }
 
-        /* State Tree */
-        .tree-node { margin-left: 12px; border-left: 1px solid rgba(255,255,255,0.05); padding-left: 8px; }
-        .tree-header { cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 1px 0; }
-        .tree-header:hover { background: rgba(255,255,255,0.03); }
-        .tree-key { color: #79c0ff; }
-        .tree-val-str { color: #a5d6ff; }
-        .tree-toggle { display: inline-block; width: 10px; font-size: 8px; color: var(--text-dim); }
+        .btn-small {
+            background: var(--surface); border: 1px solid var(--border); color: var(--text);
+            padding: 2px 8px; border-radius: 4px; font-size: 10px; cursor: pointer;
+        }
+        .btn-small:hover { background: var(--accent); color: var(--bg); }
     </style>
 </head>
 <body>
     <header>
-        <div class="brand">Pytron Kit</div>
-        <nav>
-            <div class="nav-item active" onclick="switchView('dashboard')">Elements</div>
-            <div class="nav-item" onclick="switchView('console')">Console</div>
-            <div class="nav-item" onclick="switchView('network')">Network (IPC)</div>
-            <div class="nav-item" onclick="switchView('application')">Application</div>
-        </nav>
-        <div style="margin-left: auto; padding-right: 12px; font-size: 10px; color: var(--text-dim);">
-            <span id="uptime-display">Uptime: 0s</span>
+        <div class="brand">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+            PYTRON
         </div>
+        <nav>
+            <div class="nav-item active" onclick="showView('elements')">Elements</div>
+            <div class="nav-item" onclick="showView('console')">Console</div>
+            <div class="nav-item" onclick="showView('network')">Network</div>
+            <div class="nav-item" onclick="showView('stats')">Stats</div>
+        </nav>
+        <div id="uptime-display" style="margin-left:auto; font-size:11px; color:var(--text-dim);">Uptime: 0s</div>
     </header>
 
     <main>
-        <!-- ELEMENTS VIEW (Dashboard/Trees) -->
-        <div id="view-dashboard" class="view active">
-            <div class="dashboard-grid">
+        <!-- ELEMENTS (State Tree) -->
+        <div id="elements" class="view active state-layout">
+            <div class="state-tree-pane" id="state-tree-container"></div>
+            <div class="state-props-pane" id="state-props-container">
+                <div class="props-title">Props</div>
+                <div id="props-content">Select a node to inspect state</div>
+            </div>
+        </div>
+
+        <!-- CONSOLE -->
+        <div id="console" class="view console-view">
+            <div id="console-output"></div>
+            <div class="console-input-area">
+                <span class="prompt">>>></span>
+                <input type="text" id="console-input" placeholder="Execute Python..." spellcheck="false">
+            </div>
+        </div>
+
+        <!-- NETWORK (IPC) -->
+        <div id="network" class="view">
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Time</th><th>Method</th><th>Latency</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="ipc-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- STATS -->
+        <div id="stats" class="view dashboard-view">
+            <div class="grid">
                 <div class="card">
-                    <div class="card-title">Performance Metrics</div>
-                    <div class="stat-row">CPU <span id="cpu-num" class="stat-val">0.0%</span></div>
-                    <div style="height:4px; background:var(--border); margin-bottom:12px; border-radius:2px; overflow:hidden;">
-                        <div id="cpu-bar" style="width:0%; height:100%; background:var(--accent); transition: width 0.3s;"></div>
-                    </div>
-                    <div class="stat-row">Memory (RSS) <span id="mem-num" class="stat-val">0MB</span></div>
-                    <div class="stat-row">Threads <span id="thread-num" class="stat-val">0</span></div>
+                    <div class="card-header">Engine Performance</div>
+                    <div class="stat-row">CPU <span class="stat-val" id="cpu-val">0%</span></div>
+                    <div class="progress-bg"><div id="cpu-bar" class="progress-fill"></div></div>
+                    <div class="stat-row">Memory <span class="stat-val" id="mem-val">0 MB</span></div>
+                    <div class="stat-row">Threads <span class="stat-val" id="thread-val">0</span></div>
                 </div>
-
                 <div class="card">
-                    <div class="card-title">Active Windows</div>
-                    <div id="window-list"></div>
+                    <div class="card-header">Active Windows</div>
+                    <div id="win-list"></div>
                 </div>
-
-                <div class="card" style="grid-column: span 1;">
-                    <div class="card-title">Plugin Status</div>
-                    <div id="plugin-list" class="stat-row" style="flex-direction:column; gap:4px;"></div>
+                <div class="card">
+                    <div class="card-header">Environment</div>
+                    <div id="env-list"></div>
                 </div>
-            </div>
-            
-            <div class="content-padding" style="border-top:1px solid var(--border);">
-                <div class="card-title">Reactive State Tree</div>
-                <div id="state-tree" style="font-family:'Fira Code', monospace; font-size:12px;"></div>
-            </div>
-        </div>
-
-        <!-- CONSOLE VIEW (Combined Logs & REPL) -->
-        <div id="view-console" class="view">
-            <div class="console-container">
-                <div id="console-output" class="console-output"></div>
-                <div class="console-input-area">
-                    <span class="console-prompt">›</span>
-                    <input type="text" id="console-input" class="console-input" placeholder="Enter Python command..." autocomplete="off">
-                </div>
-            </div>
-        </div>
-
-        <!-- NETWORK VIEW (IPC) -->
-        <div id="view-network" class="view">
-            <table class="ipc-table">
-                <thead>
-                    <tr>
-                        <th>Time</th>
-                        <th>Method</th>
-                        <th>Status</th>
-                        <th>Duration</th>
-                    </tr>
-                </thead>
-                <tbody id="ipc-body"></tbody>
-            </table>
-        </div>
-
-        <!-- APPLICATION VIEW (Environment) -->
-        <div id="view-application" class="view content-padding">
-            <div class="card">
-                <div class="card-title">Environment Information</div>
-                <div id="env-details"></div>
             </div>
         </div>
     </main>
 
     <script>
-        let currentView = 'dashboard';
-        let refreshTimer = null;
+        let currentView = 'elements';
+        let selectedPath = 'App.State';
+        const expandedPaths = new Set(['App.State']);
+        let fullData = null;
 
-        function switchView(name) {
+        function showView(name) {
             currentView = name;
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(v => v.classList.remove('active'));
-            document.getElementById(`view-${name}`).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById(name).classList.add('active');
             
-            // Find nav item by visible text for simpler matching
+            // Highlight nav
             const navs = document.querySelectorAll('.nav-item');
-            navs.forEach(n => {
-                if(n.innerText.toLowerCase().includes(name === 'dashboard' ? 'elements' : name)) n.classList.add('active');
-            });
+            navs.forEach(n => { if(n.innerText.toLowerCase() === name) n.classList.add('active'); });
+            
             refreshData();
         }
 
         async function refreshData() {
-            const data = await pytron.inspector_get_data();
-            updateUptime(data.stats);
+            try {
+                const data = await pytron.inspector_get_data();
+                fullData = data;
+                
+                document.getElementById('uptime-display').innerText = `PID: ${data.stats.pid} | Uptime: ${data.stats.uptime}s`;
+
+                if (currentView === 'elements') renderState();
+                if (currentView === 'console') refreshLogs();
+                if (currentView === 'network') renderIPC();
+                if (currentView === 'stats') renderStats();
+            } catch (e) {}
+        }
+
+        // --- State Tree ---
+        function renderState() {
+            const container = document.getElementById('state-tree-container');
+            container.innerHTML = '';
+            container.appendChild(createTreeNode(fullData.state, 'App.State', 'App.State'));
+            renderProps();
+        }
+
+        function createTreeNode(val, key, path) {
+            const wrap = document.createElement('div');
+            wrap.className = 'tree-node-wrap';
             
-            if(currentView === 'dashboard') {
-                updatePerformance(data.stats);
-                updateWindows(data.windows);
-                updatePlugins(data.plugins);
-                renderStateTree(data.state);
-            } else if (currentView === 'network') {
-                updateIPC(data.ipc_history);
-            } else if (currentView === 'application') {
-                updateEnvironment(data.stats);
+            const isObj = typeof val === 'object' && val !== null;
+            const expanded = expandedPaths.has(path);
+            const isSelected = selectedPath === path;
+
+            const row = document.createElement('div');
+            row.className = `tree-row ${isSelected ? 'selected' : ''}`;
+            row.style.paddingLeft = (path.split('.').length * 12) + 'px';
+            
+            row.onclick = (e) => {
+                e.stopPropagation();
+                selectedPath = path;
+                renderState();
+            };
+
+            const toggle = document.createElement('span');
+            toggle.className = 'toggle-icon';
+            toggle.innerHTML = isObj ? (expanded ? '▼' : '▶') : '';
+            toggle.onclick = (e) => {
+                e.stopPropagation();
+                if (expanded) expandedPaths.delete(path);
+                else expandedPaths.add(path);
+                renderState();
+            };
+
+            row.appendChild(toggle);
+            
+            const label = document.createElement('span');
+            label.innerHTML = `<span class="tag-bracket">&lt;</span><span class="tag-name">${key}</span><span class="tag-bracket">&gt;</span>`;
+            row.appendChild(label);
+            
+            wrap.appendChild(row);
+
+            if (isObj && expanded) {
+                for (let k in val) {
+                    wrap.appendChild(createTreeNode(val[k], k, `${path}.${k}`));
+                }
             }
+            return wrap;
+        }
+
+        function renderProps() {
+            const container = document.getElementById('props-content');
+            let target = fullData.state;
+            const parts = selectedPath.split('.').slice(1);
             
-            // Logs are updated separately or on console view
-            if(currentView === 'console') refreshLogs();
+            for (let p of parts) {
+                if (target && target[p] !== undefined) target = target[p];
+            }
+
+            container.innerHTML = '';
+            if (typeof target === 'object' && target !== null) {
+                for (let k in target) {
+                    const row = document.createElement('div');
+                    row.className = 'prop-row';
+                    const val = target[k];
+                    const type = typeof val;
+                    row.innerHTML = `<span class="prop-key">${k}:</span><span class="prop-val ${type}">${JSON.stringify(val)}</span>`;
+                    container.appendChild(row);
+                }
+            } else {
+                container.innerHTML = `<div class="prop-row"><span class="prop-key">value:</span><span class="prop-val">${JSON.stringify(target)}</span></div>`;
+            }
         }
 
-        function updateUptime(s) {
-            if(!s) return;
-            document.getElementById('uptime-display').innerText = `Uptime: ${s.uptime}s | PID: ${s.pid}`;
-        }
-
-        function updatePerformance(s) {
-            if(!s) return;
-            document.getElementById('cpu-num').innerText = s.process_cpu.toFixed(1) + '%';
-            document.getElementById('cpu-bar').style.width = Math.min(s.process_cpu, 100) + '%';
-            document.getElementById('mem-num').innerText = s.process_mem + ' MB';
-            document.getElementById('thread-num').innerText = s.threads;
-        }
-
-        function updateWindows(wins) {
-            const container = document.getElementById('window-list');
-            container.innerHTML = wins.map(w => `
-                <div style="border-bottom:1px solid var(--border); padding:6px 0; display:flex; justify-content:space-between; align-items:center;">
-                    <div style="overflow:hidden">
-                        <div style="font-size:12px; font-weight:600; color:var(--text);">${w.title}</div>
-                        <div style="font-size:10px; color:var(--text-dim); white-space:nowrap; text-overflow:ellipsis; overflow:hidden; width:180px;">${w.url}</div>
-                        <div style="font-size:9px; color:var(--accent);">${w.dimensions[0]}x${w.dimensions[1]}</div>
-                    </div>
-                    <div style="display:flex; gap:4px;">
-                        <button class="btn" onclick="winAction(${w.id}, '${w.visible?'hide':'show'}')">${w.visible?'Hide':'Show'}</button>
-                    </div>
+        // --- Console ---
+        async function refreshLogs() {
+            const logs = await pytron.inspector_get_logs();
+            const out = document.getElementById('console-output');
+            const atBottom = out.scrollHeight - out.scrollTop <= out.clientHeight + 50;
+            
+            out.innerHTML = logs.map(l => `
+                <div class="console-line level-${l.level}">
+                    <div class="line-meta">${l.time}</div>
+                    <div class="line-content">${escapeHtml(l.msg)}</div>
                 </div>
             `).join('');
+            
+            if (atBottom) out.scrollTop = out.scrollHeight;
         }
 
-        function updatePlugins(plugins) {
-            const container = document.getElementById('plugin-list');
-            container.innerHTML = plugins.map(p => `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-size:12px;">${p.name} <small style="color:var(--text-dim)">v${p.version||'?'}</small></span>
-                    <span class="badge ${p.status === 'loaded' ? 'badge-success' : 'badge-error'}">${p.status}</span>
-                </div>
-            `).join('');
-        }
+        document.getElementById('console-input').onkeydown = async (e) => {
+            if (e.key === 'Enter') {
+                const cmd = e.target.value;
+                if (!cmd) return;
+                e.target.value = '';
+                await pytron.inspector_eval(cmd);
+                refreshLogs();
+            }
+        };
 
-        function updateIPC(history) {
+        // --- IPC ---
+        function renderIPC() {
             const body = document.getElementById('ipc-body');
-            body.innerHTML = history.slice().reverse().map(e => `
+            body.innerHTML = fullData.ipc_history.slice().reverse().map(h => `
                 <tr>
-                    <td>${e.time}</td>
-                    <td><span style="color:var(--warning)">${e.function}</span></td>
-                    <td><span class="${e.error ? 'ipc-status-err' : 'ipc-status-ok'}">${e.error ? 'FAILED' : 'OK'}</span></td>
-                    <td>${e.duration}ms</td>
+                    <td>${h.time}</td>
+                    <td style="color:var(--accent)">${h.function}</td>
+                    <td>${h.duration}ms</td>
+                    <td class="${h.error?'ipc-status-err':'ipc-status-ok'}">${h.error?'ERROR':'OK'}</td>
                 </tr>
             `).join('');
         }
 
-        function updateEnvironment(s) {
-            const container = document.getElementById('env-details');
-            container.innerHTML = `
-                <div class="stat-row">Platform <span class="stat-val">${s.platform}</span></div>
-                <div class="stat-row">Python Version <span class="stat-val">${navigator.userAgent.includes('Python') ? 'Inside Runtime' : 'Native'}</span></div>
-            `;
-        }
+        // --- Stats ---
+        function renderStats() {
+            const s = fullData.stats;
+            document.getElementById('cpu-val').innerText = s.process_cpu.toFixed(1) + '%';
+            document.getElementById('cpu-bar').style.width = Math.min(s.process_cpu, 100) + '%';
+            document.getElementById('mem-val').innerText = s.process_mem + ' MB';
+            document.getElementById('thread-val').innerText = s.threads;
 
-        // --- Console / Logs logic ---
-        async function refreshLogs() {
-            const logs = await pytron.inspector_get_logs();
-            const container = document.getElementById('console-output');
-            const atBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 40;
-            
-            container.innerHTML = logs.map(l => `
-                <div class="console-line">
-                    <span class="line-time">${l.time}</span>
-                    <span class="line-level level-${l.level}">${l.level}</span>
-                    <span class="line-msg">${escapeHtml(l.msg)}</span>
+            document.getElementById('win-list').innerHTML = fullData.windows.map(w => `
+                <div class="stat-row" style="padding: 4px 0; border-bottom: 1px solid var(--border)">
+                    <span>${w.title} <small style="color:var(--text-dim)">(${w.dimensions[0]}x${w.dimensions[1]})</small></span>
+                    <button class="btn-small" onclick="pytron.inspector_window_action(${w.id}, 'center')">Center</button>
                 </div>
             `).join('');
-            
-            if(atBottom) container.scrollTop = container.scrollHeight;
-        }
 
-        const cin = document.getElementById('console-input');
-        const cout = document.getElementById('console-output');
-        cin.onkeydown = async (e) => {
-            if(e.key === 'Enter') {
-                const cmd = cin.value.trim();
-                if(!cmd) return;
-                cin.value = '';
-                
-                // Add to output immediately
-                const userLine = document.createElement('div');
-                userLine.className = 'console-line';
-                userLine.innerHTML = `<span style="color:var(--accent); font-weight:700;">»</span> <span style="font-style:italic;">${escapeHtml(cmd)}</span>`;
-                cout.appendChild(userLine);
-                
-                try {
-                    const res = await pytron.inspector_eval(cmd);
-                    const resLine = document.createElement('div');
-                    resLine.className = 'console-line';
-                    if(res.error) {
-                        resLine.innerHTML = `<span style="color:var(--error)">✖ ${escapeHtml(res.error)}</span>`;
-                    } else {
-                        resLine.innerHTML = `<span style="color:var(--success)">◀</span> <span>${escapeHtml(JSON.stringify(res.result, null, 2))}</span>`;
-                    }
-                    cout.appendChild(resLine);
-                } catch(err) {
-                    const errLine = document.createElement('div');
-                    errLine.className = 'console-line';
-                    errLine.innerHTML = `<span style="color:var(--error)">✖ ${escapeHtml(err.toString())}</span>`;
-                    cout.appendChild(errLine);
-                }
-                cout.scrollTop = cout.scrollHeight;
-            }
-        };
-
-        // --- Window Action ---
-        async function winAction(id, action) {
-            await pytron.inspector_window_action(id, action);
-            refreshData();
-        }
-
-        // --- State Tree Renderer ---
-        const expandedPaths = new Set(['App.State']);
-
-        function renderStateTree(state) {
-            const container = document.getElementById('state-tree');
-            container.innerHTML = '';
-            container.appendChild(createTreeNode(state, 'App.State', 'App.State'));
-        }
-
-        function createTreeNode(val, key, path) {
-            const div = document.createElement('div');
-            const isObj = typeof val === 'object' && val !== null;
-            const expanded = expandedPaths.has(path);
-            
-            const header = document.createElement('div');
-            header.className = 'tree-header';
-            header.innerHTML = `
-                <span class="tree-toggle">${isObj ? (expanded ? '▼' : '▶') : ' '}</span>
-                <span class="tree-key">${key}</span>: 
-                <span class="${typeof val === 'string' ? 'tree-val-str' : ''}">${isObj ? (Array.isArray(val) ? `Array(${val.length})` : 'Object') : JSON.stringify(val)}</span>
+            document.getElementById('env-list').innerHTML = `
+                <div class="stat-row">Platform <span class="stat-val">${s.platform}</span></div>
+                <div class="stat-row">Python PID <span class="stat-val">${s.pid}</span></div>
             `;
-            
-            const content = document.createElement('div');
-            content.className = 'tree-node';
-            content.style.display = expanded ? 'block' : 'none';
-            
-            if(isObj) {
-                header.onclick = () => {
-                    const shown = content.style.display === 'block';
-                    content.style.display = shown ? 'none' : 'block';
-                    header.querySelector('.tree-toggle').innerText = shown ? '▶' : '▼';
-                    if (shown) expandedPaths.delete(path);
-                    else expandedPaths.add(path);
-                };
-                for(let k in val) {
-                    const childPath = `${path}.${k}`;
-                    content.appendChild(createTreeNode(val[k], k, childPath));
-                }
-            }
-            
-            div.appendChild(header);
-            div.appendChild(content);
-            return div;
         }
 
         function escapeHtml(text) {
@@ -512,9 +457,9 @@ INSPECTOR_HTML = r"""
             return div.innerHTML;
         }
 
-        // Start polling
         setInterval(refreshData, 1000);
+        refreshData();
     </script>
 </body>
 </html>
-"""
+    """

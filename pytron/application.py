@@ -180,6 +180,12 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
                 self.load_plugins(p_dir)
                 seen.add(p_dir)
 
+    def get_base_url(self) -> str:
+        """Returns the base URL for the current platform's native engine."""
+        if sys.platform == "win32":
+            return "https://pytron.localhost/"
+        return "pytron://localhost/"
+
     def on_exit(self, func):
         """
         Register a function to run when the application is exiting.
@@ -446,11 +452,12 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
 
                     # Update state with plugin metadata for the frontend
                     plugins_list = list(self.state.plugins or [])
+                    base_url = self.get_base_url()
                     plugin_meta = {
                         "name": plugin.name,
                         "version": plugin.version,
                         "ui_entry": (
-                            f"pytron://app/plugins/{item}/{plugin.ui_entry}"
+                            f"{base_url}app/plugins/{item}/{plugin.ui_entry}"
                             if plugin.ui_entry
                             else None
                         ),
