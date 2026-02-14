@@ -80,12 +80,15 @@ class Webview:
 
         final_url = raw_url
 
-        # Determine Scheme based on Platform (Native Engine behavior)
-        self._scheme = (
-            "https://pytron.localhost/"
-            if platform.system() == "Windows"
-            else "pytron://localhost/"
-        )
+        # Determine Scheme based on Platform and Engine
+        if config.get("engine") == "chrome":
+            self._scheme = "pytron://localhost"
+        else:
+            self._scheme = (
+                "https://pytron.localhost"
+                if platform.system() == "Windows"
+                else "pytron://localhost"
+            )
 
         # Check if URL looks like a local file path
         if not raw_url.startswith(("http:", "https:", "pytron:", "data:")):
@@ -215,7 +218,11 @@ class Webview:
         # Apply UI settings (Context Menu, BG) for initial load
         self._apply_ui_settings()
 
-        # 9. Utility Status
+        # 9. VAP Archive Loading
+        if config.get("vap_mode"):
+            self._load_vap_archive(config.get("vap_archive", "app.pytron"))
+
+        # 10. Utility Status
         if getattr(self, "_is_utility", False):
             if hasattr(self.native, "set_is_utility"):
                 self.native.set_is_utility(True)
@@ -263,6 +270,11 @@ class Webview:
                 except (ValueError, AttributeError):
                     pass
 
+    @property
+    def base_url(self) -> str:
+        """Returns the base URL (scheme + host) for this webview."""
+        return self._scheme
+
     def is_alive(self):
         """Checks if the window event loop is currently running."""
         return getattr(self, "_running", False)
@@ -283,7 +295,8 @@ class Webview:
         self.bind("__pytron_vap_get", self._get_binary_asset, run_in_thread=True)
 
         # VAP Asset Server MUST be bound raw because it's called directly from Rust protocol handler
-        self.native.bind("pytron_serve_asset", self._serve_asset_callback)
+        if self.native:
+            self.native.bind("pytron_serve_asset", self._serve_asset_callback)
 
         self.bind(
             "pytron_set_slim_titlebar", self.set_slim_titlebar, run_in_thread=False
@@ -442,7 +455,7 @@ class Webview:
             # relative_to throws ValueError if not relative
             rel = path_obj.resolve().relative_to(root.resolve())
             # Use forward slashes for URL
-            return f"{self._scheme}app/{urllib.parse.quote(rel.as_posix())}"
+            return f"{self._scheme}/app/{urllib.parse.quote(rel.as_posix())}"
         except (ValueError, Exception):
             # If outside root, we can't serve it via current pytron instance easily.
             # But maybe the current logic allows it if we didn't lock protocol_root?
@@ -460,8 +473,8 @@ class Webview:
         # Ensure the key is clean (no leading slash or app/ prefix)
         clean_key = key.lstrip("/").replace("app/", "", 1)
         self._served_data[clean_key] = (data, mime_type)
-        # Use appropriate scheme and ensure 'app/' prefix for protocol routing
-        return f"{self._scheme}app/{clean_key}"
+        # Use appropriate scheme and ensure '/app/' prefix for protocol routing
+        return f"{self._scheme}/app/{clean_key}"
 
     def _apply_ui_settings(self):
         """Applies UI configuration via JavaScript injection."""
@@ -778,6 +791,31 @@ class Webview:
     def set_prevent_close(self, prevent):
         if hasattr(self.native, "set_prevent_close"):
             self.native.set_prevent_close(prevent)
+
+    def _load_vap_archive(self, archive_name):
+        """Loads all assets from a .pytron archive into the VAP cache."""
+        import zipfile
+        
+        # Resolve archive path
+        archive_path = Path(self.root_path) / archive_name
+        # Check if it's in _internal (common for PyInstaller)
+        if not archive_path.exists():
+            archive_path = Path(self.root_path) / "_internal" / archive_name
+            
+        if not archive_path.exists():
+            self.logger.warning(f"VAP Archive not found at {archive_path}")
+            return
+
+        self.logger.info(f"Loading VAP Archive: {archive_path}")
+        try:
+            with zipfile.ZipFile(archive_path, "r") as zipf:
+                for name in zipf.namelist():
+                    data = zipf.read(name)
+                    mime, _ = mimetypes.guess_type(name)
+                    self._served_data[name] = (data, mime or "application/octet-stream")
+            self.logger.info(f"VAP: Loaded {len(self._served_data)} assets from archive.")
+        except Exception as e:
+            self.logger.error(f"Failed to load VAP archive: {e}")
 
     def _on_close_requested(self):
         """Called by Native Engine when X is clicked and prevent_close is True."""

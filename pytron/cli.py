@@ -182,6 +182,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable auto-inclusion of smart assets (non-code files).",
     )
+    grp_general.add_argument(
+        "--pack",
+        action="store_true",
+        help="Pack frontend assets into a single uneditable .pytron archive.",
+    )
 
     # Engine Options
     grp_engine = p_pkg.add_argument_group("Engine Options")

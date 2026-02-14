@@ -508,8 +508,22 @@ if (!gotTheLock) {
         };
 
         const handler = (request) => {
-            let urlPath = request.url.replace('pytron://', '');
-            urlPath = urlPath.split('?')[0];
+            const url = request.url;
+            let cleanPath = '';
+            
+            // Find the 'app/' marker to isolate the virtual path
+            if (url.includes('/app/')) {
+                cleanPath = url.split('/app/')[1];
+            } else if (url.includes('app/')) {
+                cleanPath = url.split('app/')[1];
+            } else {
+                // Fallback to older style
+                cleanPath = url.replace('pytron://', '').split('?')[0];
+                if (cleanPath.startsWith('/')) cleanPath = cleanPath.substring(1);
+            }
+            
+            // Strip query strings
+            const urlPath = cleanPath.split('?')[0];
 
             // 1. Check Memory Store (O(1) Lookup for Dynamic Assets)
             if (servedData.has(urlPath)) {
@@ -524,15 +538,7 @@ if (!gotTheLock) {
                 return new Response("Project Root Not Set", { status: 500 });
             }
 
-            // Normalize urlPath: Remove leading 'app/' or '/'
-            let normalizedPath = urlPath;
-            if (normalizedPath.startsWith('app/')) {
-                normalizedPath = normalizedPath.substring(4);
-            } else if (normalizedPath.startsWith('/')) {
-                normalizedPath = normalizedPath.substring(1);
-            }
-
-            let filePath = path.join(PROJECT_ROOT, normalizedPath);
+            let filePath = path.join(PROJECT_ROOT, urlPath);
             // log(`[Protocol] Request: ${request.url} -> ${filePath}`);
 
             try {

@@ -164,6 +164,9 @@ class ChromeWebView(Webview):
                 "concurrent.futures"
             ).futures.ThreadPoolExecutor(max_workers=5)
 
+        # Determine Scheme (Always pytron:// for Chrome engine)
+        self._scheme = "pytron://localhost"
+
         self._bound_functions = {}
         self._served_data = {}
 

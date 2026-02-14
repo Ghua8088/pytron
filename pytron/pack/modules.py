@@ -82,34 +82,18 @@ class AssetModule(BuildModule):
     def prepare(self, context: BuildContext):
         log("Gathering project assets...", style="dim")
 
-        # 1. settings.json
-        settings_path = context.script_dir / "settings.json"
-        if settings_path.exists():
-            # Force debug=False and requested engine for production
-            clean_settings = context.settings.copy()
-            if clean_settings.get("debug") is True:
-                clean_settings["debug"] = False
-
-            # If the user packaged for a specific engine, force it in the config
-            if context.engine:
-                clean_settings["engine"] = context.engine
-                log(
-                    f"Enforcing engine: {context.engine} in production bundle",
-                    style="dim",
-                )
-
-            temp_settings_dir = context.build_dir / "pytron_assets"
-            temp_settings_dir.mkdir(parents=True, exist_ok=True)
-            temp_settings_path = temp_settings_dir / "settings.json"
-            temp_settings_path.write_text(json.dumps(clean_settings, indent=4))
-
-            context.add_data.append(f"{temp_settings_path}{os.pathsep}.")
-
-        # 2. Frontend Dist
+        # 1. Frontend Dist Discovery
         possible_dists = [
             context.script_dir / "frontend" / "dist",
             context.script_dir / "frontend" / "build",
         ]
+        
+        # Check custom frontend dir from settings
+        custom_front = context.settings.get("frontend_dir")
+        if custom_front:
+            possible_dists.insert(0, context.script_dir / custom_front / "dist")
+            possible_dists.insert(1, context.script_dir / custom_front / "build")
+
         frontend_dist = None
         for d in possible_dists:
             if d.exists() and d.is_dir():
@@ -117,8 +101,54 @@ class AssetModule(BuildModule):
                 break
 
         if frontend_dist:
-            rel_path = frontend_dist.relative_to(context.script_dir)
-            context.add_data.append(f"{frontend_dist}{os.pathsep}{rel_path}")
+            # FLATTEN FRONTEND: Instead of bundling the 'dist' folder as a subfolder,
+            # we bundle its CONTENTS at the root level for a cleaner distribution.
+            # This makes the app feel more 'native' and less like a 'packed' script.
+            log(f"Flattening frontend assets from: {frontend_dist.name} -> root", style="info")
+            context.add_data.append(f"{frontend_dist}{os.pathsep}.")
+            
+            # Record that we flattened the frontend for later settings adjustment
+            context.settings["_frontend_flattened"] = True
+
+        # 2. settings.json (NOW PREPARED AFTER FRONTEND DISCOVERY)
+        settings_path = context.script_dir / "settings.json"
+        if settings_path.exists():
+            clean_settings = context.settings.copy()
+            
+            # Force production defaults
+            if clean_settings.get("debug") is True:
+                clean_settings["debug"] = False
+
+            if context.engine:
+                clean_settings["engine"] = context.engine
+                log(f"Enforcing engine: {context.engine} in production bundle", style="dim")
+
+            # ADJUST URL FOR FLATTENED FRONTEND
+            if clean_settings.get("_frontend_flattened"):
+                url = clean_settings.get("url", "")
+                # If URL starts with frontend/dist/ or similar, strip it
+                for candidate in ["frontend/dist/", "frontend/build/", "dist/", "build/"]:
+                    if url.startswith(candidate):
+                        new_url = url.replace(candidate, "", 1)
+                        log(f"Adjusting production URL: {url} -> {new_url}", style="dim")
+                        clean_settings["url"] = new_url
+                        break
+                
+                # If custom frontend dir was used
+                if custom_front:
+                    prefix = f"{custom_front}/dist/"
+                    if url.startswith(prefix):
+                        clean_settings["url"] = url.replace(prefix, "", 1)
+                    prefix = f"{custom_front}/build/"
+                    if url.startswith(prefix):
+                        clean_settings["url"] = url.replace(prefix, "", 1)
+
+            temp_settings_dir = context.build_dir / "pytron_assets"
+            temp_settings_dir.mkdir(parents=True, exist_ok=True)
+            temp_settings_path = temp_settings_dir / "settings.json"
+            temp_settings_path.write_text(json.dumps(clean_settings, indent=4))
+
+            context.add_data.append(f"{temp_settings_path}{os.pathsep}.")
 
         # 3. Smart Assets
         # (This is a simplified version of what was in package.py)
@@ -517,6 +547,58 @@ class HookModule(BuildModule):
         # For now, let's add it to extra_args for PyInstaller.
         context.extra_args.append(f"--additional-hooks-dir={temp_hooks_dir}")
         log(f"Added nuclear hooks dir: {temp_hooks_dir}", style="dim")
+
+
+class PackModule(BuildModule):
+    """
+    Experimental: Fuses all frontend assets into a single .pytron archive.
+    Enables 'VAP' mode automatically at runtime.
+    """
+
+    def prepare(self, context: BuildContext):
+        import zipfile
+
+        # Check if we have frontend assets to pack
+        frontend_src = None
+        for entry in list(context.add_data):
+            if entry.endswith(f"{os.pathsep}."):
+                src = Path(entry.split(os.pathsep)[0])
+                if (src / "index.html").exists():
+                    frontend_src = src
+                    context.add_data.remove(entry)
+                    break
+
+        if not frontend_src:
+            return
+
+        log(f"VAP-ifying frontend: {frontend_src.name} -> app.pytron", style="cyan")
+
+        # Create the archive
+        archive_path = context.build_dir / "app.pytron"
+        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(frontend_src):
+                for file in files:
+                    full_path = Path(root) / file
+                    rel_path = full_path.relative_to(frontend_src)
+                    zipf.write(full_path, rel_path)
+
+        # Add the archive to the distribution
+        # In PyInstaller, '.' maps to the root or _internal depending on onefile
+        context.add_data.append(f"{archive_path}{os.pathsep}.")
+        
+        # Update settings to inform runtime about VAP mode
+        context.settings["vap_mode"] = True
+        context.settings["vap_archive"] = "app.pytron"
+        
+        # Rewrite settings.json to include VAP flags
+        for entry in context.add_data:
+            if "settings.json" in entry and "pytron_assets" in entry:
+                s_path = Path(entry.split(os.pathsep)[0])
+                s_path.write_text(json.dumps(context.settings, indent=4))
+                break
+
+    def post_build(self, context: BuildContext):
+        pass
 
 
 class IconModule(BuildModule):

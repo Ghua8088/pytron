@@ -181,10 +181,20 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
                 seen.add(p_dir)
 
     def get_base_url(self) -> str:
-        """Returns the base URL for the current platform's native engine."""
+        """Returns the base URL for the current platform and engine."""
+        # 1. If a window exists, it is the authority on the current scheme
+        if self.windows:
+            return self.windows[0].base_url
+
+        # 2. Fallback to detection logic
+        # Chrome Engine (Electron) always uses pytron://
+        if getattr(self, "engine", "native") == "chrome":
+            return "pytron://localhost"
+
+        # Native Engine (WebView2) requires https:// on Windows
         if sys.platform == "win32":
-            return "https://pytron.localhost/"
-        return "pytron://localhost/"
+            return "https://pytron.localhost"
+        return "pytron://localhost"
 
     def on_exit(self, func):
         """
@@ -457,7 +467,7 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
                         "name": plugin.name,
                         "version": plugin.version,
                         "ui_entry": (
-                            f"{base_url}app/plugins/{item}/{plugin.ui_entry}"
+                            f"{base_url}/app/plugins/{item}/{plugin.ui_entry}"
                             if plugin.ui_entry
                             else None
                         ),

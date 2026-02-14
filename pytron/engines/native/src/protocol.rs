@@ -86,12 +86,25 @@ pub fn handle_pytron_protocol(
     }
 
     // 2. Extract the path correctly
-    let path = uri.path().trim_start_matches('/');
+    // We look for "app/" or "/app/" in the URI to find where our virtual files start.
+    let full_uri = uri.to_string();
+    let mut clean_path = "";
     
-    // 3. Clean up the path
-    let clean_path = path.strip_prefix("app/").unwrap_or(path);
+    if let Some(pos) = full_uri.find("/app/") {
+        clean_path = &full_uri[pos + 5..];
+    } else if let Some(pos) = full_uri.find("app/") {
+        // Fallback for cases where it might not have leading slash in some parsers
+        clean_path = &full_uri[pos + 4..];
+    } else {
+        // If app/ not found, fallback to just the path part
+        clean_path = uri.path().trim_start_matches('/');
+    }
     
-    if clean_path == "about:blank" {
+    // Remove query strings or fragments if they leaked into clean_path
+    let clean_path = clean_path.split('?').next().unwrap_or(clean_path);
+    let clean_path = clean_path.split('#').next().unwrap_or(clean_path);
+
+    if clean_path == "about:blank" || clean_path.is_empty() {
          return Response::builder()
             .status(StatusCode::OK)
             .body(Cow::from(Vec::new()))
@@ -100,9 +113,44 @@ pub fn handle_pytron_protocol(
 
     let decoded = urlencoding::decode(clean_path).unwrap_or(Cow::Borrowed(clean_path));
     
-    // 4. Join with root and handle directories
+    // --- VAP FIRST STRATEGY ---
+    // We check Python-served memory assets BEFORE checking the disk.
+    // This allows bundling all UI into an uneditable .pytron archive while loose files are ignored.
+    let mut served_data: Option<(Vec<u8>, String)> = None;
+    let func_opt = {
+        if let Ok(cbs) = callbacks.lock() {
+             cbs.get("pytron_serve_asset").map(|f| Python::with_gil(|py| f.clone_ref(py)))
+        } else {
+            None
+        }
+    };
+
+    if let Some(func) = func_opt {
+         Python::with_gil(|py| {
+             if let Ok(res) = func.call1(py, (decoded.as_ref(),)) {
+                 if let Ok((data, mime)) = res.extract::<(Vec<u8>, String)>(py) {
+                     served_data = Some((data, mime));
+                 }
+             }
+         });
+    }
+
+    if let Some((data, mime)) = served_data {
+         let mut resp_data = data;
+         if mime.contains("html") {
+             resp_data = inject_bridge(resp_data, callbacks.clone());
+         }
+
+         return Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, mime)
+            .header("Access-Control-Allow-Origin", "*")
+            .body(Cow::from(resp_data))
+            .unwrap();
+    }
+
+    // --- DISK FALLBACK ---
     let mut final_path = protocol_root.join(decoded.as_ref());
-    
     if final_path.is_dir() {
         final_path = final_path.join("index.html");
     }
@@ -113,7 +161,6 @@ pub fn handle_pytron_protocol(
             let mime_str = mime.to_string();
             let mut resp_data = data;
 
-            // Manual Bridge Injection
             if mime.subtype() == "html" {
                 resp_data = inject_bridge(resp_data, callbacks.clone());
             }
@@ -126,41 +173,7 @@ pub fn handle_pytron_protocol(
                 .unwrap()
         }
         Err(_) => {
-            // Fallback to VAP
-            let mut served_data: Option<(Vec<u8>, String)> = None;
-            let func_opt = {
-                if let Ok(cbs) = callbacks.lock() {
-                     cbs.get("pytron_serve_asset").map(|f| Python::with_gil(|py| f.clone_ref(py)))
-                } else {
-                    None
-                }
-            };
-
-            if let Some(func) = func_opt {
-                 Python::with_gil(|py| {
-                     if let Ok(res) = func.call1(py, (decoded.as_ref(),)) {
-                         if let Ok((data, mime)) = res.extract::<(Vec<u8>, String)>(py) {
-                             served_data = Some((data, mime));
-                         }
-                     }
-                 });
-            }
-
-            if let Some((data, mime)) = served_data {
-                 let mut resp_data = data;
-                 if mime.contains("html") {
-                     resp_data = inject_bridge(resp_data, callbacks.clone());
-                 }
-
-                 Response::builder()
-                    .status(StatusCode::OK)
-                    .header(header::CONTENT_TYPE, mime)
-                    .header("Access-Control-Allow-Origin", "*")
-                    .body(Cow::from(resp_data))
-                    .unwrap()
-            } else {
-                Response::builder().status(StatusCode::NOT_FOUND).body(Cow::from(Vec::new())).unwrap()
-            }
+            Response::builder().status(StatusCode::NOT_FOUND).body(Cow::from(Vec::new())).unwrap()
         }
     }
 }

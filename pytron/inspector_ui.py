@@ -457,7 +457,7 @@ INSPECTOR_HTML = r"""
             return div.innerHTML;
         }
 
-        setInterval(refreshData, 1000);
+        setInterval(refreshData, 2000);
         refreshData();
     </script>
 </body>

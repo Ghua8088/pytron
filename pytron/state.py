@@ -135,16 +135,20 @@ class ReactiveState:
         # Python-side propagation (legacy fallback, Iron Bridge handles native)
         if app_ref:
             try:
+                # Use a local copy of windows to avoid mutation during iteration
                 windows = getattr(app_ref, "windows", [])
                 for window in list(windows):
                     try:
-                        window.emit(
-                            "pytron:state-update", {"key": key, "value": safe_val}
-                        )
-                    except:
+                        # Check if window is still valid and has emit
+                        if window and hasattr(window, "emit"):
+                            window.emit(
+                                "pytron:state-update", {"key": key, "value": safe_val}
+                            )
+                    except Exception:
+                        # Silent skip for dead windows
                         pass
-            except:
-                pass
+            except Exception as e:
+                log_shield(f"State Propagation Error: {e}")
 
     def __getattr__(self, key):
         if key.startswith("_"):
