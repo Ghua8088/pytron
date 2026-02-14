@@ -13,5 +13,6 @@ pub struct RuntimeState {
     pub callbacks: Arc<Mutex<HashMap<String, PyObject>>>,
     pub tray: Option<TrayIcon>,
     pub prevent_close: bool,
+    pub is_utility: bool,
     pub store: NativeState,
 }

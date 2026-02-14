@@ -114,6 +114,18 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
             except Exception as e:
                 self.logger.debug(f"Initial codegen skipped: {e}")
 
+            # Register Inspector Shortcuts
+            self.logger.debug("Registering Inspector shortcuts (F12, Ctrl+Shift+I)")
+            # F12 often fails on Windows due to system/kernel debugger reservations
+            self.shortcut("F12", self.toggle_inspector)
+            self.shortcut("Ctrl+Shift+I", self.toggle_inspector)
+
+            # Additional fallback
+            self.shortcut("Shift+F12", self.toggle_inspector)
+
+            # Expose to JS for manual triggering if needed
+            self.expose(self.toggle_inspector, name="inspector_toggle")
+
         # Load Plugins
         # We must use the script/exe directory (sys.path[0]), NOT cwd, because cwd changes to AppData
         if getattr(sys, "frozen", False):

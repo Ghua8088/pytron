@@ -327,7 +327,7 @@ INSPECTOR_HTML = r"""
         }
 
         async function refreshData() {
-            const data = await window.inspector_get_data();
+            const data = await pytron.inspector_get_data();
             updateUptime(data.stats);
             
             if(currentView === 'dashboard') {
@@ -406,7 +406,7 @@ INSPECTOR_HTML = r"""
 
         // --- Console / Logs logic ---
         async function refreshLogs() {
-            const logs = await window.inspector_get_logs();
+            const logs = await pytron.inspector_get_logs();
             const container = document.getElementById('console-output');
             const atBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 40;
             
@@ -436,7 +436,7 @@ INSPECTOR_HTML = r"""
                 cout.appendChild(userLine);
                 
                 try {
-                    const res = await window.inspector_eval(cmd);
+                    const res = await pytron.inspector_eval(cmd);
                     const resLine = document.createElement('div');
                     resLine.className = 'console-line';
                     if(res.error) {
@@ -457,20 +457,23 @@ INSPECTOR_HTML = r"""
 
         // --- Window Action ---
         async function winAction(id, action) {
-            await window.inspector_window_action(id, action);
+            await pytron.inspector_window_action(id, action);
             refreshData();
         }
 
         // --- State Tree Renderer ---
+        const expandedPaths = new Set(['App.State']);
+
         function renderStateTree(state) {
             const container = document.getElementById('state-tree');
             container.innerHTML = '';
-            container.appendChild(createTreeNode(state, 'App.State', true));
+            container.appendChild(createTreeNode(state, 'App.State', 'App.State'));
         }
 
-        function createTreeNode(val, key, expanded = false) {
+        function createTreeNode(val, key, path) {
             const div = document.createElement('div');
             const isObj = typeof val === 'object' && val !== null;
+            const expanded = expandedPaths.has(path);
             
             const header = document.createElement('div');
             header.className = 'tree-header';
@@ -489,8 +492,13 @@ INSPECTOR_HTML = r"""
                     const shown = content.style.display === 'block';
                     content.style.display = shown ? 'none' : 'block';
                     header.querySelector('.tree-toggle').innerText = shown ? '▶' : '▼';
+                    if (shown) expandedPaths.delete(path);
+                    else expandedPaths.add(path);
                 };
-                for(let k in val) content.appendChild(createTreeNode(val[k], k));
+                for(let k in val) {
+                    const childPath = `${path}.${k}`;
+                    content.appendChild(createTreeNode(val[k], k, childPath));
+                }
             }
             
             div.appendChild(header);

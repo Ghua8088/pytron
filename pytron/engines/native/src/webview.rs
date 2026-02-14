@@ -13,6 +13,8 @@ use wry::WebViewBuilder;
 
 #[cfg(target_os = "windows")]
 use wry::WebViewBuilderExtWindows; 
+#[cfg(target_os = "windows")]
+use tao::platform::windows::{EventLoopBuilderExtWindows, WindowExtWindows};
 
 use crate::events::UserEvent;
 use crate::state::RuntimeState;
@@ -29,6 +31,7 @@ pub struct NativeWebview {
     hwnd: usize,
     callbacks: Arc<Mutex<HashMap<String, PyObject>>>,
     store: NativeState,
+    is_utility: Mutex<bool>,
 }
 
 unsafe impl Send for NativeWebview {}
@@ -38,6 +41,10 @@ unsafe impl Sync for NativeWebview {}
 impl NativeWebview {
     #[new]
     pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool, store: NativeState) -> PyResult<Self> {
+    // Wait, I need to match existing signature.
+    // The existing signature is:
+    // pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool, store: NativeState) -> PyResult<Self>
+    
         setup_panic_hook();
 
         let safe_url = if url_str == "about:blank" {
@@ -46,13 +53,22 @@ impl NativeWebview {
              url_str
         } else if url_str.starts_with("http") {
              url_str
+        } else if url_str.starts_with("data:") {
+             url_str
         } else {
              format!("pytron://app/{}", url_str.trim_start_matches('/'))
         };
 
         println!("[PYTRON NATIVE] Init. Target: {} | Root: {}", safe_url, root_path);
 
-        let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+        let mut builder = EventLoopBuilder::<UserEvent>::with_user_event();
+        
+        #[cfg(target_os = "windows")]
+        {
+            builder.with_any_thread(true);
+        }
+
+        let event_loop = builder.build();
         let proxy = event_loop.create_proxy();
         
         // --- IRON BRIDGE: HOOK PROPAGATION ---
@@ -104,7 +120,8 @@ impl NativeWebview {
                 || url == "about:blank"
                 || url.starts_with("http://localhost")
                 || url.starts_with("http://127.0.0.1")
-                || url.starts_with("file://");
+                || url.starts_with("file://")
+                || url.starts_with("data:");
 
             if !is_safe {
                 // External! Send to system browser
@@ -176,12 +193,26 @@ impl NativeWebview {
             window.pytron.is_ready = true;
             window.__pytron_native_bridge = (method, args) => {
                 const seq = Math.random().toString(36).substring(2, 10);
-                window.ipc.postMessage(JSON.stringify({id: seq, method: method, params: args}));
+                const ipc = window.ipc || window.chrome?.webview || window.webkit?.messageHandlers?.ipc;
+                if (ipc) {
+                    ipc.postMessage(JSON.stringify({id: seq, method: method, params: args}));
+                } else {
+                    console.error("Pytron IPC not initialized.");
+                }
                 return new Promise((resolve, reject) => {
                     window._rpc = window._rpc || {};
                     window._rpc[seq] = {resolve, reject};
                 });
             };
+
+            // Dynamic Proxy for window.pytron.* calls
+            window.pytron = new Proxy(window.pytron, {
+                get: (target, prop) => {
+                    if (prop in target) return target[prop];
+                    return (...args) => window.__pytron_native_bridge(prop, args);
+                }
+            });
+
             window.pytron_close = () => window.__pytron_native_bridge('pytron_close', []);
             window.pytron_drag = () => window.__pytron_native_bridge('pytron_drag', []);
             window.pytron_log = (msg) => window.__pytron_native_bridge('pytron_log', [msg]);
@@ -230,7 +261,7 @@ impl NativeWebview {
                         }
                     });
 
-                    println!("[SHIELD] Iron Bridge: sync_state (len={})", state_json.len());
+                    // println!("[SHIELD] Iron Bridge: sync_state (len={})", state_json.len());
                     let _ = proxy_for_ipc.send_event(UserEvent::Return(seq, 0, state_json));
                     return;
                 }
@@ -291,6 +322,7 @@ impl NativeWebview {
             callbacks: callbacks.clone(), 
             tray: None, 
             prevent_close: false,
+            is_utility: false,
             store: store.clone()
         }));
 
@@ -300,7 +332,8 @@ impl NativeWebview {
             state_ptr: Mutex::new(Some(state as usize)),
             hwnd,
             callbacks,
-            store: store.clone()
+            store: store.clone(),
+            is_utility: Mutex::new(false),
         })
     }
 
@@ -309,7 +342,9 @@ impl NativeWebview {
         let state_ptr_val = self.state_ptr.lock().unwrap().take();
 
         if let (Some(el), Some(ptr)) = (event_loop, state_ptr_val) {
-            let state = unsafe { Box::from_raw(ptr as *mut RuntimeState) };
+            let mut state = unsafe { Box::from_raw(ptr as *mut RuntimeState) };
+            state.is_utility = *self.is_utility.lock().unwrap();
+            
             let cbs_arc = state.callbacks.clone();
             let w_el = SendWrapper::new(el);
             let w_state = SendWrapper::new(state);
@@ -338,7 +373,9 @@ impl NativeWebview {
                              // DEBUG LOGGING
                              match &ue {
                                  UserEvent::CallPython(_, seq, _, method) => {
-                                     println!("[PYTRON BRIDGE] CALL: {} (seq={})", method, seq);
+                                     if !method.starts_with("inspector_") {
+                                         println!("[PYTRON BRIDGE] CALL: {} (seq={})", method, seq);
+                                     }
                                  },
                                  UserEvent::Eval(_) => { /* Mute eval logs, too spammy for state sync */ },
                                  UserEvent::Navigate(u) => println!("[PYTRON NAVIGATE] Request: '{}'", u),
@@ -351,10 +388,12 @@ impl NativeWebview {
                              match ue {
                                 UserEvent::Quit => {
                                     // IMMEDIATE UX IMPROVEMENT: Move window off-screen + Hide
-                                    // This bypasses Windows DWM fade-out animations which can freeze
                                     state.window.set_outer_position(tao::dpi::PhysicalPosition::new(-10000, -10000));
                                     state.window.set_visible(false);
-                                    *control_flow = ControlFlow::Exit;
+                                    
+                                    if !state.is_utility {
+                                        *control_flow = ControlFlow::Exit;
+                                    }
                                 }
                                 UserEvent::Eval(js) => { let _ = state.webview.evaluate_script(&js); }
                                 UserEvent::SetTitle(t) => { state.window.set_title(&t); }
@@ -556,6 +595,10 @@ impl NativeWebview {
                                     let _ = state.webview.evaluate_script(&js);
                                 }
 
+                                UserEvent::SetPreventClose(p) => {
+                                    state.prevent_close = p;
+                                }
+
                                 _ => {} 
                             }
                         }
@@ -576,7 +619,10 @@ impl NativeWebview {
                                  // IMMEDIATE UX IMPROVEMENT: Hide + Zap off-screen
                                  state.window.set_outer_position(tao::dpi::PhysicalPosition::new(-10000, -10000));
                                  state.window.set_visible(false);
-                                 *control_flow = ControlFlow::Exit; 
+                                 
+                                 if !state.is_utility {
+                                     *control_flow = ControlFlow::Exit; 
+                                 }
                              }
                         }
                         _ => (),
@@ -699,5 +745,9 @@ impl NativeWebview {
     
     pub fn create_tray(&self, tooltip: String, icon_path: Option<String>) {
         let _ = self.proxy.send_event(UserEvent::CreateTray(tooltip, icon_path));
+    }
+
+    pub fn set_is_utility(&self, u: bool) {
+        *self.is_utility.lock().unwrap() = u;
     }
 }

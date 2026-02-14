@@ -5,6 +5,69 @@ use std::collections::HashMap;
 use pyo3::prelude::*;
 use wry::http::{Response, header, StatusCode, Method, Request};
 
+fn inject_bridge(data: Vec<u8>, callbacks: Arc<Mutex<HashMap<String, PyObject>>>) -> Vec<u8> {
+    if let Ok(content) = String::from_utf8(data.clone()) {
+        let mut method_bindings = String::new();
+        if let Ok(cbs) = callbacks.lock() {
+            for name in cbs.keys() {
+                method_bindings.push_str(&format!(
+                    "window['{}'] = (...args) => window.__pytron_native_bridge('{}', args);\n",
+                    name, name
+                ));
+            }
+        }
+
+        let bridge_script = format!(r#"
+        <script>
+        window.pytron_is_native = true;
+        window.pytron = window.pytron || {{}};
+        window.pytron.is_ready = true;
+        window.__pytron_native_bridge = (method, args) => {{
+            const seq = Math.random().toString(36).substring(2, 10);
+            const ipc = window.ipc || window.chrome?.webview || window.webkit?.messageHandlers?.ipc;
+            if (ipc) {{
+                ipc.postMessage(JSON.stringify({{id: seq, method: method, params: args}}));
+            }} else {{
+                console.error("Pytron IPC not initialized.");
+            }}
+            return new Promise((resolve, reject) => {{
+                window._rpc = window._rpc || {{}};
+                window._rpc[seq] = {{resolve, reject}};
+            }});
+        }};
+
+        // Dynamic Proxy for window.pytron.* calls
+        window.pytron = new Proxy(window.pytron, {{
+            get: (target, prop) => {{
+                if (prop in target) return target[prop];
+                return (...args) => window.__pytron_native_bridge(prop, args);
+            }}
+        }});
+
+        window.pytron_close = () => window.__pytron_native_bridge('pytron_close', []);
+        window.pytron_drag = () => window.__pytron_native_bridge('pytron_drag', []);
+        window.pytron_log = (msg) => window.__pytron_native_bridge('pytron_log', [msg]);
+        
+        // Override alert to use native message box
+        window.alert = (msg) => {{
+            window.__pytron_native_bridge('pytron_message_box', ["Alert", String(msg), "info"]);
+        }};
+        {}
+        </script>
+        "#, method_bindings);
+
+        let injected = if content.contains("</head>") {
+            content.replace("</head>", &format!("{}</head>", bridge_script))
+        } else if content.contains("<body>") {
+            content.replace("<body>", &format!("<body>{}", bridge_script))
+        } else {
+            format!("{}{}", bridge_script, content)
+        };
+        return injected.into_bytes();
+    }
+    data
+}
+
 pub fn handle_pytron_protocol(
     request: Request<Vec<u8>>,
     protocol_root: PathBuf,
@@ -52,49 +115,7 @@ pub fn handle_pytron_protocol(
 
             // Manual Bridge Injection
             if mime.subtype() == "html" {
-                if let Ok(content) = String::from_utf8(resp_data.clone()) {
-                    let mut method_bindings = String::new();
-                    if let Ok(cbs) = callbacks.lock() {
-                        for name in cbs.keys() {
-                            method_bindings.push_str(&format!(
-                                "window['{}'] = (...args) => window.__pytron_native_bridge('{}', args);\n",
-                                name, name
-                            ));
-                        }
-                    }
-
-                    let bridge_script = format!(r#"
-                    <script>
-                    window.pytron_is_native = true;
-                    window.pytron = window.pytron || {{}};
-                    window.pytron.is_ready = true;
-                    window.__pytron_native_bridge = (method, args) => {{
-                        const seq = Math.random().toString(36).substring(2, 10);
-                        window.ipc.postMessage(JSON.stringify({{id: seq, method: method, params: args}}));
-                        return new Promise((resolve, reject) => {{
-                            window._rpc = window._rpc || {{}};
-                            window._rpc[seq] = {{resolve, reject}};
-                        }});
-                    }};
-                    window.pytron_close = () => window.__pytron_native_bridge('pytron_close', []);
-                    window.pytron_drag = () => window.__pytron_native_bridge('pytron_drag', []);
-                    window.pytron_log = (msg) => window.__pytron_native_bridge('pytron_log', [msg]);
-                    
-                    // Override alert to use native message box
-                    window.alert = (msg) => {{
-                        window.__pytron_native_bridge('pytron_message_box', ["Alert", String(msg), "info"]);
-                    }};
-                    {}
-                    </script>
-                    "#, method_bindings);
-
-                    let injected = if content.contains("</head>") {
-                        content.replace("</head>", &format!("{}</head>", bridge_script))
-                    } else {
-                        content.replace("<body>", &format!("<body>{}", bridge_script))
-                    };
-                    resp_data = injected.into_bytes();
-                }
+                resp_data = inject_bridge(resp_data, callbacks.clone());
             }
 
             Response::builder()
@@ -126,11 +147,16 @@ pub fn handle_pytron_protocol(
             }
 
             if let Some((data, mime)) = served_data {
+                 let mut resp_data = data;
+                 if mime.contains("html") {
+                     resp_data = inject_bridge(resp_data, callbacks.clone());
+                 }
+
                  Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, mime)
                     .header("Access-Control-Allow-Origin", "*")
-                    .body(Cow::from(data))
+                    .body(Cow::from(resp_data))
                     .unwrap()
             } else {
                 Response::builder().status(StatusCode::NOT_FOUND).body(Cow::from(Vec::new())).unwrap()

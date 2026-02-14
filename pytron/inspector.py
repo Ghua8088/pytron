@@ -155,47 +155,105 @@ class Inspector:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
+    def _launch_inspector(self):
+        """Internal: Runs the inspector window in specific thread."""
+        from .inspector_ui import INSPECTOR_HTML
+        import threading
+
+        try:
+            # Creation must happen on the thread that runs the loop (Windows/Tao requirement)
+            logging.info("Inspector Thread: Creating Window...")
+
+            # Create window first without a URL to avoid duplication race
+            # Force framed window and 16:9 ratio (1244x700)
+            window = self.app.create_window(
+                title="Pytron Inspector",
+                width=1244,
+                height=700,
+                resizable=True,
+                frameless=False,
+                _is_utility=True,  # Pass it here
+            )
+            # Mark as utility so App.run doesn't block on it
+            window._is_utility = True
+            window.set_prevent_close(True)  # Force hide instead of exit
+            self.inspector_window = window
+
+            # Bindings MUST be added BEFORE navigation so the protocol handler can inject them
+            window.bind("inspector_get_data", self.get_app_data)
+            window.bind("inspector_get_logs", self.get_logs)
+            window.bind("inspector_eval", self.eval_code)
+            window.bind("inspector_window_action", self.window_action)
+
+            # Serve the HTML via the pytron:// protocol
+            # Webview.serve_data now automatically handles the /app/ prefixing for routing
+            inspector_url = window.serve_data(
+                "inspector.html", INSPECTOR_HTML.encode("utf-8"), "text/html"
+            )
+
+            # Navigate to the served URL
+            window.navigate(inspector_url)
+
+            # Navigation happens via init now
+            self._opening = False
+
+            # Block until closed
+            window.start()
+
+        except Exception as e:
+            logging.error(f"Failed to launch inspector: {e}")
+        finally:
+            self.inspector_window = None
+            self._opening = False
+
     def toggle(self):
-        # Add a more robust check to see if the window is truly alive
+        # 1. Opening Guard: Prevent spamming while thread is spinning up
+        if hasattr(self, "_opening") and self._opening:
+            logging.info("Inspector: Already opening...")
+            return
+
+        # 2. Existing Window Guard
         if self.inspector_window:
             try:
                 if self.inspector_window.is_alive():
+                    logging.info(
+                        "Inspector: Window exists and is alive, attempting to show..."
+                    )
                     self.inspector_window.show()
+                    # Attempt to un-minimize if needed
+                    if hasattr(self.inspector_window, "restore"):
+                        self.inspector_window.restore()
                     return
                 else:
+                    logging.info("Inspector: Window exists but is dead, resetting.")
                     self.inspector_window = None
-            except Exception:
+            except Exception as e:
+                logging.error(
+                    f"Inspector: Error checking existing window (resetting): {e}"
+                )
                 self.inspector_window = None
 
-        from .inspector_ui import INSPECTOR_HTML
+        # 3. Launch
+        logging.info("Inspector: Launching new thread...")
+        self._opening = True
+        import threading
 
-        try:
-            self.inspector_window = self.app.create_window(
-                title="Pytron Inspector", width=1200, height=800, debug=True
-            )
-
-            self.inspector_window.bind("inspector_get_data", self.get_app_data)
-            self.inspector_window.bind("inspector_get_logs", self.get_logs)
-            self.inspector_window.bind("inspector_eval", self.eval_code)
-            self.inspector_window.bind("inspector_window_action", self.window_action)
-
-            b64_html = base64.b64encode(INSPECTOR_HTML.encode("utf-8")).decode("utf-8")
-            data_url = f"data:text/html;base64,{b64_html}"
-            self.inspector_window.navigate(data_url)
-        except Exception as e:
-            logging.error(f"Failed to open inspector: {e}")
+        t = threading.Thread(target=self._launch_inspector, daemon=True)
+        t.start()
 
     def window_action(self, index, action):
         try:
-            win = self.app.windows[index]
-            if action == "show":
-                win.show()
-            elif action == "hide":
-                win.hide()
-            elif action == "close":
-                win.close()
-            elif action == "center":
-                win.center()
+            # Allow controlling other windows from inspector
+            if index < len(self.app.windows):
+                win = self.app.windows[index]
+                if action == "show":
+                    win.show()
+                elif action == "hide":
+                    win.hide()
+                elif action == "close":
+                    win.close()
+                elif action == "center":
+                    win.center()
             return True
         except Exception as e:
             return {"error": str(e)}
