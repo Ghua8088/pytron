@@ -117,7 +117,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     if platform.system() == "Windows":
         # Check NSIS
-        from .package import find_makensis
+        from ..pack.installers import find_makensis
 
         makensis = find_makensis()
         if makensis:

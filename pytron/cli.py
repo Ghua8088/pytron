@@ -37,6 +37,9 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         const="pytron.log",
     )
+    base_parser.add_argument(
+        "--version", "-v", action="store_true", help="Show version and exit"
+    )
 
     parser = argparse.ArgumentParser(
         prog="pytron", description="Pytron CLI", parents=[base_parser]
@@ -353,7 +356,26 @@ from .exceptions import PytronError
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+
+    # Use parse_known_args to avoid eager consumption of flags intended for scripts
+    args, remaining = parser.parse_known_args(argv)
+
+    # 1. Version Check (only if no command or explicitly requested)
+    if getattr(args, "version", False):
+        # Only show version if it's a global flag or 'info' command
+        # This prevents 'pytron run app.py -v' from being intercepted
+        if not args.command or args.command == "info":
+            from . import __version__
+
+            print(f"Pytron v{__version__}")
+            return 0
+
+    # 2. Re-inject remaining args if it's 'run' command
+    if args.command == "run" and remaining:
+        # Append unknown flags to extra_args
+        if not hasattr(args, "extra_args"):
+            args.extra_args = []
+        args.extra_args.extend(remaining)
 
     # Initialize logger if requested
     if getattr(args, "logger", None):
