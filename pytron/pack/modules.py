@@ -489,75 +489,22 @@ class HookModule(BuildModule):
                 except Exception as e:
                     log(f"Crystal Audit Failed: {e}", style="warning")
 
-            # Use Intelligent Introspection (AI Oracle)
-            try:
-                from .graph import GraphBuilder, DependencyOracle
+            # Nuclear Hook Generation Whitelist
+            import json
 
-                log("Spawning Dependency Oracle (ML Brain)...", style="info")
-                builder = GraphBuilder(context.script_dir)
-                graph = builder.scan_project()
-
-                oracle = DependencyOracle(graph)
-                oracle.predict()
-
-                smart_flags = []
-
-                # Convert Graph Predictions to PyInstaller Flags
-                for edge in graph.edges:
-                    if edge.type == "predicted":
-                        # Handle different prediction types
-                        if edge.target.endswith(".*"):
-                            # Wildcard -> Collect Submodules
-                            pkg = edge.target[:-2]
-                            flag = f"--collect-submodules={pkg}"
-                            smart_flags.append(flag)
-                        elif edge.target == "<resource_data>":
-                            # Generic Data -> Collect All (Safest for now)
-                            pkg = edge.source.split(".")[
-                                0
-                            ]  # Assuming source is module name
-                            flag = f"--collect-all={pkg}"
-                            smart_flags.append(flag)
-                        elif edge.target.startswith("collect_"):
-                            # Oracle explicit instruction "collect_all:pkg" etc
-                            # But our edge target usually is just the dependency
-                            pass
-                        else:
-                            # Standard hidden import
-                            flag = f"--hidden-import={edge.target}"
-                            smart_flags.append(flag)
-
-                # Deduplicate
-                smart_flags = list(set(smart_flags))
-
-                if smart_flags:
-                    log(
-                        f"Oracle: Predicted {len(smart_flags)} missing dependencies.",
-                        style="success",
-                    )
-                    for f in smart_flags:
-                        log(f"  + {f}", style="dim")
-                    context.extra_args.extend(smart_flags)
-
-                # We can still pass the whitelist to the nuclear hook generator if we want absolute redundancy,
-                # but --collect-all usually supersedes hook generation for specific packages.
-                # However, for non-collect-all packages, the hook generator is still useful for standard hidden imports.
-
-                # Let's rebuild the whitelist for the hook generator (standard safe fallback)
-                import json
-
-                if req_file.exists():
+            if req_file.exists():
+                try:
                     data = json.loads(req_file.read_text())
                     deps = data.get("dependencies", [])
                     if deps:
-                        whitelist = set()
+                        new_whitelist = set()
                         for d in deps:
                             clean = d.split("==")[0].split(">")[0].split("<")[0].strip()
                             if "/" not in clean and "\\" not in clean and clean:
-                                whitelist.add(clean)
-                        whitelist = list(whitelist)
-            except Exception as e:
-                log(f"Oracle prediction failed: {e}", style="warning")
+                                new_whitelist.add(clean)
+                        whitelist = list(new_whitelist)
+                except Exception:
+                    pass
 
         generate_nuclear_hooks(
             temp_hooks_dir,

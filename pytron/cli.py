@@ -24,7 +24,6 @@ from .commands.android import cmd_android
 from .commands.engine import cmd_engine
 from .commands.doctor import cmd_doctor
 from .commands.workflow import cmd_workflow
-from .commands.scan import cmd_scan
 from .console import log
 
 
@@ -111,19 +110,6 @@ def build_parser() -> argparse.ArgumentParser:
         "doctor", help="Check system dependencies", parents=[base_parser]
     )
     p_doctor.set_defaults(func=cmd_doctor)
-
-    p_scan = sub.add_parser(
-        "scan", help="Analyze dependency graph with ML Oracle", parents=[base_parser]
-    )
-    p_scan.add_argument("target", nargs="?", help="Target directory (default: current)")
-    p_scan.add_argument("--json", action="store_true", help="Dump graph to JSON")
-    p_scan.add_argument(
-        "--html", action="store_true", help="Generate interactive HTML graph"
-    )
-    p_scan.add_argument(
-        "--verbose", action="store_true", help="Show raw uncertainty zones"
-    )
-    p_scan.set_defaults(func=cmd_scan)
 
     p_frontend = sub.add_parser(
         "frontend",
