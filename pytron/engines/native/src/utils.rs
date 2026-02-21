@@ -32,6 +32,7 @@ impl<T: Clone> Clone for SendWrapper<T> {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 pub fn load_icon(path: &std::path::Path) -> Result<tray_icon::Icon, Box<dyn std::error::Error>> {
     let image = image::open(path)?;
     let rgba = image.to_rgba8();

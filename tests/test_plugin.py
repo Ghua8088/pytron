@@ -118,12 +118,36 @@ def test_install_dependencies_native(mock_subprocess, plugin_env):
     )
     plugin = Plugin(manifest_path)
 
-    # Should call pip
-    with patch("importlib.import_module", side_effect=ImportError):
-        plugin.install_dependencies()
+    # Use check_dependencies to drive logic, but we need to trick it into thinking 'requests' is missing.
+    # The clean way is to mock importlib.import_module ONLY for 'requests'
+
+    original_import = __import__
+
+    def side_effect(name, *args, **kwargs):
+        if name == "requests":
+            raise ImportError("No module named 'requests'")
+        return original_import(name, *args, **kwargs)
+
+    # We patch threading first so it's ready
+    with patch("threading.Thread") as mock_thread:
+        # Define behavior: run the target function immediately
+        def run_sync(target=None, daemon=None, **kwargs):
+            if target:
+                target()
+            return MagicMock()
+
+        mock_thread.side_effect = run_sync
+
+        # Now patch importlib.import_module locally
+        with patch("importlib.import_module", side_effect=ImportError):
+            plugin.install_dependencies()
+
         mock_subprocess.assert_called()
         cmd = mock_subprocess.call_args[0][0]
-        assert "pip" in cmd and "install" in cmd and "requests" in cmd
+        # Check command structure
+        assert "pip" in cmd
+        assert "install" in cmd
+        assert "requests" in cmd
 
 
 @patch("subprocess.check_call")

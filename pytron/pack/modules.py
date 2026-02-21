@@ -87,7 +87,7 @@ class AssetModule(BuildModule):
             context.script_dir / "frontend" / "dist",
             context.script_dir / "frontend" / "build",
         ]
-        
+
         # Check custom frontend dir from settings
         custom_front = context.settings.get("frontend_dir")
         if custom_front:
@@ -104,9 +104,12 @@ class AssetModule(BuildModule):
             # FLATTEN FRONTEND: Instead of bundling the 'dist' folder as a subfolder,
             # we bundle its CONTENTS at the root level for a cleaner distribution.
             # This makes the app feel more 'native' and less like a 'packed' script.
-            log(f"Flattening frontend assets from: {frontend_dist.name} -> root", style="info")
+            log(
+                f"Flattening frontend assets from: {frontend_dist.name} -> root",
+                style="info",
+            )
             context.add_data.append(f"{frontend_dist}{os.pathsep}.")
-            
+
             # Record that we flattened the frontend for later settings adjustment
             context.settings["_frontend_flattened"] = True
 
@@ -114,26 +117,36 @@ class AssetModule(BuildModule):
         settings_path = context.script_dir / "settings.json"
         if settings_path.exists():
             clean_settings = context.settings.copy()
-            
+
             # Force production defaults
             if clean_settings.get("debug") is True:
                 clean_settings["debug"] = False
 
             if context.engine:
                 clean_settings["engine"] = context.engine
-                log(f"Enforcing engine: {context.engine} in production bundle", style="dim")
+                log(
+                    f"Enforcing engine: {context.engine} in production bundle",
+                    style="dim",
+                )
 
             # ADJUST URL FOR FLATTENED FRONTEND
             if clean_settings.get("_frontend_flattened"):
                 url = clean_settings.get("url", "")
                 # If URL starts with frontend/dist/ or similar, strip it
-                for candidate in ["frontend/dist/", "frontend/build/", "dist/", "build/"]:
+                for candidate in [
+                    "frontend/dist/",
+                    "frontend/build/",
+                    "dist/",
+                    "build/",
+                ]:
                     if url.startswith(candidate):
                         new_url = url.replace(candidate, "", 1)
-                        log(f"Adjusting production URL: {url} -> {new_url}", style="dim")
+                        log(
+                            f"Adjusting production URL: {url} -> {new_url}", style="dim"
+                        )
                         clean_settings["url"] = new_url
                         break
-                
+
                 # If custom frontend dir was used
                 if custom_front:
                     prefix = f"{custom_front}/dist/"
@@ -585,11 +598,11 @@ class PackModule(BuildModule):
         # Add the archive to the distribution
         # In PyInstaller, '.' maps to the root or _internal depending on onefile
         context.add_data.append(f"{archive_path}{os.pathsep}.")
-        
+
         # Update settings to inform runtime about VAP mode
         context.settings["vap_mode"] = True
         context.settings["vap_archive"] = "app.pytron"
-        
+
         # Rewrite settings.json to include VAP flags
         for entry in context.add_data:
             if "settings.json" in entry and "pytron_assets" in entry:
@@ -716,6 +729,7 @@ class IconModule(BuildModule):
             ext = Path(context.app_icon).suffix
             # PyInstaller add_data DEST is a folder. We cannot rename files directly.
             # We must copy to a temp file with the desired name, then bundle that.
+            context.build_dir.mkdir(parents=True, exist_ok=True)
             temp_icon = context.build_dir / f"app_icon{ext}"
             shutil.copy2(context.app_icon, temp_icon)
 

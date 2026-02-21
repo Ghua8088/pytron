@@ -25,6 +25,7 @@ from .commands.engine import cmd_engine
 from .commands.doctor import cmd_doctor
 from .commands.workflow import cmd_workflow
 from .console import log
+import os
 
 
 def build_parser() -> argparse.ArgumentParser:

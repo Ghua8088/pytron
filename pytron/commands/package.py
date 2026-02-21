@@ -171,7 +171,7 @@ def cmd_package(args: argparse.Namespace) -> int:
     pipeline.add_module(FrontendModule())
     pipeline.add_module(IconModule())
     pipeline.add_module(AssetModule())
-    
+
     if getattr(args, "pack", False):
         pipeline.add_module(PackModule())
 

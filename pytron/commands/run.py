@@ -5,14 +5,17 @@ import subprocess
 import json
 import os
 from pathlib import Path
-from ..console import log, console
 from rich.text import Text
+from ..console import log, console
+
+# Removed rich.text import previously but needed for Text.from_ansi correctly
 from .helpers import (
     locate_frontend_dir,
     run_frontend_build,
     get_python_executable,
     ensure_next_config,
     get_config,
+    get_sanitized_env,
 )
 
 try:
@@ -237,7 +240,7 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
         # Start as a subprocess we control
         python_exe = get_python_executable()
 
-        env = os.environ.copy()
+        env = get_sanitized_env()
         if dev_server_url:
             env["PYTRON_DEV_URL"] = dev_server_url
         if engine:
@@ -301,7 +304,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         return run_dev_mode(path, args.extra_args, engine=engine)
 
     python_exe = get_python_executable()
-    env = os.environ.copy()
+    env = get_sanitized_env()
+
     if getattr(args, "chrome", False):
         env["PYTRON_ENGINE"] = "chrome"
     elif args.engine:

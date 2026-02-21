@@ -202,24 +202,34 @@ class Plugin:
                 self.logger.info(
                     f"Installing Python dependencies for {self.name}: {py_deps}"
                 )
-            try:
-                # Resolve the project's virtual environment if it exists
-                python_exe = sys.executable
-                venv_scripts = os.path.join(os.getcwd(), "env", "Scripts", "python.exe")
-                venv_bin = os.path.join(os.getcwd(), "env", "bin", "python")
 
-                if os.path.exists(venv_scripts):
-                    python_exe = venv_scripts
-                elif os.path.exists(venv_bin):
-                    python_exe = venv_bin
+            def _install_py():
+                try:
+                    # Resolve the project's virtual environment if it exists
+                    python_exe = sys.executable
+                    venv_scripts = os.path.join(
+                        os.getcwd(), "env", "Scripts", "python.exe"
+                    )
+                    venv_bin = os.path.join(os.getcwd(), "env", "bin", "python")
 
-                subprocess.check_call([python_exe, "-m", "pip", "install"] + py_deps)
-                self.logger.info(f"Python dependencies installed into {python_exe}")
-            except subprocess.CalledProcessError as e:
-                self.logger.error(f"Failed to install Python dependencies: {e}")
-                raise PluginDependencyError(
-                    f"Python dependency installation failed: {e}"
-                )
+                    if os.path.exists(venv_scripts):
+                        python_exe = venv_scripts
+                    elif os.path.exists(venv_bin):
+                        python_exe = venv_bin
+
+                    subprocess.check_call(
+                        [python_exe, "-m", "pip", "install"] + py_deps
+                    )
+                    self.logger.info(f"Python dependencies installed into {python_exe}")
+                except subprocess.CalledProcessError as e:
+                    self.logger.error(f"Failed to install Python dependencies: {e}")
+                    raise PluginDependencyError(
+                        f"Python dependency installation failed: {e}"
+                    )
+
+            # Use threading to avoid blocking main thread if called from sync context
+            # (Though caller should ideally thread this)
+            threading.Thread(target=_install_py, daemon=True).start()
 
         # 2. JS Dependencies
         js_deps = self.npm_dependencies
@@ -246,28 +256,29 @@ class Plugin:
                 with open(pkg_json_path, "w") as f:
                     json.dump(pkg_data, f, indent=2)
 
-            try:
-                # Find JS provider binary
-                provider_bin = shutil.which(provider)
-                if not provider_bin:
-                    self.logger.warning(
-                        f"JS Provider '{provider}' not found in PATH. Skipping JS dependencies."
-                    )
-                    return
+            def _install_js():
+                try:
+                    # Find JS provider binary
+                    provider_bin = shutil.which(provider)
+                    if not provider_bin:
+                        self.logger.warning(
+                            f"JS Provider '{provider}' not found in PATH. Skipping JS dependencies."
+                        )
+                        return
 
-                subprocess.check_call(
-                    [provider_bin, "install"],
-                    cwd=target_dir,
-                    shell=False,
-                )  # nosec B603
-                self.logger.info(
-                    f"JS dependencies installed successfully using {provider}."
-                )
-            except Exception as e:
-                self.logger.error(f"Failed to install JS dependencies: {e}")
-                raise PluginDependencyError(f"JS dependency installation failed: {e}")
-                # We don't necessarily want to crash the whole app if NPM is missing,
-                # but we should log it.
+                    subprocess.check_call(
+                        [provider_bin, "install"],
+                        cwd=target_dir,
+                        shell=False,
+                    )  # nosec B603
+                    self.logger.info(
+                        f"JS dependencies installed successfully using {provider}."
+                    )
+                except Exception as e:
+                    self.logger.error(f"Failed to install JS dependencies: {e}")
+                    # Non-fatal for Python logic
+
+            threading.Thread(target=_install_js, daemon=True).start()
 
     def load(self, app_instance):
         """

@@ -88,17 +88,16 @@ pub fn handle_pytron_protocol(
     // 2. Extract the path correctly
     // We look for "app/" or "/app/" in the URI to find where our virtual files start.
     let full_uri = uri.to_string();
-    let mut clean_path = "";
     
-    if let Some(pos) = full_uri.find("/app/") {
-        clean_path = &full_uri[pos + 5..];
+    let clean_path = if let Some(pos) = full_uri.find("/app/") {
+        &full_uri[pos + 5..]
     } else if let Some(pos) = full_uri.find("app/") {
         // Fallback for cases where it might not have leading slash in some parsers
-        clean_path = &full_uri[pos + 4..];
+        &full_uri[pos + 4..]
     } else {
         // If app/ not found, fallback to just the path part
-        clean_path = uri.path().trim_start_matches('/');
-    }
+        uri.path().trim_start_matches('/')
+    };
     
     // Remove query strings or fragments if they leaked into clean_path
     let clean_path = clean_path.split('?').next().unwrap_or(clean_path);
@@ -113,6 +112,12 @@ pub fn handle_pytron_protocol(
 
     let decoded = urlencoding::decode(clean_path).unwrap_or(Cow::Borrowed(clean_path));
     
+    // SECURITY: Path Traversal Mitigation
+    // Reject paths with '..' or absolute roots to prevent escaping protocol_root
+    if decoded.contains("..") || decoded.starts_with('/') || decoded.contains(':') || decoded.starts_with('\\') {
+         return Response::builder().status(StatusCode::FORBIDDEN).body(Cow::from(Vec::new())).unwrap();
+    }
+
     // --- VAP FIRST STRATEGY ---
     // We check Python-served memory assets BEFORE checking the disk.
     // This allows bundling all UI into an uneditable .pytron archive while loose files are ignored.

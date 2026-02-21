@@ -141,6 +141,7 @@ class ConfigMixin:
         # B324: Use SHA256 instead of MD5 for port generation stability
         port = 10000 + (int(hashlib.sha256(app_id.encode()).hexdigest(), 16) % 50000)
         self._instance_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._instance_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
         try:
             self._instance_socket.bind(("127.0.0.1", port))

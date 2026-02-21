@@ -60,7 +60,7 @@ impl NativeState {
         if let Ok(proxies_lock) = self.proxies.lock() {
             if !proxies_lock.is_empty() {
                 let mut json_val = String::from("null");
-                if let Ok(json_mod) = py.import_bound("json") {
+                if let Ok(json_mod) = py.import("json") {
                     if let Ok(res) = json_mod.call_method1("dumps", (value,)) {
                         if let Ok(s) = res.extract::<String>() { json_val = s; }
                     }
@@ -98,7 +98,7 @@ impl NativeState {
             if let Some(proxies_lock) = proxies_opt.as_ref() {
                 if !proxies_lock.is_empty() {
                     let mut json_val = String::from("null");
-                    if let Ok(json_mod) = py.import_bound("json") {
+                    if let Ok(json_mod) = py.import("json") {
                         if let Ok(res) = json_mod.call_method1("dumps", (val.clone_ref(py),)) {
                             if let Ok(s) = res.extract::<String>() { json_val = s; }
                         }

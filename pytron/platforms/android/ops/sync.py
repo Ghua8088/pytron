@@ -590,13 +590,45 @@ def sync_android_project(project_root: str, native: bool = False) -> None:
                         libpy_src, os.path.join(jni_libs_dir, "libpython3.14.so")
                     )
 
-    # 6c. ALWAYS ensure libpython3.14.so is in jniLibs/arm64-v8a if not already there
-    # This is critical for the native bridge to link against it, even if no other extensions are built.
+    # 6c. ALWAYS ensure libpython3.14.so and libpytron-native.so are in jniLibs/arm64-v8a
     jni_libs_arm64 = os.path.join(
         target_android_dir, "app", "src", "main", "jniLibs", "arm64-v8a"
     )
     os.makedirs(jni_libs_arm64, exist_ok=True)
     libpy_dst = os.path.join(jni_libs_arm64, "libpython3.14.so")
+
+    # 6d. Copy our newly built native bridge if present
+    # Check both the project dependencies and the repo-level dependencies
+    bridge_candidates = [
+        os.path.join(
+            project_root,
+            "pytron",
+            "dependencies",
+            "android",
+            "arm64-v8a",
+            "libpytron-native.so",
+        ),
+        os.path.join(
+            os.path.dirname(project_root),
+            "pytron",
+            "pytron",
+            "dependencies",
+            "android",
+            "arm64-v8a",
+            "libpytron-native.so",
+        ),
+        os.path.join(
+            pytron_root, "dependencies", "android", "arm64-v8a", "libpytron-native.so"
+        ),
+    ]
+    for bridge in bridge_candidates:
+        if os.path.exists(bridge):
+            shutil.copy2(bridge, os.path.join(jni_libs_arm64, "libpytron-native.so"))
+            console.print(
+                f"  [Native]   Copied native bridge from: {escape(str(bridge))}",
+                style="success",
+            )
+            break
 
     # Check for local workspace android-python-3.14 (Common in this user's env)
     workspace_root = os.path.dirname(project_root)

@@ -211,6 +211,23 @@ if __name__ == "__main__":
             except Exception as e:
                 log(f"Warning: Could not copy {item.name}: {e}", style="warning")
 
+        if sys.platform == "win32":
+            # The compiled binary implicitly links to Python/VC DLLs.
+            # They must be in the app root to be found by the Windows loader.
+            internal_dir = final_dist / "_internal"
+            if internal_dir.exists():
+                for dll in internal_dir.glob("*.dll"):
+                    name = dll.name.lower()
+                    if (
+                        name.startswith("python")
+                        or name.startswith("vcruntime")
+                        or name.startswith("msvcp")
+                    ):
+                        try:
+                            shutil.copy2(dll, final_dist / dll.name)
+                        except Exception as e:
+                            pass
+
         # 5. FUSE AND CLOAK LIBRARY (Optional via --bundled)
         if getattr(context, "bundled", False):
             # Place the bundle inside _internal for a cleaner root

@@ -40,6 +40,15 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         # Router Init
         self.router = Router()
 
+        # Event Loop (Asyncio) - Shared for core async tasks
+        import asyncio
+
+        try:
+            self.loop = asyncio.get_event_loop()
+        except RuntimeError:
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
+
         # ConfigMixin setup
         self._setup_logging()
         self.router.logger = self.logger  # Share logger
@@ -58,6 +67,7 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         self._load_config(config_file)
         _, safe_title = self._setup_identity()
         self._setup_storage(safe_title)
+        self._setup_crash_handler()
         self._resolve_resources()
         self._register_core_apis()
 
@@ -179,6 +189,45 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
                 self.logger.info(f"Scanning for plugins in: {p_dir}")
                 self.load_plugins(p_dir)
                 seen.add(p_dir)
+
+    def _setup_crash_handler(self):
+        """Registers a global exception hook to capture and log crashes."""
+        import traceback
+        import datetime
+
+        def _handle_exception(exc_type, exc_value, exc_traceback):
+            if issubclass(exc_type, KeyboardInterrupt):
+                sys.__excepthook__(exc_type, exc_value, exc_traceback)
+                return
+
+            crash_msg = "".join(
+                traceback.format_exception(exc_type, exc_value, exc_traceback)
+            )
+            self.logger.critical(f"FATAL CRASH:\n{crash_msg}")
+
+            # Save to storage
+            try:
+                crash_file = os.path.join(self.storage_path, "crash.log")
+                with open(crash_file, "a", encoding="utf-8") as f:
+                    f.write(f"\n--- CRASH AT {datetime.datetime.now()} ---\n")
+                    f.write(crash_msg)
+            except:
+                pass
+
+            # Show native alert if possible
+            try:
+                title = self.config.get("title", "Pytron App")
+                self.message_box(
+                    f"{title} - Fatal Error",
+                    f"The application has encountered a fatal error and must close.\n\nDetails saved to: {self.storage_path}/crash.log",
+                    style=0x10,  # MB_ICONERROR
+                )
+            except:
+                pass
+
+            sys.exit(1)
+
+        sys.excepthook = _handle_exception
 
     def get_base_url(self) -> str:
         """Returns the base URL for the current platform and engine."""
@@ -332,14 +381,18 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         # Event Bus
         self.expose(self.publish, name="app_publish")
 
+        # Utility
+        self.expose(lambda: "pong", name="app_ping")
+
         # Updater APIs
         self.expose(self.check_updates, name="app_check_updates")
         self.expose(self.install_update, name="app_install_update")
 
-        # Inspector APIs
-        self.expose(
-            self.toggle_inspector, name="app_toggle_inspector", run_in_thread=False
-        )
+        # Inspector APIs (SECURITY: Only expose in debug mode)
+        if self.config.get("debug", False):
+            self.expose(
+                self.toggle_inspector, name="app_toggle_inspector", run_in_thread=False
+            )
 
     def check_updates(self, url: str):
         """

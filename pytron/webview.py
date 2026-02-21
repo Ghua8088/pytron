@@ -472,6 +472,15 @@ class Webview:
         """
         # Ensure the key is clean (no leading slash or app/ prefix)
         clean_key = key.lstrip("/").replace("app/", "", 1)
+
+        # PERFORMANCE: Limit cache size to prevent memory leaks from generated assets
+        if len(self._served_data) > 500:
+            # Simple purge of oldest entries if it gets too large
+            # (In a real app, LRU would be better, but this is a safe guard)
+            keys_to_remove = list(self._served_data.keys())[:100]
+            for k in keys_to_remove:
+                del self._served_data[k]
+
         self._served_data[clean_key] = (data, mime_type)
         # Use appropriate scheme and ensure '/app/' prefix for protocol routing
         return f"{self._scheme}/app/{clean_key}"
@@ -795,13 +804,13 @@ class Webview:
     def _load_vap_archive(self, archive_name):
         """Loads all assets from a .pytron archive into the VAP cache."""
         import zipfile
-        
+
         # Resolve archive path
         archive_path = Path(self.root_path) / archive_name
         # Check if it's in _internal (common for PyInstaller)
         if not archive_path.exists():
             archive_path = Path(self.root_path) / "_internal" / archive_name
-            
+
         if not archive_path.exists():
             self.logger.warning(f"VAP Archive not found at {archive_path}")
             return
@@ -813,7 +822,9 @@ class Webview:
                     data = zipf.read(name)
                     mime, _ = mimetypes.guess_type(name)
                     self._served_data[name] = (data, mime or "application/octet-stream")
-            self.logger.info(f"VAP: Loaded {len(self._served_data)} assets from archive.")
+            self.logger.info(
+                f"VAP: Loaded {len(self._served_data)} assets from archive."
+            )
         except Exception as e:
             self.logger.error(f"Failed to load VAP archive: {e}")
 

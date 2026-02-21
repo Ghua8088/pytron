@@ -8,13 +8,14 @@ use tao::{
     event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy, EventLoop},
     window::WindowBuilder,
 };
+#[cfg(not(target_os = "android"))]
 use tray_icon::{TrayIconBuilder, menu::{Menu, MenuItemBuilder, PredefinedMenuItem}};
 use wry::WebViewBuilder;
 
 #[cfg(target_os = "windows")]
 use wry::WebViewBuilderExtWindows; 
 #[cfg(target_os = "windows")]
-use tao::platform::windows::{EventLoopBuilderExtWindows, WindowExtWindows};
+use tao::platform::windows::EventLoopBuilderExtWindows;
 
 use crate::events::UserEvent;
 use crate::state::RuntimeState;
@@ -93,7 +94,6 @@ impl NativeWebview {
         let root = PathBuf::from(&root_path);
         let callbacks = Arc::new(Mutex::new(HashMap::<String, PyObject>::new()));
         let cbs_for_ipc = callbacks.clone();
-        let proxy_for_ipc = proxy.clone();
 
         let mut builder = WebViewBuilder::new(&window)
             .with_devtools(debug)
@@ -251,7 +251,7 @@ impl NativeWebview {
                     // ACCESS RUST STORE DIRECTLY
                     let _ = Python::with_gil(|py| {
                         if let Ok(dict) = store_for_ipc.to_dict(py) {
-                            if let Ok(json_mod) = py.import_bound("json") {
+                            if let Ok(json_mod) = py.import("json") {
                                 if let Ok(res) = json_mod.call_method1("dumps", (dict,)) {
                                     if let Ok(s) = res.extract::<String>() {
                                         state_json = s;
@@ -350,16 +350,19 @@ impl NativeWebview {
             let w_state = SendWrapper::new(state);
 
             // Spawn Menu Event Listener Thread
-            let proxy_for_menu = self.proxy.clone();
-            std::thread::spawn(move || {
-                let receiver = tray_icon::menu::MenuEvent::receiver();
-                loop {
-                    if let Ok(event) = receiver.recv() {
-                        let id = event.id.0;
-                         let _ = proxy_for_menu.send_event(UserEvent::TrayMenuClick(id));
+            #[cfg(not(target_os = "android"))]
+            {
+                let proxy_for_menu = self.proxy.clone();
+                std::thread::spawn(move || {
+                    let receiver = tray_icon::menu::MenuEvent::receiver();
+                    loop {
+                        if let Ok(event) = receiver.recv() {
+                            let id = event.id.0;
+                             let _ = proxy_for_menu.send_event(UserEvent::TrayMenuClick(id));
+                        }
                     }
-                }
-            });
+                });
+            }
 
             py.allow_threads(move || {
                 let el = w_el.take();
@@ -490,42 +493,45 @@ impl NativeWebview {
                                 }
 
                                 UserEvent::CreateTray(tooltip, icon_path) => {
-                                    let mut final_icon = None;
+                                    #[cfg(not(target_os = "android"))]
+                                    {
+                                        let mut final_icon = None;
 
-                                    if let Some(path) = icon_path {
-                                        if let Ok(ic) = load_icon(std::path::Path::new(&path)) {
-                                            final_icon = Some(ic);
-                                        } else {
-                                             println!("[PYTRON NATIVE] Warning: Failed to load tray icon at '{}'. Using default.", path);
+                                        if let Some(path) = icon_path {
+                                            if let Ok(ic) = load_icon(std::path::Path::new(&path)) {
+                                                final_icon = Some(ic);
+                                            } else {
+                                                println!("[PYTRON NATIVE] Warning: Failed to load tray icon at '{}'. Using default.", path);
+                                            }
                                         }
-                                    }
 
-                                    // Fallback Generation (Blue Square) if no icon provided or load failed
-                                    if final_icon.is_none() {
-                                        let w = 32u32;
-                                        let h = 32u32;
-                                        let mut buffer = Vec::with_capacity((w * h * 4) as usize);
-                                        for _ in 0..(w * h) {
-                                            buffer.extend_from_slice(&[0, 122, 204, 255]); // #007ACC (VS Code Blue-ish)
+                                        // Fallback Generation (Blue Square) if no icon provided or load failed
+                                        if final_icon.is_none() {
+                                            let w = 32u32;
+                                            let h = 32u32;
+                                            let mut buffer = Vec::with_capacity((w * h * 4) as usize);
+                                            for _ in 0..(w * h) {
+                                                buffer.extend_from_slice(&[0, 122, 204, 255]); // #007ACC (VS Code Blue-ish)
+                                            }
+                                            if let Ok(ic) = tray_icon::Icon::from_rgba(buffer, w, h) {
+                                                final_icon = Some(ic);
+                                            }
                                         }
-                                        if let Ok(ic) = tray_icon::Icon::from_rgba(buffer, w, h) {
-                                            final_icon = Some(ic);
-                                        }
-                                    }
 
-                                    if let Some(ic) = final_icon {
-                                        let menu = Menu::new();
-                                        let show_item = MenuItemBuilder::new().text("Show App").id("1000".into()).enabled(true).build();
-                                        let quit_item = MenuItemBuilder::new().text("Quit").id("1001".into()).enabled(true).build();
-                                        let _ = menu.append(&show_item);
-                                        let _ = menu.append(&PredefinedMenuItem::separator());
-                                        let _ = menu.append(&quit_item);
+                                        if let Some(ic) = final_icon {
+                                            let menu = Menu::new();
+                                            let show_item = MenuItemBuilder::new().text("Show App").id("1000".into()).enabled(true).build();
+                                            let quit_item = MenuItemBuilder::new().text("Quit").id("1001".into()).enabled(true).build();
+                                            let _ = menu.append(&show_item);
+                                            let _ = menu.append(&PredefinedMenuItem::separator());
+                                            let _ = menu.append(&quit_item);
 
-                                        let tray_res = TrayIconBuilder::new().with_menu(Box::new(menu)).with_tooltip(&tooltip).with_icon(ic).build();
-                                        
-                                        match tray_res {
-                                            Ok(t) => { state.tray = Some(t); }
-                                            Err(e) => { println!("[PYTRON NATIVE] Failed to create tray: {}", e); }
+                                            let tray_res = TrayIconBuilder::new().with_menu(Box::new(menu)).with_tooltip(&tooltip).with_icon(ic).build();
+                                            
+                                            match tray_res {
+                                                Ok(t) => { state.tray = Some(t); }
+                                                Err(e) => { println!("[PYTRON NATIVE] Failed to create tray: {}", e); }
+                                            }
                                         }
                                     }
                                 }
@@ -568,13 +574,23 @@ impl NativeWebview {
 
                                 UserEvent::OpenExternal(url) => {
                                     #[cfg(target_os = "windows")]
-                                    {
-                                        // Use powershell to ensure the URL is handled correctly by the default browser
-                                        let _ = std::process::Command::new("powershell")
-                                            .arg("-NoProfile")
-                                            .arg("-Command")
-                                            .arg(format!("Start-Process '{}'", url))
-                                            .spawn();
+                                    unsafe {
+                                        use windows::Win32::UI::Shell::ShellExecuteW;
+                                        use windows::Win32::Foundation::HWND;
+                                        use windows::core::PCWSTR;
+                                        use windows::Win32::UI::WindowsAndMessaging::SHOW_WINDOW_CMD;
+
+                                        let url_wide: Vec<u16> = url.encode_utf16().chain(std::iter::once(0)).collect();
+                                        let operation: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+                                        
+                                        ShellExecuteW(
+                                            HWND(0),
+                                            PCWSTR(operation.as_ptr()),
+                                            PCWSTR(url_wide.as_ptr()),
+                                            None,
+                                            None,
+                                            SHOW_WINDOW_CMD(1), // SW_SHOWNORMAL
+                                        );
                                     }
                                     #[cfg(target_os = "macos")]
                                     {
@@ -743,6 +759,7 @@ impl NativeWebview {
         let _ = self.proxy.send_event(UserEvent::SetPreventClose(p));
     }
     
+    #[pyo3(signature = (tooltip, icon_path=None))]
     pub fn create_tray(&self, tooltip: String, icon_path: Option<String>) {
         let _ = self.proxy.send_event(UserEvent::CreateTray(tooltip, icon_path));
     }
