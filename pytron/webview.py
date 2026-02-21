@@ -806,10 +806,10 @@ class Webview:
         import zipfile
 
         # Resolve archive path
-        archive_path = Path(self.root_path) / archive_name
+        archive_path = pathlib.Path(self.root_path) / archive_name
         # Check if it's in _internal (common for PyInstaller)
         if not archive_path.exists():
-            archive_path = Path(self.root_path) / "_internal" / archive_name
+            archive_path = pathlib.Path(self.root_path) / "_internal" / archive_name
 
         if not archive_path.exists():
             self.logger.warning(f"VAP Archive not found at {archive_path}")
