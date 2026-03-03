@@ -67,9 +67,7 @@ def build():
 
     # 3. Verify Artifact
     if not os.path.exists(TARGET_PATH):
-        print(
-            f"\n[ERROR] Build finished but artifact not found at:\n   {TARGET_PATH}"
-        )
+        print(f"\n[ERROR] Build finished but artifact not found at:\n   {TARGET_PATH}")
         sys.exit(1)
 
     # 4. Deploy
