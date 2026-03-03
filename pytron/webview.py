@@ -182,7 +182,6 @@ class Webview:
                 "Native Engine: min_size/max_size are not currently supported without rebuild. Ignoring."
             )
 
-        # 6. Platform Helpers (Windows)
         self._platform = None
         if platform.system() == "Windows":
             try:
@@ -191,6 +190,13 @@ class Webview:
                 self._platform = WindowsImplementation()
             except Exception as e:
                 self.logger.warning(f"Failed to load Windows Platform helpers: {e}")
+
+            # Apply hide_from_taskbar settings for Windows
+            if config.get("hide_from_taskbar", False) and self._platform and self.hwnd:
+                try:
+                    self._platform.set_utility_window(self.hwnd, True)
+                except Exception as e:
+                    self.logger.warning(f"Failed to apply hide_from_taskbar: {e}")
 
         if not config.get("start_hidden", False):
             self.show()

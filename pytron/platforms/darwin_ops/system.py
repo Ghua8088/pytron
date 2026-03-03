@@ -86,6 +86,13 @@ def set_app_id(app_id):
 
 
 def set_launch_on_boot(app_name, exe_path, enable=True):
+    try:
+        from pytron.dependencies import pytron_os
+
+        return pytron_os.set_launch_on_boot(app_name, exe_path, enable)
+    except Exception:
+        pass
+
     import shlex
 
     home = os.path.expanduser("~")

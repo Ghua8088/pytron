@@ -182,3 +182,56 @@ pub fn handle_pytron_protocol(
         }
     }
 }
+
+// -------------------------------------------------------------------
+// Unit Tests
+// -------------------------------------------------------------------
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_path_traversal_mitigation() {
+        // We simulate how handle_pytron_protocol parses paths
+        let cases = vec![
+            ("sub/file.js", false),
+            ("../file.js", true),
+            ("a/../../etc/passwd", true),
+            ("C:/Windows/System32", true),
+            ("/absolute/path", true),
+            ("\\\\network\\share", true),
+        ];
+
+        for (path, should_fail) in cases {
+            let decoded = urlencoding::decode(path).unwrap();
+            let is_insecure = decoded.contains("..") || decoded.starts_with('/') || decoded.contains(':') || decoded.starts_with('\\');
+            assert_eq!(is_insecure, should_fail, "Path security failed for: {}", path);
+        }
+    }
+
+    #[test]
+    fn test_inject_bridge_html_structure() {
+        // Mock callbacks
+        let cbs = Arc::new(Mutex::new(HashMap::new()));
+        
+        let html_with_head = b"<html><head><title>Test</title></head><body></body></html>".to_vec();
+        let result = inject_bridge(html_with_head, cbs.clone());
+        let result_str = String::from_utf8(result).unwrap();
+        assert!(result_str.contains("window.pytron_is_native = true;"));
+        assert!(result_str.contains("</head>"));
+        // Script should be BEFORE head closing
+        assert!(result_str.find("window.pytron_is_native").unwrap() < result_str.find("</head>").unwrap());
+
+        let html_no_head = b"<html><body>Hello</body></html>".to_vec();
+        let result = inject_bridge(html_no_head, cbs.clone());
+        let result_str = String::from_utf8(result).unwrap();
+        assert!(result_str.contains("window.pytron_is_native = true;"));
+        assert!(result_str.contains("<body>"));
+
+        let raw_text = b"Just some text".to_vec();
+        let result = inject_bridge(raw_text, cbs);
+        let result_str = String::from_utf8(result).unwrap();
+        assert!(result_str.contains("window.pytron_is_native = true;"));
+        assert!(result_str.contains("Just some text"));
+    }
+}

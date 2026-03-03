@@ -22,9 +22,11 @@ class TestPytronFilter:
         f = PytronFilter(frontend_dir=frontend)
 
         # Should ignore frontend/src
-        assert f(1, str(frontend / "src" / "App.jsx")) is False
+        assert f(change=1, path=str(frontend / "src" / "App.jsx")) is False
+        # Should ignore node_modules in root
+        assert f(change=1, path=str(tmp_path / "node_modules" / "some-pkg")) is False
         # Should allow backend/api.py
-        assert f(1, str(tmp_path / "backend" / "api.py")) is True
+        assert f(change=1, path=str(tmp_path / "backend" / "api.py")) is True
 
 
 class TestHelpers:
@@ -72,3 +74,31 @@ class TestCLICommands:
 
         cmd_run(args)
         mock_dev.assert_called_once_with(Path(app_py), ["--foo"], engine="edge")
+
+    @patch("watchfiles.watch")
+    @patch("subprocess.run")
+    @patch("subprocess.Popen")
+    @patch("pytron.commands.run.get_python_executable", return_value="python")
+    @patch("pytron.commands.run.locate_frontend_dir", return_value=None)
+    def test_run_dev_mode_loop(
+        self, mock_locate, mock_py, mock_popen, mock_run, mock_watch, tmp_path
+    ):
+        app_py = tmp_path / "app.py"
+        app_py.touch()
+
+        # Setup watch to exit immediately
+        mock_watch.return_value = []
+
+        # Mock proc
+        mock_proc = MagicMock()
+        mock_popen.return_value = mock_proc
+
+        code = run_dev_mode(app_py, ["--arg"])
+
+        assert code == 0
+        mock_popen.assert_called()
+        # Should have started the app at least once
+        args = mock_popen.call_args_list[0][0][0]
+        assert "python" in args
+        assert str(app_py) in args
+        assert "--arg" in args

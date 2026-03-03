@@ -123,6 +123,13 @@ def set_app_id(app_id):
 
 
 def set_launch_on_boot(app_name, exe_path, enable=True):
+    try:
+        from pytron.dependencies import pytron_os
+
+        return pytron_os.set_launch_on_boot(app_name, exe_path, enable)
+    except Exception:
+        pass
+
     config_home = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
     autostart_dir = os.path.join(config_home, "autostart")
     desktop_file = os.path.join(autostart_dir, f"{app_name}.desktop")

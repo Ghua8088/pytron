@@ -85,6 +85,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         "start_maximized": False,
         "start_hidden": False,
         "default_context_menu": False,
+        "hide_from_taskbar": False,
         # Application
         "url": dist_path,
         "icon": "pytron.ico",

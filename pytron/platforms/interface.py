@@ -68,6 +68,10 @@ class PlatformInterface(ABC):
     def make_frameless(self, w: WindowHandle) -> None:
         pass
 
+    def set_utility_window(self, w: WindowHandle, enable: bool) -> None:
+        """Configures the window as a utility window (e.g. hides from taskbar on Windows)."""
+        pass
+
     def start_drag(self, w: WindowHandle) -> None:
         pass
 

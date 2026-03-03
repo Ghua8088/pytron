@@ -51,6 +51,9 @@ class WindowsImplementation(PlatformInterface):
     def make_frameless(self, w):
         window.make_frameless(w)
 
+    def set_utility_window(self, w, enable):
+        window.set_utility_window(w, enable)
+
     def start_drag(self, w):
         window.start_drag(w)
 

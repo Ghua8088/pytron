@@ -81,13 +81,14 @@ VK_MAP = {
 
 class ShortcutManager:
     def __init__(self):
-        self.shortcuts: Dict[int, Callable] = {}
+        self.shortcuts: Dict[int, Any] = {}
         self.logger = logging.getLogger("Pytron.Shortcuts")
         self._running = False
         self._next_id = 1
         self._thread = None
         self._reg_queue = queue.Queue()
         self._thread_id = None
+        self._queue_ready = threading.Event()
 
     def register(self, combo: str, callback: Callable):
         """Registers a global shortcut (e.g., 'Ctrl+Alt+S')."""
@@ -177,6 +178,10 @@ class ShortcutManager:
                 if not vk and len(part) == 1:
                     vk = ord(part)
 
+        # Better default: prevent repetition if supported by the OS (Win 7+)
+        if sys.platform == "win32":
+            modifiers |= MOD_NOREPEAT
+
         return modifiers, vk
 
     def _register_windows(self, combo: str, callback: Callable):
@@ -191,13 +196,10 @@ class ShortcutManager:
         # 1. Start loop if dead
         if not self._running:
             self._start_message_loop()
-            # Wait for thread ID to be ready (need synchronization)
-            import time
-
-            while self._thread_id is None:
-                if not self._running:  # Abort if failed to start
-                    return
-                time.sleep(0.01)
+            # Wait for thread ID to be ready AND queue to be initialized
+            if not self._queue_ready.wait(timeout=2.0):
+                self.logger.error("Shortcut message loop failed to initialize in time.")
+                return
 
         # 2. Push to local dict with 'False' registered state
         # The thread will read this dict when it receives the signal
@@ -207,18 +209,32 @@ class ShortcutManager:
             "vk": vk,
             "callback": callback,
             "registered": False,
+            "combo": combo,
         }
         self.shortcuts[sid] = data
 
         # 3. Wake up the loop!
         # Post a specific message to the thread to tell it "Check the queue"
         if self._thread_id:
-            ctypes.windll.user32.PostThreadMessageW(
-                self._thread_id, WM_APP_REGISTER, 0, 0
-            )
+            # Retry mechanism for the "Queue not yet ready" edge case
+            # although event.wait() should have covered it.
+            for attempt in range(3):
+                success = ctypes.windll.user32.PostThreadMessageW(
+                    self._thread_id, WM_APP_REGISTER, 0, 0
+                )
+                if success:
+                    break
+                import time
+
+                time.sleep(0.05)
+            else:
+                self.logger.error(
+                    f"Failed to post registration message for shortcut {combo}"
+                )
 
     def _start_message_loop(self):
         self._running = True
+        self._queue_ready.clear()
         self._thread = threading.Thread(target=self._msg_loop, daemon=True)
         self._thread.start()
 
@@ -226,12 +242,16 @@ class ShortcutManager:
         user32 = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
 
-        # Store Thread ID so main thread can send messages to us
+        # 1. Store Thread ID so main thread can send messages to us
         self._thread_id = kernel32.GetCurrentThreadId()
 
-        # Force create message queue by peeking once
+        # 2. Force create message queue by peeking once
+        # MSDN: PostThreadMessage fails if the thread doesn't have a message queue.
         msg = ctypes.wintypes.MSG()
         user32.PeekMessageW(ctypes.byref(msg), 0, 0, 0, 0)
+
+        # 3. Signal that we are ready
+        self._queue_ready.set()
 
         self.logger.info("Shortcut loop started (Blocking Mode).")
 
@@ -259,22 +279,24 @@ class ShortcutManager:
                         )
                         if success:
                             data["registered"] = True
-                            self.logger.info(f"Registered global shortcut ID {sid}")
+                            self.logger.info(
+                                f"Registered global shortcut ID {sid} ({data.get('combo')})"
+                            )
                         else:
-                            # Mark as faulty/registered so we don't retry endlessly in this loop
-                            # We can't really "fix" it without changing the key combo.
-                            data["registered"] = True
                             err_code = ctypes.GetLastError()
                             # 1409 = Hotkey already registered
                             if err_code == 1409:
                                 self.logger.warning(
-                                    f"Shortcut ID {sid} failed: Hotkey already reserved by another app."
+                                    f"Shortcut ID {sid} failed: Hotkey already reserved by another app ({data.get('combo')})."
                                 )
+                                # Don't mark as registered True here - let it attempt again if triggered later
+                                # This helps if a previous instance was still cleaning up.
                             else:
                                 self.logger.error(
-                                    f"Failed to register ID {sid}. Error: {err_code}"
+                                    f"Failed to register ID {sid} ({data.get('combo')}). Error: {err_code}"
                                 )
-                            pass
+                                # Mark as registered for other errors to avoid infinite log spam
+                                data["registered"] = True
 
             user32.TranslateMessage(ctypes.byref(msg))
             user32.DispatchMessageW(ctypes.byref(msg))

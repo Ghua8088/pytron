@@ -5,19 +5,22 @@ import threading
 import json
 import pytest
 
-# Add dependencies to path
-sys.path.append(
-    os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "pytron", "dependencies")
-    )
-)
-
 try:
-    import pytron_native
+    # We try to import via the package structure first
+    from pytron.dependencies import pytron_native
 
     HAS_NATIVE = True
 except ImportError:
-    HAS_NATIVE = False
+    # Fallback to sys.path hack for direct runs from the test dir
+    try:
+        sys.path.append(
+            os.path.abspath(os.path.join(os.getcwd(), "pytron", "dependencies"))
+        )
+        import pytron_native
+
+        HAS_NATIVE = True
+    except ImportError:
+        HAS_NATIVE = False
 
 
 @pytest.mark.skipif(not HAS_NATIVE, reason="pytron_native module not found")
@@ -118,13 +121,37 @@ def test_chrome_ipc_handshake():
     t.join()
 
 
+@pytest.mark.skipif(not HAS_NATIVE, reason="pytron_native module not found")
+def test_native_state_shared():
+    """Verify that NativeState singleton works between Python objects."""
+    state1 = pytron_native.NativeState()
+    state2 = pytron_native.NativeState()
+
+    state1.set("score", 100)
+    assert state2.get("score") == 100
+
+    state2.update({"player": "Hero", "level": 5})
+
+    assert state1.get("player") == "Hero"
+    assert state1.get("level") == 5
+
+    raw_dict = state1.to_dict()
+    assert raw_dict["score"] == 100
+    assert raw_dict["player"] == "Hero"
+
+
 if __name__ == "__main__":
     # Manual run support
     try:
+        print("Running IPC Handshake Test...")
         test_chrome_ipc_handshake()
         print(" Rust IPC Integration Test Passed!")
+
+        print("Running Native State Sync Test...")
+        test_native_state_shared()
+        print(" Rust Native State Sync Test Passed!")
     except Exception as e:
-        print(f" Rust IPC Integration Test Failed: {e}")
+        print(f" Rust Tests Failed: {e}")
         import traceback
 
         traceback.print_exc()
