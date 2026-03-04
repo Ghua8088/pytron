@@ -224,6 +224,11 @@ class Webview:
         # Apply UI settings (Context Menu, BG) for initial load
         self._apply_ui_settings()
 
+        # Apply Border Color for Native Windows (Floating App specialized)
+        bg_color = config.get("background_color")
+        if bg_color and self._platform:
+            self.set_border_color(bg_color)
+
         # 9. VAP Archive Loading
         if config.get("vap_mode"):
             self._load_vap_archive(config.get("vap_archive", "app.pytron"))
@@ -313,6 +318,7 @@ class Webview:
             self.get_registered_shortcuts,
             run_in_thread=True,
         )
+        self.bind("pytron_set_border_color", self.set_border_color, run_in_thread=False)
 
         # 2. SYSTEM TOOLING / DIALOGS (Prefixed)
         self.bind("pytron_dialog_open_file", self.dialog_open_file, run_in_thread=True)
@@ -327,6 +333,7 @@ class Webview:
         self.bind(
             "pytron_set_taskbar_progress", self.set_taskbar_progress, run_in_thread=True
         )
+        self.bind("pytron_toast", self.toast, run_in_thread=True)
 
         # 3. CLEAN ALIASES (Convenience for JS users, but can be overwritten)
         # Avoid logging for frequent state/asset syncs
@@ -350,8 +357,10 @@ class Webview:
         self.bind("dialog_open_folder", self.dialog_open_folder, run_in_thread=True)
         self.bind("message_box", self.message_box, run_in_thread=True)
         self.bind("system_notification", self.system_notification, run_in_thread=True)
+        self.bind("toast", self.toast, run_in_thread=True)
         self.bind("set_taskbar_progress", self.set_taskbar_progress, run_in_thread=True)
         self.bind("set_bounds", self.set_bounds, run_in_thread=False)
+        self.bind("set_border_color", self.set_border_color, run_in_thread=False)
         self.bind(
             "get_registered_shortcuts",
             self.get_registered_shortcuts,
@@ -512,6 +521,11 @@ class Webview:
                 "(function(){ setTimeout(() => { " + " ".join(js) + " }, 100); })();"
             )
             self.eval(full_script)
+
+    def set_border_color(self, color_hex):
+        """Sets the native window border color."""
+        if self._platform:
+            self._platform.set_border_color(self.hwnd, color_hex)
 
     def set_title(self, title):
         self.native.set_title(title)
@@ -797,6 +811,31 @@ class Webview:
             if not icon:
                 icon = self.config.get("icon")
             self._platform.notification(self.hwnd, title, message, icon)
+
+    def toast(self, config):
+        if self._platform and self.hwnd:
+            # Inject App ID if missing
+            if "app_id" not in config:
+                config["app_id"] = self.config.get("title", "Pytron")
+            # Inject default icon if missing
+            if "icon" not in config:
+                config["icon"] = self.config.get("icon")
+
+            # Resolve paths for images/icons
+            for key in ["image", "icon", "inline_image"]:
+                path = config.get(key)
+                if path and not os.path.isabs(path):
+                    # Try resolving relative to root_path (where the HTML is) or app_root
+                    possible_path = os.path.join(self.root_path, path)
+                    if os.path.exists(possible_path):
+                        config[key] = possible_path
+                    else:
+                        # Fallback to app_root
+                        possible_path = os.path.join(self._app_root, path)
+                        if os.path.exists(possible_path):
+                            config[key] = possible_path
+
+            self._platform.toast(self.hwnd, config)
 
     # --- Native Tray & Close Handling ---
     def create_tray(self, icon_path, tooltip="Pytron App"):

@@ -3,7 +3,14 @@ import ctypes
 import threading
 import logging
 from typing import Callable, Dict
-import ctypes.wintypes
+try:
+    import ctypes.wintypes
+except (ImportError, AttributeError):
+    # Fallback for non-Windows platforms
+    class MockWintypes:
+        class MSG(ctypes.Structure):
+            _fields_ = [("hwnd", ctypes.c_void_p), ("message", ctypes.c_uint)]
+    ctypes.wintypes = MockWintypes
 import queue
 from .exceptions import ShortcutRegistrationError
 

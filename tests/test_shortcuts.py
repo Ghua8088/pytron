@@ -2,6 +2,14 @@ import pytest
 import sys
 import threading
 from unittest.mock import MagicMock, patch
+import ctypes
+
+# Mock windll for non-Windows platforms to allow testing and patching
+if not hasattr(ctypes, "windll"):
+    ctypes.windll = MagicMock()
+if not hasattr(ctypes, "wintypes"):
+    ctypes.wintypes = MagicMock()
+
 from pytron.shortcuts import (
     ShortcutManager,
     MOD_CONTROL,

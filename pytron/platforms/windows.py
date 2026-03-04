@@ -36,6 +36,9 @@ class WindowsImplementation(PlatformInterface):
     def notification(self, w, title, message, icon=None):
         system.notification(w, title, message, icon)
 
+    def toast(self, w, config):
+        system.toast(w, config)
+
     def minimize(self, w):
         window.minimize(w)
 
@@ -137,3 +140,6 @@ class WindowsImplementation(PlatformInterface):
 
     def set_menu(self, w, menu_bar):
         window.set_menu(w, menu_bar)
+
+    def set_border_color(self, w, color_hex):
+        window.set_border_color(w, color_hex)

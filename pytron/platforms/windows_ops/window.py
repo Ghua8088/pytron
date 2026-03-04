@@ -445,6 +445,40 @@ def set_menu(w, menu_bar):
     _wnd_procs[hwnd] = (new_proc_inst, old_proc)
 
     # Cast to void ptr for SetWindowLongPtrW
-    new_proc_ptr = ctypes.cast(new_proc_inst, ctypes.c_void_p)
+    new_proc_ptr = ctypes.c_void_p(new_proc_inst) if hasattr(ctypes, "c_void_p") else new_proc_inst
     user32.SetWindowLongPtrW(hwnd, GWL_WNDPROC, new_proc_ptr)
     user32.DrawMenuBar(hwnd)
+
+
+def set_border_color(w, color_hex):
+    """Sets the border color of the window using DWM (Windows 11+)."""
+    hwnd = get_hwnd(w)
+    if not hwnd:
+        return
+
+    try:
+        # Convert hex #RRGGBB to COLORREF (0x00BBGGRR)
+        color_hex = color_hex.lstrip("#")
+        if len(color_hex) == 6:
+            r = int(color_hex[0:2], 16)
+            g = int(color_hex[2:4], 16)
+            b = int(color_hex[4:6], 16)
+            color_ref = b << 16 | g << 8 | r
+        elif len(color_hex) == 8:
+            # Handle ARGB if needed, but DWM expects COLORREF (24-bit)
+            r = int(color_hex[2:4], 16)
+            g = int(color_hex[4:6], 16)
+            b = int(color_hex[6:8], 16)
+            color_ref = b << 16 | g << 8 | r
+        else:
+            return
+
+        dwmapi = ctypes.windll.dwmapi
+        dwmapi.DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_BORDER_COLOR,
+            ctypes.byref(ctypes.c_int(color_ref)),
+            4,
+        )
+    except Exception:
+        pass

@@ -117,6 +117,10 @@ class PlatformInterface(ABC):
     ) -> None:
         pass
 
+    def toast(self, w: WindowHandle, config: Dict) -> None:
+        """Sends a rich, modern system notification (Windows Toast / macOS UserNotification)."""
+        pass
+
     def set_taskbar_progress(
         self, w: WindowHandle, state: str, value: int, max_value: int
     ) -> None:
@@ -153,4 +157,8 @@ class PlatformInterface(ABC):
     # --- UI Polish ---
 
     def set_slim_titlebar(self, w: WindowHandle, enabled: bool) -> None:
+        pass
+
+    def set_border_color(self, w: WindowHandle, color_hex: str) -> None:
+        """Sets the native window border color (Windows 11+)."""
         pass

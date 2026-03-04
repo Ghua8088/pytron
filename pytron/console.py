@@ -99,16 +99,21 @@ def run_command_with_output(
             log(title, style="info")
 
         # Use Popen to capture output
+        # On Windows, system tools like NSIS might output in local code page (CP1252)
+        # We use mistakes="replace" to ensure the build doesn't crash on weird characters.
+        # We also prefer to rely on bytes and decode manually if needed, but text=True with errors="replace" is cleaner.
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # Merge stderr into stdout
+            stderr=subprocess.STDOUT,
             text=True,
+            encoding="utf-8",  # Explicitly try UTF-8 first
+            errors="replace",   # But don't crash if it fails
             cwd=cwd,
             env=env,
-            bufsize=1,  # Line buffered
+            bufsize=1,
             shell=shell,
-        )  # nosec B602
+        )
 
         for line in process.stdout:
             # Strip only trailing newline to preserve some formatting (or strip both?)

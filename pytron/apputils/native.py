@@ -107,6 +107,26 @@ class NativeMixin:
                         f"Failed to send notification via window {window}: {e}"
                     )
 
+    def show_toast(self, config: dict):
+        """
+        Sends a rich, modern system notification.
+        Example config:
+        {
+            "title": "Hello",
+            "body": "World",
+            "image": "path/to/hero.jpg",
+            "icon": "path/to/icon.png",
+            "actions": [{"label": "Open", "action": "pytron://open"}]
+        }
+        """
+        if self.windows:
+            for window in self.windows:
+                try:
+                    window.toast(config)
+                    break
+                except Exception as e:
+                    self.logger.debug(f"Failed to send toast via window {window}: {e}")
+
     def copy_to_clipboard(self, text: str):
         """Copies text to the system clipboard."""
         if self.windows:
