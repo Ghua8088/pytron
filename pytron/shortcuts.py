@@ -2,7 +2,7 @@ import sys
 import ctypes
 import threading
 import logging
-from typing import Callable, Dict,Any
+from typing import Callable, Dict, Any
 
 try:
     import ctypes.wintypes
