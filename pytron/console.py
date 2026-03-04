@@ -108,7 +108,7 @@ def run_command_with_output(
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",  # Explicitly try UTF-8 first
-            errors="replace",   # But don't crash if it fails
+            errors="replace",  # But don't crash if it fails
             cwd=cwd,
             env=env,
             bufsize=1,

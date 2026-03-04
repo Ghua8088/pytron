@@ -5,6 +5,7 @@ import pathlib
 import xml.etree.ElementTree as ET
 from .utils import get_hwnd
 
+
 def show_toast(w, config):
     """
     Shows a modern Windows Toast notification using PowerShell and WinRT.
@@ -18,13 +19,14 @@ def show_toast(w, config):
     app_id = config.get("app_id", "Pytron.App")
     # Sanitize App ID (Windows prefers no spaces/special chars for unregistered IDs)
     safe_app_id = "".join(c if c.isalnum() or c in ".-" else "" for c in app_id)
-    if not safe_app_id: safe_app_id = "Pytron.App"
+    if not safe_app_id:
+        safe_app_id = "Pytron.App"
 
     # 1. Build XML
     toast = ET.Element("toast", {"launch": "pytron://open"})
     visual = ET.SubElement(toast, "visual")
     binding = ET.SubElement(visual, "binding", {"template": "ToastGeneric"})
-    
+
     ET.SubElement(binding, "text").text = title
     if body:
         ET.SubElement(binding, "text").text = body
@@ -32,27 +34,26 @@ def show_toast(w, config):
     # App Icon Override
     if icon and os.path.exists(icon):
         icon_abs = os.path.abspath(icon)
-        ET.SubElement(binding, "image", {
-            "placement": "appLogoOverride",
-            "src": icon_abs,
-            "hint-crop": "circle" if config.get("circle_icon") else "none"
-        })
+        ET.SubElement(
+            binding,
+            "image",
+            {
+                "placement": "appLogoOverride",
+                "src": icon_abs,
+                "hint-crop": "circle" if config.get("circle_icon") else "none",
+            },
+        )
 
     # Hero Image
     if image and os.path.exists(image):
         hero_abs = os.path.abspath(image)
-        ET.SubElement(binding, "image", {
-            "placement": "hero",
-            "src": hero_abs
-        })
+        ET.SubElement(binding, "image", {"placement": "hero", "src": hero_abs})
 
     # Inline Image
     inline_image = config.get("inline_image")
     if inline_image and os.path.exists(inline_image):
-       inline_abs = os.path.abspath(inline_image)
-       ET.SubElement(binding, "image", {
-            "src": inline_abs
-        })
+        inline_abs = os.path.abspath(inline_image)
+        ET.SubElement(binding, "image", {"src": inline_abs})
 
     # Actions
     if actions:
@@ -60,15 +61,15 @@ def show_toast(w, config):
         for action in actions:
             label = action.get("label", "Action")
             args = action.get("action", "")
-            
+
             action_props = {
                 "content": label,
                 "arguments": args,
             }
-            
+
             if args.startswith("http") or args.startswith("pytron://"):
                 action_props["activationType"] = "protocol"
-            
+
             ET.SubElement(actions_elem, "action", action_props)
 
     xml_str = ET.tostring(toast, encoding="unicode")
@@ -124,7 +125,7 @@ try {{
             capture_output=True,
             text=True,
             check=False,
-            creationflags=0x08000000  # CREATE_NO_WINDOW
+            creationflags=0x08000000,  # CREATE_NO_WINDOW
         )
         if res.stderr:
             print(f"[Pytron] Toast PowerShell Error: {res.stderr}")

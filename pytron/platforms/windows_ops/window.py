@@ -445,7 +445,9 @@ def set_menu(w, menu_bar):
     _wnd_procs[hwnd] = (new_proc_inst, old_proc)
 
     # Cast to void ptr for SetWindowLongPtrW
-    new_proc_ptr = ctypes.c_void_p(new_proc_inst) if hasattr(ctypes, "c_void_p") else new_proc_inst
+    new_proc_ptr = (
+        ctypes.c_void_p(new_proc_inst) if hasattr(ctypes, "c_void_p") else new_proc_inst
+    )
     user32.SetWindowLongPtrW(hwnd, GWL_WNDPROC, new_proc_ptr)
     user32.DrawMenuBar(hwnd)
 
