@@ -2,7 +2,7 @@ import os
 import sys
 import pytest
 from unittest.mock import MagicMock, patch
-from pytron.apputils.windows import WindowMixin
+from pytron.apputils.window_mixin import WindowMixin
 
 
 # Mock App class that uses the mixin
@@ -28,7 +28,7 @@ def app():
 
 @pytest.fixture
 def mock_webview():
-    with patch("pytron.apputils.windows.Webview") as mock:
+    with patch("pytron.apputils.window_mixin.Webview") as mock:
         # Setup the mock instance returned by the constructor
         instance = mock.return_value
         instance.config = {}

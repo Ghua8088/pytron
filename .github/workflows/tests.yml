@@ -27,6 +27,7 @@ jobs:
           rust_native:
             - 'pytron/engines/native/**'
             - 'pytron/engines/native/Cargo.toml'
+            - 'pytron/platforms/pytron_os/**'
           rust_loader:
             - 'pytron/pack/secure_loader/**'
             - 'pytron/pack/secure_loader/Cargo.toml'
@@ -48,6 +49,7 @@ jobs:
         workspaces: |
           pytron/engines/native
           pytron/pack/secure_loader
+          pytron/platforms/pytron_os
 
     - name: Install Linux Dependencies
       if: matrix.os == 'ubuntu-latest'
@@ -81,6 +83,8 @@ jobs:
       run: |
         if [ "${{ steps.filter.outputs.rust_native }}" == "true" ]; then
           cd pytron/engines/native && cargo check
+          cd ../../../pytron/platforms/pytron_os && cargo check
+          cd ../../../
         fi
         if [ "${{ steps.filter.outputs.rust_loader }}" == "true" ]; then
           cd pytron/pack/secure_loader && cargo check
@@ -90,6 +94,10 @@ jobs:
     - name: 🦾 Build Native Engine
       if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (steps.filter.outputs.rust_native == 'true') || startsWith(github.ref, 'refs/tags/v')
       run: python pytron/engines/native/build.py
+
+    - name: 🦾 Build OS Platform Hook
+      if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (steps.filter.outputs.rust_native == 'true') || startsWith(github.ref, 'refs/tags/v')
+      run: python pytron/platforms/pytron_os/build.py
     
     - name: Run Tests
       run: |

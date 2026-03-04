@@ -4,6 +4,7 @@ import subprocess
 import json
 import sys
 from pathlib import Path
+import os
 
 
 def get_venv_python_path(venv_dir: Path = Path("env")) -> Path:
@@ -17,6 +18,14 @@ def get_python_executable() -> str:
     if venv_python.exists():
         return str(venv_python)
     return sys.executable
+
+
+def get_sanitized_env() -> dict:
+    """Returns a copy of os.environ with PYTHONHOME and PYTHONPATH removed to prevent path poisoning."""
+    env = os.environ.copy()
+    env.pop("PYTHONHOME", None)
+    env.pop("PYTHONPATH", None)
+    return env
 
 
 def get_config() -> dict:

@@ -8,6 +8,7 @@ import sysconfig
 import platform
 from pathlib import Path
 from ..console import log, run_command_with_output, console, Rule
+from ..exceptions import ModuleError
 from .installers import build_installer
 from ..commands.helpers import get_python_executable, get_venv_site_packages
 from ..commands.harvest import generate_nuclear_hooks
@@ -31,30 +32,26 @@ class SecurityModule(BuildModule):
 
     def prepare(self, context: BuildContext):
         log(
-            "Shield: Initializing Secure Packaging (Binary Compilation)...",
+            "Shield: Initializing Secure Packaging (Static Linking)...",
             style="info",
         )
 
-        # 1. CYTHON COMPILATION
+        # 1. SETUP BUILD DIR
         if self.build_dir.exists():
             shutil.rmtree(self.build_dir)
         self.build_dir.mkdir(parents=True, exist_ok=True)
 
-        self.compiled_pyd = cython_compile(context.script, self.build_dir)
-        if not self.compiled_pyd:
-            raise RuntimeError("Shield Error: Cython compilation failed.")
-
-        # 3. GENERATE BOOTSTRAP SCRIPT
+        # 2. GENERATE BOOTSTRAP SCRIPT
         bootstrap_path = self.build_dir / "bootstrap_env.py"
         bootstrap_content = """
-import sys, os, json, logging, threading, asyncio, textwrap, re, socket, ssl, ctypes, hashlib, time, base64, mimetypes
-from collections import deque
+import sys, os
 import pytron
 
+# 'app' is a built-in module linked statically into this executable.
 try:
-    import app # This imports the compiled app.pyd/so
-except Exception as e:
-    print(f"Boot Error: Failed to load compiled app: {e}")
+    import app 
+except ImportError as e:
+    print(f"Boot Error: Failed to load built-in app: {e}")
     sys.exit(1)
 
 if __name__ == "__main__":
@@ -62,23 +59,17 @@ if __name__ == "__main__":
 """
         bootstrap_path.write_text(bootstrap_content)
 
-        # 2. CONFIGURE SHIELDED ANALYSIS
+        # 3. CONFIGURE SHIELDED ANALYSIS
         self.original_script = context.script
         context.script = bootstrap_path
 
         # Store original for PyInstaller module to pick up (Dual Analysis)
         context.original_script = self.original_script
 
-        # Add the compiled binary to the build context binaries
-        # CRITICAL: We EXCLUDE the original script from being bundled as source
-        if self.original_script.stem not in context.excludes:
-            context.excludes.append(self.original_script.stem)
-
-        # Add to pathex so PyInstaller finds the .pyd during analysis of bootstrap
-        if str(self.build_dir.resolve()) not in context.pathex:
-            context.pathex.append(str(self.build_dir.resolve()))
-
-        context.binaries.append(f"{self.compiled_pyd.resolve()}{os.pathsep}.")
+        # Hide the original script and the 'app' module from PyInstaller
+        # 'app' will be provided by the executable itself at runtime
+        context.excludes.append(self.original_script.stem)
+        context.excludes.append("app")
 
         # 4. FORCE NO-ARCHIVE (Required for our custom fusion process)
         if "--debug" not in context.extra_args:
@@ -220,6 +211,23 @@ if __name__ == "__main__":
             except Exception as e:
                 log(f"Warning: Could not copy {item.name}: {e}", style="warning")
 
+        if sys.platform == "win32":
+            # The compiled binary implicitly links to Python/VC DLLs.
+            # They must be in the app root to be found by the Windows loader.
+            internal_dir = final_dist / "_internal"
+            if internal_dir.exists():
+                for dll in internal_dir.glob("*.dll"):
+                    name = dll.name.lower()
+                    if (
+                        name.startswith("python")
+                        or name.startswith("vcruntime")
+                        or name.startswith("msvcp")
+                    ):
+                        try:
+                            shutil.copy2(dll, final_dist / dll.name)
+                        except Exception as e:
+                            pass
+
         # 5. FUSE AND CLOAK LIBRARY (Optional via --bundled)
         if getattr(context, "bundled", False):
             # Place the bundle inside _internal for a cleaner root
@@ -232,23 +240,72 @@ if __name__ == "__main__":
             )
             log("Use --bundled to group Python modules into app.bundle.", style="dim")
 
-        # 7. DEPLOY RUST LOADER
-        log("Hardening Loader...", style="info")
-        ext_exe = ".exe" if sys.platform == "win32" else ""
-        loader_name = f"pytron_rust_bootloader{ext_exe}"
-        precompiled_bin = (
-            context.package_dir
-            / "pytron"
-            / "pack"
-            / "secure_loader"
-            / "bin"
-            / loader_name
+        # 7. COMPILE & LINK LOADER
+        log("Compiling and Linking Static Loader...", style="info")
+
+        # Determine static lib name
+        lib_name = (
+            "pytron_rust_bootloader.lib"
+            if sys.platform == "win32"
+            else "libpytron_rust_bootloader.a"
+        )
+        if (
+            sys.platform == "win32"
+            and not (
+                context.package_dir
+                / "pytron"
+                / "pack"
+                / "secure_loader"
+                / "bin"
+                / lib_name
+            ).exists()
+        ):
+            # Check for alternate name
+            if (
+                context.package_dir
+                / "pytron"
+                / "pack"
+                / "secure_loader"
+                / "bin"
+                / "libpytron_rust_bootloader.a"
+            ).exists():
+                lib_name = "libpytron_rust_bootloader.a"
+
+        bootloader_lib = (
+            context.package_dir / "pytron" / "pack" / "secure_loader" / "bin" / lib_name
         )
 
-        final_loader = final_dist / f"{original_out_name}{ext_exe}"
-        shutil.copy(precompiled_bin, final_loader)
+        if not bootloader_lib.exists():
+            raise ModuleError(
+                f"Static Bootloader not found at {bootloader_lib}. Please run 'pytron build-loader'.",
+                module_name="SecurityModule",
+            )
+
+        # Compile app.c and link with bootloader_lib
+        compiled_exe = cython_compile(
+            self.original_script, self.build_dir, bootloader_lib
+        )
+
+        if not compiled_exe or not compiled_exe.exists():
+            raise ModuleError(
+                "Failed to compile fused executable.", module_name="SecurityModule"
+            )
+
+        final_loader = (
+            final_dist / f"{original_out_name}.exe"
+            if sys.platform == "win32"
+            else final_dist / original_out_name
+        )
+
+        if final_loader.exists():
+            os.remove(final_loader)
+
+        shutil.copy2(compiled_exe, final_loader)
+
+        log(f"  + Generated Fused Executable: {final_loader.name}", style="success")
 
         # Cleanup dummy base exe if it exists
+        ext_exe = ".exe" if sys.platform == "win32" else ""
         base_exe = final_dist / f"{original_out_name}_base{ext_exe}"
         if base_exe.exists():
             try:

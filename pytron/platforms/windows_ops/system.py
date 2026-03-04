@@ -3,6 +3,7 @@ import os
 import sys
 from .constants import *
 from .utils import get_hwnd
+from . import toasts
 
 try:
     import winreg
@@ -183,6 +184,14 @@ def notification(w, title, message, icon=None):
         print(f"[Pytron] Notification Exception: {e}")
 
 
+def toast(w, config):
+    try:
+        # Pass the window handle if info is needed, but toasts are mostly process-wide
+        toasts.show_toast(w, config)
+    except Exception as e:
+        print(f"[Pytron] Rich Toast Exception: {e}")
+
+
 def message_box(w, title, message, style=0):
     hwnd = get_hwnd(w)
     return user32.MessageBoxW(hwnd, message, title, style)
@@ -315,6 +324,13 @@ def register_protocol(scheme):
 
 
 def set_launch_on_boot(app_name, exe_path, enable=True):
+    try:
+        from pytron.dependencies import pytron_os
+
+        return pytron_os.set_launch_on_boot(app_name, exe_path, enable)
+    except Exception:
+        pass
+
     if not winreg:
         return False
     key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"

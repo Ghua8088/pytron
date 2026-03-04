@@ -98,6 +98,7 @@ sys.modules["plugins"] = plugins
 from .core import App, Webview, get_resource_path, Menu, MenuBar
 from .plugin import Plugin
 from .updater import Updater
+from .testing import PytronTestClient
 
 __all__ = [
     "App",
@@ -109,4 +110,5 @@ __all__ = [
     "Updater",
     "plugins",
     "PluginConfigurator",
+    "PytronTestClient",
 ]

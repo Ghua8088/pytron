@@ -15,12 +15,15 @@ def build_and_deploy():
     bin_dir = base_dir / "bin"
     target_dir = base_dir / "target" / "release"
 
-    # 2. Determine binary name
-    ext = ".exe" if sys.platform == "win32" else ""
-    loader_name = f"pytron_rust_bootloader{ext}"
+    # 2. Determine static library name
+    lib_names = []
+    if sys.platform == "win32":
+        lib_names = ["pytron_rust_bootloader.lib", "libpytron_rust_bootloader.a"]
+    else:
+        lib_names = ["libpytron_rust_bootloader.a"]
 
     # 3. Compile Rust (Release mode)
-    print(f"[*] Starting build of {loader_name}...")
+    print("[*] Starting build of static bootloader...")
     env = os.environ.copy()
 
     # macOS requires special linker flags for PyO3
@@ -33,8 +36,6 @@ def build_and_deploy():
         print("[INFO] Applying macOS Linker Flags (dynamic_lookup)")
     elif sys.platform.startswith("linux"):
         rustflags = env.get("RUSTFLAGS", "")
-        # Linux binaries using pyo3 with extension-module need to allow undefined symbols
-        # to avoid linker errors, resolving them at runtime.
         env["RUSTFLAGS"] = (
             f"{rustflags} -C link-arg=-Wl,--unresolved-symbols=ignore-all".strip()
         )
@@ -55,17 +56,25 @@ def build_and_deploy():
     # 4. Ensure bin directory exists
     bin_dir.mkdir(exist_ok=True)
 
-    # 5. Move binary to bin/
-    src_bin = target_dir / loader_name
-    dest_bin = bin_dir / loader_name
+    # 5. Move static lib to bin/
+    found_lib = None
+    for name in lib_names:
+        candidate = target_dir / name
+        if candidate.exists():
+            found_lib = candidate
+            break
 
-    if src_bin.exists():
-        shutil.copy2(src_bin, dest_bin)
+    # Also check .deps or native directory if not found in root release? No, usually in release.
+
+    if found_lib and found_lib.exists():
+        dest_lib = bin_dir / found_lib.name
+        shutil.copy2(found_lib, dest_lib)
         print(
-            f"[+] Success: Deployed {loader_name} to {bin_dir.relative_to(base_dir.parent.parent)}"
+            f"[+] Success: Deployed static library {found_lib.name} to {bin_dir.name}/"
         )
     else:
-        print(f"[!] Error: Could not find compiled binary at {src_bin}")
+        print(f"[!] Error: Could not find compiled static library in {target_dir}")
+        print(f"    Expected one of: {lib_names}")
         sys.exit(1)
 
 

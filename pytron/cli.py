@@ -24,8 +24,8 @@ from .commands.android import cmd_android
 from .commands.engine import cmd_engine
 from .commands.doctor import cmd_doctor
 from .commands.workflow import cmd_workflow
-from .commands.scan import cmd_scan
 from .console import log
+import os
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,6 +36,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enable file logging (provide path or defaults to pytron.log)",
         nargs="?",
         const="pytron.log",
+    )
+    base_parser.add_argument(
+        "--version", "-v", action="store_true", help="Show version and exit"
     )
 
     parser = argparse.ArgumentParser(
@@ -109,19 +112,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_doctor.set_defaults(func=cmd_doctor)
 
-    p_scan = sub.add_parser(
-        "scan", help="Analyze dependency graph with ML Oracle", parents=[base_parser]
-    )
-    p_scan.add_argument("target", nargs="?", help="Target directory (default: current)")
-    p_scan.add_argument("--json", action="store_true", help="Dump graph to JSON")
-    p_scan.add_argument(
-        "--html", action="store_true", help="Generate interactive HTML graph"
-    )
-    p_scan.add_argument(
-        "--verbose", action="store_true", help="Show raw uncertainty zones"
-    )
-    p_scan.set_defaults(func=cmd_scan)
-
     p_frontend = sub.add_parser(
         "frontend",
         help="Frontend commands proxy (runs '<provider> <args>' in the frontend folder)",
@@ -192,6 +182,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--smart-assets",
         action="store_true",
         help="Enable auto-inclusion of smart assets (non-code files).",
+    )
+    grp_general.add_argument(
+        "--pack",
+        action="store_true",
+        help="Pack frontend assets into a single uneditable .pytron archive.",
     )
 
     # Engine Options
@@ -353,7 +348,26 @@ from .exceptions import PytronError
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+
+    # Use parse_known_args to avoid eager consumption of flags intended for scripts
+    args, remaining = parser.parse_known_args(argv)
+
+    # 1. Version Check (only if no command or explicitly requested)
+    if getattr(args, "version", False):
+        # Only show version if it's a global flag or 'info' command
+        # This prevents 'pytron run app.py -v' from being intercepted
+        if not args.command or args.command == "info":
+            from . import __version__
+
+            print(f"Pytron v{__version__}")
+            return 0
+
+    # 2. Re-inject remaining args if it's 'run' command
+    if args.command == "run" and remaining:
+        # Append unknown flags to extra_args
+        if not hasattr(args, "extra_args"):
+            args.extra_args = []
+        args.extra_args.extend(remaining)
 
     # Initialize logger if requested
     if getattr(args, "logger", None):

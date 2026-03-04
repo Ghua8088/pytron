@@ -132,7 +132,7 @@ def build_windows_installer(
     try:
         settings_path = script_dir / "settings.json"
         if settings_path.exists():
-            settings = json.loads(settings_path.read_text())
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
             version = settings.get("version", "1.0")
             author = settings.get("author", author)
             description = settings.get("description", description)

@@ -12,23 +12,35 @@ ROOT = os.path.abspath(os.path.join(ENGINE_DIR, "..", "..", ".."))
 # Destination Directory (Python runtime dependencies)
 DEPENDENCIES_DIR = os.path.join(ROOT, "pytron", "dependencies")
 
+# Check for Android Target
+is_android = "--android" in sys.argv
+
 # Determine Extension (Python Extension Module)
-if sys.platform == "win32":
+if is_android:
+    LIB_NAME = "libpytron_native.so"
+    EXT_NAME = "libpytron-native.so"  # Android loader expects hyphen
+    TARGET_SUBDIR = os.path.join("aarch64-linux-android", "release")
+    DEPENDENCIES_DIR = os.path.join(DEPENDENCIES_DIR, "android", "arm64-v8a")
+elif sys.platform == "win32":
     LIB_NAME = "pytron_native.dll"  # Cargo outputs .dll on Windows
     EXT_NAME = "pytron_native.pyd"  # Python expects .pyd
+    TARGET_SUBDIR = "release"
 elif sys.platform == "darwin":
     LIB_NAME = "libpytron_native.dylib"
     EXT_NAME = "pytron_native.so"  # Python on Mac expects .so
+    TARGET_SUBDIR = "release"
 else:
     LIB_NAME = "libpytron_native.so"
     EXT_NAME = "pytron_native.so"
+    TARGET_SUBDIR = "release"
 
-TARGET_PATH = os.path.join(ENGINE_DIR, "target", "release", LIB_NAME)
+TARGET_PATH = os.path.join(ENGINE_DIR, "target", TARGET_SUBDIR, LIB_NAME)
 DEST_PATH = os.path.join(DEPENDENCIES_DIR, EXT_NAME)
 
 
 def build():
     print(f"\n[BUILD] Starting Iron Engine Build...")
+    print(f"   Target OS: {'Android (arm64)' if is_android else 'Host System'}")
     print(f"   Source: {ENGINE_DIR}")
     print(f"   Target: {DEST_PATH}\n")
 
@@ -44,8 +56,32 @@ def build():
     env = os.environ.copy()
     env["PYO3_USE_ABI3_FORWARD_COMPATIBILITY"] = "1"
 
+    cargo_cmd = ["cargo", "build", "--release"]
+
+    if is_android:
+        # Cross-compilation for Android
+        cargo_cmd.extend(["--target", "aarch64-linux-android"])
+        print("[INFO] Target: aarch64-linux-android")
+
+        # We need to ensure the linker is set. If the user has a .cargo/config.toml, great.
+        # Otherwise, we might need to point to a zig-cc wrapper or NDK.
+        # If the rust_linker.bat exists from builder.py, we can attempt to use it.
+        linker_path = os.path.join(
+            ROOT,
+            "pytron",
+            "platforms",
+            "android",
+            "tools",
+            "zig",
+            "wrappers",
+            "rust_linker.bat",
+        )
+        if os.path.exists(linker_path):
+            env["CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"] = linker_path
+            print(f"[INFO] Using Zig-Linker: {linker_path}")
+
     # macOS requires special linker flags for PyO3 extensions
-    if sys.platform == "darwin":
+    if sys.platform == "darwin" and not is_android:
         rustflags = env.get("RUSTFLAGS", "")
         # Add dynamic lookup for Python symbols
         env["RUSTFLAGS"] = (
@@ -54,7 +90,7 @@ def build():
         print("[INFO] Applying macOS Linker Flags (dynamic_lookup)")
 
     try:
-        subprocess.check_call(["cargo", "build", "--release"], cwd=ENGINE_DIR, env=env)
+        subprocess.check_call(cargo_cmd, cwd=ENGINE_DIR, env=env)
     except subprocess.CalledProcessError:
         print("\n[ERROR] Cargo Build Failed! Check the error messages above.")
         sys.exit(1)

@@ -10,7 +10,10 @@ set_target_properties(python-lib PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_S
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Create our native library
-add_library(pytron-native SHARED pytron_bridge.cpp)
+add_library(pytron-native SHARED 
+    pytron_bridge.cpp 
+    pytron_compat.c
+)
 
 # Find system libraries
 find_library(log-lib log)

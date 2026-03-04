@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rich Notifications Demo</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background: var(--card);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            margin-bottom: 0.5rem;
+            font-weight: 800;
+        }
+
+        p {
+            color: #94a3b8;
+            margin-bottom: 2rem;
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
+        }
+
+        button.secondary {
+            background: #334155;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Rich Toasts</h1>
+        <p>Experience insane Windows notifications with hero images and buttons.</p>
+
+        <button id="btnBasic">Basic Notification</button>
+        <button id="btnRich" class="secondary">Send Rich Toast (Insane)</button>
+        <button id="btnAction" class="secondary">Toast with Actions</button>
+    </div>
+
+    <!-- We'll use the globally injected 'pytron' object for simplicity in this example -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnBasic = document.getElementById('btnBasic');
+            const btnRich = document.getElementById('btnRich');
+            const btnAction = document.getElementById('btnAction');
+
+            btnBasic.onclick = () => {
+                if (window.pytron) {
+                    pytron.system_notification("Hello", "This is a basic notification");
+                }
+            };
+
+            btnRich.onclick = async () => {
+                if (window.pytron) {
+                    await pytron.toast({
+                        title: "System Update",
+                        body: "A new version of Pytron is ready. Click to explore the new features and improvements in the latest engine.",
+                        image: "frontend/hero.png",
+                        circle_icon: true
+                    });
+                }
+            };
+
+            btnAction.onclick = async () => {
+                if (window.pytron) {
+                    await pytron.toast({
+                        title: "New Message",
+                        body: "John Doe sent you a message: 'Hey, have you seen the new rich notifications in Pytron?'",
+                        icon: "frontend/icon.png",
+                        actions: [
+                            { label: "Reply", action: "pytron://reply" },
+                            { label: "Open App", action: "pytron://open" }
+                        ]
+                    });
+                }
+            };
+        });
+    </script>
+</body>
+
+</html>

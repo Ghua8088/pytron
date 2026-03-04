@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "pytron-client": "^0.2.1"
+  }
+}

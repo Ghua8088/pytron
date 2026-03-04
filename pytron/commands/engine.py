@@ -17,6 +17,16 @@ def cmd_engine(args):
             except Exception as e:
                 log(f"Engine Forge Failed: {e}", style="error")
                 return 1
+        elif args.name == "native":
+            log(f"Building Native Iron Engine from source...", style="info")
+            try:
+                from ..engines.native.build import build as build_native
+
+                build_native()
+                log("Native Engine Build Successful!", style="success")
+            except Exception as e:
+                log(f"Native Engine Build Failed: {e}", style="error")
+                return 1
         else:
             log(f"Unsupported engine: {args.name}", style="error")
             return 1

@@ -10,6 +10,7 @@ pub enum UserEvent {
     Return(String, i32, String),
     SetTitle(String),
     SetSize(i32, i32, u32),
+    SetBounds(i32, i32, i32, i32), // x, y, w, h
     Navigate(String),
     Quit,
     Minimize,
@@ -23,9 +24,10 @@ pub enum UserEvent {
     SetFullscreen(bool),
     CenterWindow,
     SetPreventClose(bool),
-    CreateTray(String, String), // icon_path, tooltip
+    CreateTray(String, Option<String>), // tooltip, icon_path
     TrayMenuClick(String), // id
     SetDecorations(bool),
     MessageBox(String, String, String, String), // Title, Message, Level, Seq
     OpenExternal(String),
+    StateUpdate(String, String), // Key, Value (JSON)
 }
