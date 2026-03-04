@@ -10,7 +10,7 @@ from .shortcuts import ShortcutManager
 from .apputils.codegen import CodegenMixin
 from .apputils.native import NativeMixin
 from .apputils.config import ConfigMixin
-from .apputils.windows import WindowMixin
+from .apputils.window_mixin import WindowMixin
 from .apputils.extras import ExtrasMixin
 from .apputils.shell import Shell
 from .inspector import Inspector

@@ -12,17 +12,16 @@ import os
 import base64
 from collections import deque
 
-# Import Native Engine
-try:
-    from .dependencies import pytron_native
-except ImportError:
-    # Fallback to check if it's in path
-    sys.path.append(os.path.join(os.path.dirname(__file__), "dependencies"))
+# Import Native Engine via Canonical Resolver
+from .utils import resolve_native_module
+
+pytron_native = resolve_native_module()
+if not pytron_native:
+    # Final legacy fallback for simple environments
     try:
-        import pytron_native
+        from .dependencies import pytron_native
     except ImportError:
-        print("[CRITICAL] Could not load pytron_native engine.")
-        pytron_native = None
+        pass
 
 import urllib.parse
 from .serializer import pytron_serialize
@@ -37,10 +36,11 @@ IS_ANDROID = False
 class Webview:
     def __init__(self, config):
         if not pytron_native:
+            ext = ".pyd" if sys.platform == "win32" else ".so"
             raise NativeEngineError(
-                "Pytron Native Engine binary (pytron_native.pyd/so) is missing or could not be loaded. "
-                "Ensure it is present in 'pytron/dependencies' or your environment. "
-                "You may need to run 'pytron engine install native' or check for architecture mismatches."
+                f"Pytron Native Engine binary (pytron_native{ext}) is missing or could not be loaded. "
+                "Ensure it is present in 'pytron/dependencies' or your path. "
+                "Try running 'pytron engine install native' to build it for your current system."
             )
 
         self.config = config
