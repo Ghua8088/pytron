@@ -12,21 +12,20 @@ import os
 import base64
 from collections import deque
 
-# Import Native Engine
-try:
-    from .dependencies import pytron_native
-except ImportError:
-    # Fallback to check if it's in path
-    sys.path.append(os.path.join(os.path.dirname(__file__), "dependencies"))
+# Import Native Engine via Canonical Resolver
+from .utils import resolve_native_module
+
+pytron_native = resolve_native_module()
+if not pytron_native:
+    # Final legacy fallback for simple environments
     try:
-        import pytron_native
+        from .dependencies import pytron_native
     except ImportError:
-        print("[CRITICAL] Could not load pytron_native engine.")
-        pytron_native = None
+        pass
 
 import urllib.parse
 from .serializer import pytron_serialize
-from .exceptions import ConfigError
+from .exceptions import ConfigError, NativeEngineError
 
 IS_ANDROID = False
 
@@ -37,8 +36,11 @@ IS_ANDROID = False
 class Webview:
     def __init__(self, config):
         if not pytron_native:
-            raise ImportError(
-                "Pytron Native Engine (pyd) is missing. Run build_engine.py."
+            ext = ".pyd" if sys.platform == "win32" else ".so"
+            raise NativeEngineError(
+                f"Pytron Native Engine binary (pytron_native{ext}) is missing or could not be loaded. "
+                "Ensure it is present in 'pytron/dependencies' or your path. "
+                "Try running 'pytron engine install native' to build it for your current system."
             )
 
         self.config = config
@@ -62,38 +64,53 @@ class Webview:
                 "concurrent.futures"
             ).futures.ThreadPoolExecutor(max_workers=5)
 
-        self._bound_functions = {}
         self._served_data = {}
+        self._running = False
 
-        # 3. Native Engine Initialization
         # 3. Native Engine Initialization
         # Logic to determine Root Path for Virtual Host (pytron://app/)
         raw_url = config.get("url", "")
         debug = config.get("debug", False)
 
-        root_path = str(self._app_root)
+        # Determine the definitive Application Root
+        if self.app and hasattr(self.app, "app_root"):
+            root_path = str(self.app.app_root)
+        else:
+            root_path = str(self._app_root)
+
         final_url = raw_url
 
+        # Determine Scheme based on Platform and Engine
+        if config.get("engine") == "chrome":
+            self._scheme = "pytron://localhost"
+        else:
+            self._scheme = (
+                "https://pytron.localhost"
+                if platform.system() == "Windows"
+                else "pytron://localhost"
+            )
+
         # Check if URL looks like a local file path
-        if not raw_url.startswith(("http:", "https:", "pytron:")):
+        if not raw_url.startswith(("http:", "https:", "pytron:", "data:")):
             path_obj = pathlib.Path(raw_url)
             if not path_obj.is_absolute():
-                path_obj = (self._app_root / path_obj).resolve()
+                # Resolve relative to determined root
+                path_obj = (pathlib.Path(root_path) / path_obj).resolve()
 
             if path_obj.exists():
-                # Valid local file found.
-                # Map its parent dir as the App Root.
-                root_path = str(path_obj.parent)
-                # URL becomes https://pytron.localhost/app/<filename>
-                final_url = (
-                    f"https://pytron.localhost/app/{urllib.parse.quote(path_obj.name)}"
-                )
+                try:
+                    # Map the URL relative to the Application Root for consistent routing
+                    rel = path_obj.relative_to(pathlib.Path(root_path))
+                    final_url = (
+                        f"{self._scheme}app/{urllib.parse.quote(rel.as_posix())}"
+                    )
+                except ValueError:
+                    # Fallback if the file is outside app_root (e.g. system file)
+                    root_path = str(path_obj.parent)
+                    final_url = f"{self._scheme}app/{urllib.parse.quote(path_obj.name)}"
             else:
-                # Fallback
-                root_path = str(path_obj.parent)
-                final_url = (
-                    f"https://pytron.localhost/app/{urllib.parse.quote(path_obj.name)}"
-                )
+                # Fallback for missing files or legacy paths
+                final_url = f"{self._scheme}app/{urllib.parse.quote(path_obj.name)}"
 
         self.root_path = root_path  # Store for later navigations
         self.logger.info(
@@ -109,13 +126,35 @@ class Webview:
             # bindings can be registered (via UserEvent::Bind) BEFORE the real app loads.
             # This prevents race conditions where IPC calls happen before callbacks are ready.
             self._start_url = final_url
+
+            # Access the underlying NativeState for the Iron Bridge
+            store_instance = (
+                self.app.state._store
+                if self.app and hasattr(self.app.state, "_store")
+                else None
+            )
+
             self.native = pytron_native.NativeWebview(
                 debug,
                 "about:blank",  # Start empty
                 root_path,
                 bool(resizable),
                 bool(frameless),
+                store_instance,
             )
+        except RuntimeError as e:
+            err_msg = str(e)
+            if "0x8007139F" in err_msg:
+                raise NativeEngineError(
+                    "WebView2 Conflict (0x8007139F): The User Data Folder is locked or in an invalid state. \n"
+                    "SOLUTIONS: \n"
+                    "1. Close any ghost processes of this app in Task Manager. \n"
+                    "2. Try deleting the storage folder: "
+                    + str(getattr(self.app, "storage_path", "unknown"))
+                    + "\n"
+                    "3. Ensure your 'settings.json' has a unique 'title' to avoid conflicts with other Pytron apps."
+                ) from e
+            raise NativeEngineError(f"Failed to initialize Native WebView: {e}") from e
         except TypeError:
             # Fallback if pyd wasn't updated yet? No, we will rebuild.
             raise ImportError("Native Engine signature mismatch. Please rebuild.")
@@ -143,7 +182,6 @@ class Webview:
                 "Native Engine: min_size/max_size are not currently supported without rebuild. Ignoring."
             )
 
-        # 6. Platform Helpers (Windows)
         self._platform = None
         if platform.system() == "Windows":
             try:
@@ -152,6 +190,13 @@ class Webview:
                 self._platform = WindowsImplementation()
             except Exception as e:
                 self.logger.warning(f"Failed to load Windows Platform helpers: {e}")
+
+            # Apply hide_from_taskbar settings for Windows
+            if config.get("hide_from_taskbar", False) and self._platform and self.hwnd:
+                try:
+                    self._platform.set_utility_window(self.hwnd, True)
+                except Exception as e:
+                    self.logger.warning(f"Failed to apply hide_from_taskbar: {e}")
 
         if not config.get("start_hidden", False):
             self.show()
@@ -179,8 +224,32 @@ class Webview:
         # Apply UI settings (Context Menu, BG) for initial load
         self._apply_ui_settings()
 
+        # Apply Border Color for Native Windows (Floating App specialized)
+        bg_color = config.get("background_color")
+        if bg_color and self._platform:
+            self.set_border_color(bg_color)
+
+        # 9. VAP Archive Loading
+        if config.get("vap_mode"):
+            self._load_vap_archive(config.get("vap_archive", "app.pytron"))
+
+        # 10. Utility Status
+        if getattr(self, "_is_utility", False):
+            if hasattr(self.native, "set_is_utility"):
+                self.native.set_is_utility(True)
+
     def start(self):
         self.logger.info("Starting Native Event Loop...")
+
+        # Consume Pending Tray Config (from setup_tray_standard)
+        if self.app and self.app.config.get("_pending_native_tray"):
+            cfg = self.app.config.pop("_pending_native_tray")
+            self.logger.info("Initializing Defered Native Tray...")
+            try:
+                self.create_tray(cfg["icon"], cfg["title"])
+                self.config["close_to_tray"] = cfg["close_to_tray"]
+            except Exception as e:
+                self.logger.error(f"Failed to create deferred tray: {e}")
 
         # Register Native Event Handlers (Direct Binding)
         self.native.bind("pytron_on_close", self._on_close_requested)
@@ -192,11 +261,34 @@ class Webview:
             self.set_prevent_close(True)
 
         # Trigger initial navigation now that bindings are (presumably) queued
-        if hasattr(self, "_start_url"):
+        if hasattr(self, "_start_url") and self.config.get("navigate_on_init", True):
             self.logger.info(f"Navigating to start URL: {self._start_url}")
             self.navigate(self._start_url)
 
-        self.native.run()
+            # Apply hacks after navigation request
+            if self.config.get("always_on_top", False):
+                self.set_always_on_top(True)
+
+        self._running = True
+        try:
+            self.native.run()
+        finally:
+            self._running = False
+            # Clean up window from App tracking when its event loop terminates
+            if self.app and self in getattr(self.app, "windows", []):
+                try:
+                    self.app.windows.remove(self)
+                except (ValueError, AttributeError):
+                    pass
+
+    @property
+    def base_url(self) -> str:
+        """Returns the base URL (scheme + host) for this webview."""
+        return self._scheme
+
+    def is_alive(self):
+        """Checks if the window event loop is currently running."""
+        return getattr(self, "_running", False)
 
     def _init_bindings(self):
         # 1. CORE SYSTEM BINDINGS (Prefixed with pytron_ to avoid user collisions)
@@ -212,10 +304,21 @@ class Webview:
         self.bind("pytron_center", self.center, run_in_thread=False)
         self.bind("pytron_sync_state", self._sync_state, run_in_thread=False)
         self.bind("__pytron_vap_get", self._get_binary_asset, run_in_thread=True)
-        self.bind("pytron_serve_asset", self._serve_asset_callback, run_in_thread=False)
+
+        # VAP Asset Server MUST be bound raw because it's called directly from Rust protocol handler
+        if self.native:
+            self.native.bind("pytron_serve_asset", self._serve_asset_callback)
+
         self.bind(
             "pytron_set_slim_titlebar", self.set_slim_titlebar, run_in_thread=False
         )
+        self.bind("pytron_set_bounds", self.set_bounds, run_in_thread=False)
+        self.bind(
+            "pytron_get_registered_shortcuts",
+            self.get_registered_shortcuts,
+            run_in_thread=True,
+        )
+        self.bind("pytron_set_border_color", self.set_border_color, run_in_thread=False)
 
         # 2. SYSTEM TOOLING / DIALOGS (Prefixed)
         self.bind("pytron_dialog_open_file", self.dialog_open_file, run_in_thread=True)
@@ -230,11 +333,11 @@ class Webview:
         self.bind(
             "pytron_set_taskbar_progress", self.set_taskbar_progress, run_in_thread=True
         )
+        self.bind("pytron_toast", self.toast, run_in_thread=True)
 
         # 3. CLEAN ALIASES (Convenience for JS users, but can be overwritten)
         # Avoid logging for frequent state/asset syncs
         self._spammy_methods = {
-            "pytron_sync_state",
             "pytron_serve_asset",
             "__pytron_vap_get",
         }
@@ -254,7 +357,15 @@ class Webview:
         self.bind("dialog_open_folder", self.dialog_open_folder, run_in_thread=True)
         self.bind("message_box", self.message_box, run_in_thread=True)
         self.bind("system_notification", self.system_notification, run_in_thread=True)
+        self.bind("toast", self.toast, run_in_thread=True)
         self.bind("set_taskbar_progress", self.set_taskbar_progress, run_in_thread=True)
+        self.bind("set_bounds", self.set_bounds, run_in_thread=False)
+        self.bind("set_border_color", self.set_border_color, run_in_thread=False)
+        self.bind(
+            "get_registered_shortcuts",
+            self.get_registered_shortcuts,
+            run_in_thread=True,
+        )
 
     def _serve_asset_callback(self, key):
         """Called by Native Engine Protocol Handler to fetch VAP assets."""
@@ -331,6 +442,12 @@ class Webview:
     def navigate(self, url):
         target = self._normalize_to_pytron(url)
         self.config["url"] = target
+
+        # If the event loop hasn't started yet, update the start URL
+        # so that start() uses this new target instead of the default.
+        if not getattr(self, "_running", False):
+            self._start_url = target
+
         self.native.navigate(target)
         # Attempt to apply UI settings (Context Menu, BG) via JS for Native Engine
         # Note: This might race with page load clearing scripts, but it's best effort.
@@ -338,7 +455,7 @@ class Webview:
 
     def _normalize_to_pytron(self, url):
         """Ensures local file paths are converted to pytron://app/ URLs relative to root_path."""
-        if url.startswith(("http:", "https:", "pytron:")):
+        if url.startswith(("http:", "https:", "pytron:", "data:")):
             return url
 
         path_obj = pathlib.Path(url)
@@ -353,7 +470,7 @@ class Webview:
             # relative_to throws ValueError if not relative
             rel = path_obj.resolve().relative_to(root.resolve())
             # Use forward slashes for URL
-            return f"https://pytron.localhost/app/{urllib.parse.quote(rel.as_posix())}"
+            return f"{self._scheme}/app/{urllib.parse.quote(rel.as_posix())}"
         except (ValueError, Exception):
             # If outside root, we can't serve it via current pytron instance easily.
             # But maybe the current logic allows it if we didn't lock protocol_root?
@@ -366,11 +483,22 @@ class Webview:
     def serve_data(self, key, data, mime_type):
         """
         Callback for serializing binary data used by plugins/VAP.
-        Stores the data in memory to be served via __pytron_vap_get.
+        Stores the data in memory to be served via pytron_serve_asset.
         """
-        self._served_data[key] = (data, mime_type)
-        # Use HTTPS scheme for Windows/Native compatibility
-        return f"https://pytron.localhost/{key}"
+        # Ensure the key is clean (no leading slash or app/ prefix)
+        clean_key = key.lstrip("/").replace("app/", "", 1)
+
+        # PERFORMANCE: Limit cache size to prevent memory leaks from generated assets
+        if len(self._served_data) > 500:
+            # Simple purge of oldest entries if it gets too large
+            # (In a real app, LRU would be better, but this is a safe guard)
+            keys_to_remove = list(self._served_data.keys())[:100]
+            for k in keys_to_remove:
+                del self._served_data[k]
+
+        self._served_data[clean_key] = (data, mime_type)
+        # Use appropriate scheme and ensure '/app/' prefix for protocol routing
+        return f"{self._scheme}/app/{clean_key}"
 
     def _apply_ui_settings(self):
         """Applies UI configuration via JavaScript injection."""
@@ -394,11 +522,32 @@ class Webview:
             )
             self.eval(full_script)
 
+    def set_border_color(self, color_hex):
+        """Sets the native window border color."""
+        if self._platform:
+            self._platform.set_border_color(self.hwnd, color_hex)
+
     def set_title(self, title):
         self.native.set_title(title)
 
     def set_size(self, w, h):
         self.native.set_size(w, h, 0)
+
+    def set_bounds(self, x, y, width, height):
+        if hasattr(self.native, "set_bounds"):
+            self.native.set_bounds(int(x), int(y), int(width), int(height))
+        else:
+            # Fallback if native not rebuilt yet (partial updates)
+            self.native.set_size(int(width), int(height), 0)
+
+    def get_registered_shortcuts(self):
+        """Returns a list of currently registered shortcut accelerators."""
+        if self.app and hasattr(self.app, "shortcuts"):
+            # app.shortcuts is the shortcut manager instance
+            # It stores registered shortcuts in self.shortcuts dict
+            if hasattr(self.app.shortcuts, "shortcuts"):
+                return list(self.app.shortcuts.shortcuts.keys())
+        return []
 
     def eval(self, js):
         self.native.eval(js)
@@ -434,9 +583,26 @@ class Webview:
     # serve_data is defined above to return the URL.
 
     def _sync_state(self):
+        # We use a direct import to ensure we get the sovereign log_shield
+        from .state import log_shield
+
         if self.app:
-            return self.app.state.to_dict()
-        return {}
+            try:
+                if self.config.get("debug"):
+                    log_shield("Received pytron_sync_state Request")
+
+                state_dict = self.app.state.to_dict()
+
+                if self.config.get("debug"):
+                    log_shield(f"Syncing state keys: {list(state_dict.keys())}")
+
+                return state_dict
+            except Exception as e:
+                log_shield(f"SYNC FATAL ERROR: {e}")
+                return {}
+        else:
+            log_shield("SYNC ERROR: No App Instance in Webview")
+            return {}
 
     # --- Path Normalizer ---
     def normalize_path(self, config):
@@ -646,18 +812,72 @@ class Webview:
                 icon = self.config.get("icon")
             self._platform.notification(self.hwnd, title, message, icon)
 
+    def toast(self, config):
+        if self._platform and self.hwnd:
+            # Inject App ID if missing
+            if "app_id" not in config:
+                config["app_id"] = self.config.get("title", "Pytron")
+            # Inject default icon if missing
+            if "icon" not in config:
+                config["icon"] = self.config.get("icon")
+
+            # Resolve paths for images/icons
+            for key in ["image", "icon", "inline_image"]:
+                path = config.get(key)
+                if path and not os.path.isabs(path):
+                    # Try resolving relative to root_path (where the HTML is) or app_root
+                    possible_path = os.path.join(self.root_path, path)
+                    if os.path.exists(possible_path):
+                        config[key] = possible_path
+                    else:
+                        # Fallback to app_root
+                        possible_path = os.path.join(self._app_root, path)
+                        if os.path.exists(possible_path):
+                            config[key] = possible_path
+
+            self._platform.toast(self.hwnd, config)
+
     # --- Native Tray & Close Handling ---
     def create_tray(self, icon_path, tooltip="Pytron App"):
         if hasattr(self.native, "create_tray"):
-            self.native.create_tray(icon_path, tooltip)
+            self.native.create_tray(tooltip, icon_path)
 
     def set_prevent_close(self, prevent):
         if hasattr(self.native, "set_prevent_close"):
             self.native.set_prevent_close(prevent)
 
+    def _load_vap_archive(self, archive_name):
+        """Loads all assets from a .pytron archive into the VAP cache."""
+        import zipfile
+
+        # Resolve archive path
+        archive_path = pathlib.Path(self.root_path) / archive_name
+        # Check if it's in _internal (common for PyInstaller)
+        if not archive_path.exists():
+            archive_path = pathlib.Path(self.root_path) / "_internal" / archive_name
+
+        if not archive_path.exists():
+            self.logger.warning(f"VAP Archive not found at {archive_path}")
+            return
+
+        self.logger.info(f"Loading VAP Archive: {archive_path}")
+        try:
+            with zipfile.ZipFile(archive_path, "r") as zipf:
+                for name in zipf.namelist():
+                    data = zipf.read(name)
+                    mime, _ = mimetypes.guess_type(name)
+                    self._served_data[name] = (data, mime or "application/octet-stream")
+            self.logger.info(
+                f"VAP: Loaded {len(self._served_data)} assets from archive."
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to load VAP archive: {e}")
+
     def _on_close_requested(self):
         """Called by Native Engine when X is clicked and prevent_close is True."""
-        if self.config.get("close_to_tray", False):
+        if self.config.get("close_to_tray", False) or getattr(
+            self, "_is_utility", False
+        ):
             self.hide()
         else:
             # Should not happen if prevent_close logic is consistent, but fallback

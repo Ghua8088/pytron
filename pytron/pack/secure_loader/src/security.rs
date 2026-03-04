@@ -41,7 +41,7 @@ pub fn check_debugger() {
             x = std::hint::black_box(x + i); 
         }
         // If it takes more than 5ms for a simple loop, something is wrong
-        if start.elapsed().as_millis() > 5 {
+        if start.elapsed().as_millis() > 50 {
              alert(obfstr!("Security Alert"), obfstr!("Timing anomaly detected. Binary compromised."));
              std::process::exit(0xDEAC);
         }

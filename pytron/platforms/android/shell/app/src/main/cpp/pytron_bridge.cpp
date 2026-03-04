@@ -5,7 +5,8 @@
 #include <dlfcn.h>
 #include <vector>
 #include <unistd.h>
-#include <fcntl.h> // <--- REQUIRED for open/dup2
+#include <fcntl.h>
+#include <pthread.h>
 
 #define LOG_TAG "PytronNative"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -13,6 +14,33 @@
 
 static JavaVM* gJavaVM = nullptr;
 static jobject gMainActivity = nullptr;
+
+// --- NATIVE LOG REDIRECTION ---
+static int pipe_stdout[2];
+static int pipe_stderr[2];
+static pthread_t thread_stdout;
+static pthread_t thread_stderr;
+
+void* log_reader_thread(void* arg) {
+    int* fd = (int*)arg;
+    char buffer[1024];
+    ssize_t r;
+    while ((r = read(fd[0], buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[r] = '\0';
+        __android_log_write(ANDROID_LOG_INFO, "PythonOutput", buffer);
+    }
+    return nullptr;
+}
+
+void start_logger() {
+    pipe(pipe_stdout);
+    pipe(pipe_stderr);
+    dup2(pipe_stdout[1], STDOUT_FILENO);
+    dup2(pipe_stderr[1], STDERR_FILENO);
+    pthread_create(&thread_stdout, nullptr, log_reader_thread, &pipe_stdout);
+    pthread_create(&thread_stderr, nullptr, log_reader_thread, &pipe_stderr);
+}
+// -----------------------------
 
 // Helper to send message to Java
 static PyObject* py_send_to_android(PyObject* self, PyObject* args) {
@@ -68,35 +96,23 @@ Java_com_pytron_shell_MainActivity_startPython(JNIEnv* env, jobject thiz, jstrin
     LOGI("Starting Python configuration with home: %s", path);
 
     // ==========================================================
-    // 1. FIX FILE DESCRIPTORS (THE CRITICAL FIX)
-    // Python crashes if fd 0, 1, 2 are closed/invalid. We point them to /dev/null.
+    // 1. FIX FILE DESCRIPTORS & START NATIVE LOGGER
     // ==========================================================
-    int fd = open("/dev/null", O_RDWR);
-    if (fd != -1) {
-        dup2(fd, 0); // stdin
-        dup2(fd, 1); // stdout
-        dup2(fd, 2); // stderr
-        if (fd > 2) close(fd);
-    }
+    start_logger();
     // ==========================================================
 
     // 2. ENVIRONMENT SETUP
     setenv("PYTHONHOME", path, 1);
-    setenv("PYTHONUNBUFFERED", "1", 1); // Disable buffering
+    setenv("PYTHONUNBUFFERED", "1", 1); 
+    setenv("PYTHONUTF8", "1", 1);
     setenv("PYTHON_PLATFORM","android",1);
+    
     std::string base = std::string(path);
     std::string libPath = base + "/Lib";
     std::string sitePath = base + "/site-packages";
     std::string zipPath = base + "/python314.zip";
 
-    if (access(libPath.c_str(), F_OK) != -1) {
-        LOGI("Native: Found Lib folder at %s", libPath.c_str());
-    } else {
-        LOGI("Native: Lib folder not found, assuming zip or custom structure.");
-    }
-
-    // DLOPEN
-    // Use the specific version name to be safe
+    // DLOPEN libpython globally to ensure C extensions can find symbols
     void* handle = dlopen("libpython3.14.so", RTLD_NOW | RTLD_GLOBAL);
     if (!handle) LOGE("Could not dlopen libpython3.14.so: %s", dlerror());
     else LOGI("Successfully loaded libpython3.14.so globally");
@@ -106,11 +122,10 @@ Java_com_pytron_shell_MainActivity_startPython(JNIEnv* env, jobject thiz, jstrin
     PyConfig config;
     PyConfig_InitIsolatedConfig(&config);
 
-    // CRITICAL: Stop Python from trying to initialize C-level streams
-    config.configure_c_stdio = 0;
+    // We handle IO via pipes now, but let Python think it has stdio if needed
+    config.configure_c_stdio = 1; 
     config.parse_argv = 0;
-    // Optional: Stop Python from stealing signal handlers (Good for Android)
-    config.install_signal_handlers = 0;
+    config.install_signal_handlers = 0; // Prevent Python from crashing JVM on signals
 
     wchar_t *wpath = Py_DecodeLocale(path, NULL);
     status = PyConfig_SetString(&config, &config.program_name, wpath);
@@ -127,7 +142,6 @@ Java_com_pytron_shell_MainActivity_startPython(JNIEnv* env, jobject thiz, jstrin
     PyWideStringList_Append(&config.module_search_paths, wBase);
     PyWideStringList_Append(&config.module_search_paths, wLib);
 
-    // Lib-dynload (Critical for .so extensions like _struct)
     std::string dynPath = libPath + "/lib-dynload";
     wchar_t *wDyn = Py_DecodeLocale(dynPath.c_str(), NULL);
     PyWideStringList_Append(&config.module_search_paths, wDyn);
@@ -146,31 +160,20 @@ Java_com_pytron_shell_MainActivity_startPython(JNIEnv* env, jobject thiz, jstrin
     if (PyStatus_Exception(status)) {
         LOGE("FATAL: Py_InitializeFromConfig failed.");
         if (status.err_msg) LOGE("Python Config Error: %s", status.err_msg);
-        if (PyErr_Occurred()) PyErr_Print();
     } else {
         LOGI("Py_Initialize success!");
 
         // Run Main
-        // We override sys.stdout/stderr here so print() goes to LogCat
         std::string runCmd =
-            "import sys\n"
-            "class LogCatOut:\n"
-            "    def write(self, s):\n"
-            "        import _pytron_android, json\n"
-            "        if s.strip(): _pytron_android.send_to_android(json.dumps({'method': 'log', 'args': {'message': s.strip()}}))\n"
-            "    def flush(self): pass\n"
-            "sys.stdout = LogCatOut()\n"
-            "sys.stderr = LogCatOut()\n"
+            "import sys, os\n"
             "try:\n"
-            "    print('Native: sys.path is ' + str(sys.path))\n"
             "    import main\n"
             "    if hasattr(main, 'main'): main.main()\n"
             "except Exception as e:\n"
             "    import traceback\n"
             "    traceback.print_exc()\n"
             "    err_msg = 'Python Crash: ' + str(e)\n"
-            "    import _pytron_android\n"
-            "    import json\n"
+            "    import _pytron_android, json\n"
             "    _pytron_android.send_to_android(json.dumps({'method': 'message_box', 'args': {'title': 'Crash', 'message': err_msg}}))\n";
 
         PyRun_SimpleString(runCmd.c_str());

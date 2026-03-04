@@ -13,31 +13,30 @@ class NativeMixin:
         Enables or disables automatic application startup on system boot.
         """
         app_name = self.config.get("title", "PytronApp")
-        # Sanitize for registry key
+        # Sanitize for registry key/filename
         safe_name = "".join(c if c.isalnum() else "_" for c in app_name)
 
         if not getattr(sys, "frozen", False):
             self.logger.info("Skipping Start-on-Boot registration in Development Mode.")
             return False
 
-        exe_path = f'"{sys.executable}"'  # Quote for safety
+        # Attempt native Rust implementation first for performance
+        try:
+            from pytron.dependencies import pytron_os
 
-        # We need a platform instance.
-        # Since App doesn't hold it, we instantiate temporarily or grab from first window
-        if self.windows:
-            # Best effort
-            try:
-                return self.windows[0]._platform.set_launch_on_boot(
-                    safe_name, exe_path, enable
-                )
-            except Exception as e:
-                self.logger.debug(f"Failed to set start on boot via window: {e}")
+            exe_path = sys.executable
+            if pytron_os.set_launch_on_boot(safe_name, exe_path, enable):
+                return True
+        except Exception:
+            pass
 
-        # Fallback if no window yet or needed
+        # Fallback to platform-specific Python implementations
         try:
             import platform
 
             sys_plat = platform.system()
+            exe_path = f'"{sys.executable}"'
+
             impl = None
             if sys_plat == "Windows":
                 from ..platforms.windows import WindowsImplementation
@@ -55,7 +54,9 @@ class NativeMixin:
             if impl:
                 return impl.set_launch_on_boot(safe_name, exe_path, enable)
         except Exception as e:
-            self.logger.warning(f"Could not set start on boot: {e}")
+            self.logger.warning(f"Could not set start on boot during fallback: {e}")
+
+        return False
 
     def message_box(self, title, message, style=0):
         """
@@ -105,6 +106,26 @@ class NativeMixin:
                     self.logger.debug(
                         f"Failed to send notification via window {window}: {e}"
                     )
+
+    def show_toast(self, config: dict):
+        """
+        Sends a rich, modern system notification.
+        Example config:
+        {
+            "title": "Hello",
+            "body": "World",
+            "image": "path/to/hero.jpg",
+            "icon": "path/to/icon.png",
+            "actions": [{"label": "Open", "action": "pytron://open"}]
+        }
+        """
+        if self.windows:
+            for window in self.windows:
+                try:
+                    window.toast(config)
+                    break
+                except Exception as e:
+                    self.logger.debug(f"Failed to send toast via window {window}: {e}")
 
     def copy_to_clipboard(self, text: str):
         """Copies text to the system clipboard."""

@@ -5,14 +5,17 @@ import subprocess
 import json
 import os
 from pathlib import Path
-from ..console import log, console
 from rich.text import Text
+from ..console import log, console
+
+# Removed rich.text import previously but needed for Text.from_ansi correctly
 from .helpers import (
     locate_frontend_dir,
     run_frontend_build,
     get_python_executable,
     ensure_next_config,
     get_config,
+    get_sanitized_env,
 )
 
 try:
@@ -67,6 +70,10 @@ class PytronFilter(DefaultFilter):
 
 
 def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int:
+    import threading
+    import time
+
+    stop_event = threading.Event()
     try:
         from watchfiles import watch
     except ImportError:
@@ -237,7 +244,7 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
         # Start as a subprocess we control
         python_exe = get_python_executable()
 
-        env = os.environ.copy()
+        env = get_sanitized_env()
         if dev_server_url:
             env["PYTRON_DEV_URL"] = dev_server_url
         if engine:
@@ -245,10 +252,113 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
 
         app_proc = subprocess.Popen([python_exe, str(script)] + extra_args, env=env)
 
+    def print_dev_menu():
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        # We create a grid for the shortcuts to keep them perfectly aligned
+        table = Table.grid(padding=(0, 1))
+        table.add_column(style="bold green", justify="right")
+        table.add_column(style="white")
+
+        table.add_row(" [r] ", "Restart Application")
+        table.add_row(" [c] ", "Clear Terminal")
+        table.add_row(" [q] ", "Stop Developer Mode")
+
+        # Build the header text with some flair
+        header = Text.assemble(
+            (" ◈ ", "cyan bold"),
+            ("Pytron Dev Mode ", "white bold"),
+            ("Active", "green dim"),
+        )
+
+        panel = Panel(
+            table,
+            title=header,
+            title_align="left",
+            border_style="cyan",
+            expand=False,
+            padding=(1, 3),
+        )
+        console.print("\n")
+        console.print(panel)
+        console.print("[dim]  Watching for file changes in project root...[/dim]\n")
+
+    def keyboard_listener():
+        # Setup for POSIX (Linux/macOS)
+        old_settings = None
+        fd = None
+        try:
+            if sys.platform != "win32":
+                import termios
+                import tty
+
+                fd = sys.stdin.fileno()
+                old_settings = termios.tcgetattr(fd)
+                # tty.setcbreak is less destructive than setraw, it keeps signals like Ctrl+C working
+                tty.setcbreak(fd)
+        except Exception:
+            # Fallback for environments where stdin is not a TTY (e.g. some CI/Docker)
+            pass
+
+        try:
+            while not stop_event.is_set():
+                char = None
+                try:
+                    if sys.platform == "win32":
+                        import msvcrt
+
+                        if msvcrt.kbhit():
+                            char = (
+                                msvcrt.getch().decode("utf-8", errors="ignore").lower()
+                            )
+                    else:
+                        import select
+
+                        # Use select to check if input is available without blocking
+                        if (
+                            fd is not None
+                            and select.select([sys.stdin], [], [], 0.1)[0]
+                        ):
+                            char = sys.stdin.read(1).lower()
+                except (IOError, EOFError):
+                    break  # Stdin closed
+
+                if char:
+                    if char == "r":
+                        log("Manual restart triggered...", style="info")
+                        start_app()
+                    elif char == "c":
+                        os.system("cls" if sys.platform == "win32" else "clear")
+                        print_dev_menu()
+                    elif char == "q":
+                        log("Stopping dev mode...", style="info")
+                        stop_event.set()
+                        break
+
+                # Small sleep to prevent high CPU usage on Windows
+                # On POSIX, select's 0.1s timeout already handles this
+                if sys.platform == "win32" or not char:
+                    time.sleep(0.05)
+        finally:
+            if old_settings and fd is not None:
+                import termios
+
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
     try:
         start_app()
+        print_dev_menu()
+
+        # Start keyboard listener
+        k_thread = threading.Thread(target=keyboard_listener, daemon=True)
+        k_thread.start()
+
         log(f"Watching for changes in {Path.cwd()}...", style="success")
-        for changes in watch(str(Path.cwd()), watch_filter=watcher_filter):
+        for changes in watch(
+            str(Path.cwd()), watch_filter=watcher_filter, stop_event=stop_event
+        ):
             log(f"Detected changes: {changes}", style="dim")
             # Filter out non-code changes manually if needed, but DevWatcher handles most
             start_app()
@@ -301,7 +411,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         return run_dev_mode(path, args.extra_args, engine=engine)
 
     python_exe = get_python_executable()
-    env = os.environ.copy()
+    env = get_sanitized_env()
+
     if getattr(args, "chrome", False):
         env["PYTRON_ENGINE"] = "chrome"
     elif args.engine:

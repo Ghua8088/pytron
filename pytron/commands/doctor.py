@@ -117,7 +117,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     if platform.system() == "Windows":
         # Check NSIS
-        from .package import find_makensis
+        from ..pack.installers import find_makensis
 
         makensis = find_makensis()
         if makensis:
@@ -135,6 +135,31 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             console.print(
                 f"  [dim]i[/dim] SignTool: Not found (Optional: needed for code signing)"
             )
+
+        # Check WebView2 Runtime
+        try:
+            import winreg
+
+            found_wv2 = False
+            for root in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
+                try:
+                    key = winreg.OpenKey(
+                        root,
+                        r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3C4FE00-07C5-4501-907C-0558C957AF29}",
+                    )
+                    v, _ = winreg.QueryValueEx(key, "pv")
+                    if v:
+                        console.print(f"  [success]✓[/success] WebView2 Runtime: {v}")
+                        found_wv2 = True
+                        break
+                except:
+                    continue
+            if not found_wv2:
+                console.print(
+                    f"  [error]✗[/error] WebView2 Runtime: Not found (Required for Native Engine)"
+                )
+        except ImportError:
+            pass
 
     console.print("")
 

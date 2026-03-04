@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 from packaging.version import parse as parse_version
 import stat
+from .exceptions import UpdateError
 
 
 class Updater:
@@ -54,8 +55,9 @@ class Updater:
                 remote_version = data.get("version")
 
                 if not remote_version:
-                    self.logger.error("Invalid update manifest: missing 'version'")
-                    return None
+                    raise UpdateError(
+                        f"Invalid update manifest at {url}: missing 'version' field."
+                    )
 
                 # Compare versions
                 if parse_version(remote_version) > parse_version(self.current_version):
@@ -68,11 +70,11 @@ class Updater:
                     return None
 
         except urllib.error.URLError as e:
-            self.logger.error(f"Failed to check for updates: {e}")
-            return None
+            raise UpdateError(f"Network error while checking for updates: {e}") from e
         except Exception as e:
-            self.logger.error(f"Error checking updates: {e}")
-            return None
+            if isinstance(e, UpdateError):
+                raise
+            raise UpdateError(f"Unexpected error during update check: {e}") from e
 
     def download_and_install(self, update_info: dict, on_progress=None):
         """
@@ -102,7 +104,10 @@ class Updater:
             self.logger.error("No download URL provided in update info.")
             return False
 
-        return self._handle_full_download(full_url, on_progress)
+        # SECURITY: Extract hash from update info
+        expected_hash = update_info.get("hash") or update_info.get("sha256")
+
+        return self._handle_full_download(full_url, on_progress, expected_hash)
 
     def _handle_patch_download(self, url, on_progress):
         try:
@@ -139,7 +144,7 @@ class Updater:
             self.logger.error(f"Failed to download patch: {e}")
             return False
 
-    def _handle_full_download(self, url, on_progress):
+    def _handle_full_download(self, url, on_progress, expected_hash=None):
         filename = url.split("/")[-1]
         if not filename.endswith(
             (".exe", ".msi", ".dmg", ".pkg", ".deb", ".rpm", ".AppImage")
@@ -152,9 +157,10 @@ class Updater:
 
         download_path = Path(tempfile.gettempdir()) / filename
         try:
+            import hashlib
 
             def progress(block_num, block_size, total_size):
-                if on_progress:
+                if on_progress and total_size > 0:
                     percent = min(100, int((block_num * block_size / total_size) * 100))
                     on_progress(percent)
 
@@ -163,6 +169,24 @@ class Updater:
                 url, download_path, reporthook=progress
             )  # nosec B310
             self.logger.info(f"Download complete: {download_path}")
+
+            # SECURITY: Verify Hash
+            if expected_hash:
+                sha256 = hashlib.sha256()
+                with open(download_path, "rb") as f:
+                    while chunk := f.read(8192):
+                        sha256.update(chunk)
+
+                calculated_hash = sha256.hexdigest()
+                if calculated_hash.lower() != expected_hash.lower():
+                    self.logger.error(
+                        f"Update Hash Mismatch! Expected: {expected_hash}, Got: {calculated_hash}"
+                    )
+                    os.remove(download_path)
+                    raise UpdateError(
+                        "Security Check Failed: Downloaded file hash does not match manifest."
+                    )
+                self.logger.info("Update Hash Verified.")
 
             if sys.platform == "win32":
                 subprocess.Popen(

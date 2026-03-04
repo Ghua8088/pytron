@@ -17,6 +17,11 @@ pub fn find_internal_dir() -> (PathBuf, PathBuf) {
 
 pub fn run_python_and_payload(root_dir: &Path, internal_dir: &Path, _base_zip: Option<&Path>) -> PyResult<()> {
     pyo3::prepare_freethreaded_python();
+    
+    // Clear packaging-specific environment variables so child processes don't inherit them.
+    // Python has already used them to initialize its internal paths (sys.prefix etc.)
+    env::remove_var("PYTHONHOME");
+    env::remove_var("PYTHONPATH");
 
     let exe_path = env::current_exe().map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("EXE check failed: {}", e)))?;
     

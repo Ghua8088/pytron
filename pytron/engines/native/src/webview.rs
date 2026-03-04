@@ -8,16 +8,21 @@ use tao::{
     event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy, EventLoop},
     window::WindowBuilder,
 };
+#[cfg(not(target_os = "android"))]
 use tray_icon::{TrayIconBuilder, menu::{Menu, MenuItemBuilder, PredefinedMenuItem}};
 use wry::WebViewBuilder;
 
 #[cfg(target_os = "windows")]
 use wry::WebViewBuilderExtWindows; 
+#[cfg(target_os = "windows")]
+use tao::platform::windows::EventLoopBuilderExtWindows;
 
 use crate::events::UserEvent;
 use crate::state::RuntimeState;
 use crate::utils::{setup_panic_hook, SendWrapper, load_icon};
 use crate::protocol::handle_pytron_protocol;
+
+use crate::store::NativeState;
 
 #[pyclass]
 pub struct NativeWebview {
@@ -26,6 +31,8 @@ pub struct NativeWebview {
     state_ptr: Mutex<Option<usize>>, 
     hwnd: usize,
     callbacks: Arc<Mutex<HashMap<String, PyObject>>>,
+    store: NativeState,
+    is_utility: Mutex<bool>,
 }
 
 unsafe impl Send for NativeWebview {}
@@ -34,7 +41,11 @@ unsafe impl Sync for NativeWebview {}
 #[pymethods]
 impl NativeWebview {
     #[new]
-    pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool) -> PyResult<Self> {
+    pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool, store: NativeState) -> PyResult<Self> {
+    // Wait, I need to match existing signature.
+    // The existing signature is:
+    // pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool, store: NativeState) -> PyResult<Self>
+    
         setup_panic_hook();
 
         let safe_url = if url_str == "about:blank" {
@@ -43,14 +54,26 @@ impl NativeWebview {
              url_str
         } else if url_str.starts_with("http") {
              url_str
+        } else if url_str.starts_with("data:") {
+             url_str
         } else {
              format!("pytron://app/{}", url_str.trim_start_matches('/'))
         };
 
         println!("[PYTRON NATIVE] Init. Target: {} | Root: {}", safe_url, root_path);
 
-        let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+        let mut builder = EventLoopBuilder::<UserEvent>::with_user_event();
+        
+        #[cfg(target_os = "windows")]
+        {
+            builder.with_any_thread(true);
+        }
+
+        let event_loop = builder.build();
         let proxy = event_loop.create_proxy();
+        
+        // --- IRON BRIDGE: HOOK PROPAGATION ---
+        store._bind_proxy(proxy.clone());
         
         let window = WindowBuilder::new()
             .with_title("Pytron App")
@@ -71,7 +94,6 @@ impl NativeWebview {
         let root = PathBuf::from(&root_path);
         let callbacks = Arc::new(Mutex::new(HashMap::<String, PyObject>::new()));
         let cbs_for_ipc = callbacks.clone();
-        let proxy_for_ipc = proxy.clone();
 
         let mut builder = WebViewBuilder::new(&window)
             .with_devtools(debug)
@@ -92,8 +114,16 @@ impl NativeWebview {
 
         let proxy_for_nav = proxy.clone();
         builder = builder.with_navigation_handler(move |url: String| {
-            // Check if it's an internal application link or an external one
-            if !url.starts_with("pytron://") && !url.starts_with("https://pytron.") && url != "about:blank" {
+            // Relaxed for Dev Mode support (localhost/127.0.0.1)
+            let is_safe = url.starts_with("pytron://") 
+                || url.starts_with("https://pytron.") 
+                || url == "about:blank"
+                || url.starts_with("http://localhost")
+                || url.starts_with("http://127.0.0.1")
+                || url.starts_with("file://")
+                || url.starts_with("data:");
+
+            if !is_safe {
                 // External! Send to system browser
                 let _ = proxy_for_nav.send_event(UserEvent::OpenExternal(url.clone()));
                 return false; // Prevent internal navigation
@@ -163,12 +193,26 @@ impl NativeWebview {
             window.pytron.is_ready = true;
             window.__pytron_native_bridge = (method, args) => {
                 const seq = Math.random().toString(36).substring(2, 10);
-                window.ipc.postMessage(JSON.stringify({id: seq, method: method, params: args}));
+                const ipc = window.ipc || window.chrome?.webview || window.webkit?.messageHandlers?.ipc;
+                if (ipc) {
+                    ipc.postMessage(JSON.stringify({id: seq, method: method, params: args}));
+                } else {
+                    console.error("Pytron IPC not initialized.");
+                }
                 return new Promise((resolve, reject) => {
                     window._rpc = window._rpc || {};
                     window._rpc[seq] = {resolve, reject};
                 });
             };
+
+            // Dynamic Proxy for window.pytron.* calls
+            window.pytron = new Proxy(window.pytron, {
+                get: (target, prop) => {
+                    if (prop in target) return target[prop];
+                    return (...args) => window.__pytron_native_bridge(prop, args);
+                }
+            });
+
             window.pytron_close = () => window.__pytron_native_bridge('pytron_close', []);
             window.pytron_drag = () => window.__pytron_native_bridge('pytron_drag', []);
             window.pytron_log = (msg) => window.__pytron_native_bridge('pytron_log', [msg]);
@@ -178,6 +222,9 @@ impl NativeWebview {
                 window.__pytron_native_bridge('pytron_message_box', ["Alert", String(msg), "info"]);
             };
         "#);
+
+        let proxy_for_ipc = proxy.clone();
+        let store_for_ipc = store.clone();
 
         builder = builder.with_ipc_handler(move |request| {
             let msg = request.body().clone();
@@ -191,8 +238,31 @@ impl NativeWebview {
                     let _ = proxy_for_ipc.send_event(UserEvent::DragWindow);
                     return;
                 }
+
+                // 2. AUTHORITATIVE NATIVE SYNC (Bypass Python Schism)
                 if method == "pytron_close" || method == "close" || method == "app_quit" {
                     let _ = proxy_for_ipc.send_event(UserEvent::Quit);
+                    return;
+                }
+
+                if method == "pytron_sync_state" {
+                    let mut state_json = String::from("{}");
+                    
+                    // ACCESS RUST STORE DIRECTLY
+                    let _ = Python::with_gil(|py| {
+                        if let Ok(dict) = store_for_ipc.to_dict(py) {
+                            if let Ok(json_mod) = py.import("json") {
+                                if let Ok(res) = json_mod.call_method1("dumps", (dict,)) {
+                                    if let Ok(s) = res.extract::<String>() {
+                                        state_json = s;
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    // println!("[SHIELD] Iron Bridge: sync_state (len={})", state_json.len());
+                    let _ = proxy_for_ipc.send_event(UserEvent::Return(seq, 0, state_json));
                     return;
                 }
 
@@ -251,7 +321,9 @@ impl NativeWebview {
             window, 
             callbacks: callbacks.clone(), 
             tray: None, 
-            prevent_close: false 
+            prevent_close: false,
+            is_utility: false,
+            store: store.clone()
         }));
 
         Ok(NativeWebview {
@@ -260,6 +332,8 @@ impl NativeWebview {
             state_ptr: Mutex::new(Some(state as usize)),
             hwnd,
             callbacks,
+            store: store.clone(),
+            is_utility: Mutex::new(false),
         })
     }
 
@@ -268,22 +342,27 @@ impl NativeWebview {
         let state_ptr_val = self.state_ptr.lock().unwrap().take();
 
         if let (Some(el), Some(ptr)) = (event_loop, state_ptr_val) {
-            let state = unsafe { Box::from_raw(ptr as *mut RuntimeState) };
+            let mut state = unsafe { Box::from_raw(ptr as *mut RuntimeState) };
+            state.is_utility = *self.is_utility.lock().unwrap();
+            
             let cbs_arc = state.callbacks.clone();
             let w_el = SendWrapper::new(el);
             let w_state = SendWrapper::new(state);
 
             // Spawn Menu Event Listener Thread
-            let proxy_for_menu = self.proxy.clone();
-            std::thread::spawn(move || {
-                let receiver = tray_icon::menu::MenuEvent::receiver();
-                loop {
-                    if let Ok(event) = receiver.recv() {
-                        let id = event.id.0;
-                         let _ = proxy_for_menu.send_event(UserEvent::TrayMenuClick(id));
+            #[cfg(not(target_os = "android"))]
+            {
+                let proxy_for_menu = self.proxy.clone();
+                std::thread::spawn(move || {
+                    let receiver = tray_icon::menu::MenuEvent::receiver();
+                    loop {
+                        if let Ok(event) = receiver.recv() {
+                            let id = event.id.0;
+                             let _ = proxy_for_menu.send_event(UserEvent::TrayMenuClick(id));
+                        }
                     }
-                }
-            });
+                });
+            }
 
             py.allow_threads(move || {
                 let el = w_el.take();
@@ -297,7 +376,9 @@ impl NativeWebview {
                              // DEBUG LOGGING
                              match &ue {
                                  UserEvent::CallPython(_, seq, _, method) => {
-                                     println!("[PYTRON BRIDGE] CALL: {} (seq={})", method, seq);
+                                     if !method.starts_with("inspector_") {
+                                         println!("[PYTRON BRIDGE] CALL: {} (seq={})", method, seq);
+                                     }
                                  },
                                  UserEvent::Eval(_) => { /* Mute eval logs, too spammy for state sync */ },
                                  UserEvent::Navigate(u) => println!("[PYTRON NAVIGATE] Request: '{}'", u),
@@ -308,10 +389,22 @@ impl NativeWebview {
                              }
                              
                              match ue {
-                                UserEvent::Quit => *control_flow = ControlFlow::Exit,
+                                UserEvent::Quit => {
+                                    // IMMEDIATE UX IMPROVEMENT: Move window off-screen + Hide
+                                    state.window.set_outer_position(tao::dpi::PhysicalPosition::new(-10000, -10000));
+                                    state.window.set_visible(false);
+                                    
+                                    if !state.is_utility {
+                                        *control_flow = ControlFlow::Exit;
+                                    }
+                                }
                                 UserEvent::Eval(js) => { let _ = state.webview.evaluate_script(&js); }
                                 UserEvent::SetTitle(t) => { state.window.set_title(&t); }
                                 UserEvent::SetSize(w, h, _) => { state.window.set_inner_size(tao::dpi::LogicalSize::new(w, h)); }
+                                UserEvent::SetBounds(x, y, w, h) => {
+                                    state.window.set_outer_position(tao::dpi::LogicalPosition::new(x, y));
+                                    state.window.set_inner_size(tao::dpi::LogicalSize::new(w, h));
+                                }
                                 
                                 UserEvent::Navigate(u) => { 
                                     let _ = state.webview.load_url(&u);
@@ -399,17 +492,47 @@ impl NativeWebview {
                                     }
                                 }
 
-                                UserEvent::CreateTray(icon_path, tooltip) => {
-                                    if let Ok(ic) = load_icon(std::path::Path::new(&icon_path)) {
-                                        let menu = Menu::new();
-                                        let show_item = MenuItemBuilder::new().text("Show App").id("1000".into()).enabled(true).build();
-                                        let quit_item = MenuItemBuilder::new().text("Quit").id("1001".into()).enabled(true).build();
-                                        let _ = menu.append(&show_item);
-                                        let _ = menu.append(&PredefinedMenuItem::separator());
-                                        let _ = menu.append(&quit_item);
+                                UserEvent::CreateTray(tooltip, icon_path) => {
+                                    #[cfg(not(target_os = "android"))]
+                                    {
+                                        let mut final_icon = None;
 
-                                        let tray_res = TrayIconBuilder::new().with_menu(Box::new(menu)).with_tooltip(&tooltip).with_icon(ic).build();
-                                        if let Ok(t) = tray_res { state.tray = Some(t); }
+                                        if let Some(path) = icon_path {
+                                            if let Ok(ic) = load_icon(std::path::Path::new(&path)) {
+                                                final_icon = Some(ic);
+                                            } else {
+                                                println!("[PYTRON NATIVE] Warning: Failed to load tray icon at '{}'. Using default.", path);
+                                            }
+                                        }
+
+                                        // Fallback Generation (Blue Square) if no icon provided or load failed
+                                        if final_icon.is_none() {
+                                            let w = 32u32;
+                                            let h = 32u32;
+                                            let mut buffer = Vec::with_capacity((w * h * 4) as usize);
+                                            for _ in 0..(w * h) {
+                                                buffer.extend_from_slice(&[0, 122, 204, 255]); // #007ACC (VS Code Blue-ish)
+                                            }
+                                            if let Ok(ic) = tray_icon::Icon::from_rgba(buffer, w, h) {
+                                                final_icon = Some(ic);
+                                            }
+                                        }
+
+                                        if let Some(ic) = final_icon {
+                                            let menu = Menu::new();
+                                            let show_item = MenuItemBuilder::new().text("Show App").id("1000".into()).enabled(true).build();
+                                            let quit_item = MenuItemBuilder::new().text("Quit").id("1001".into()).enabled(true).build();
+                                            let _ = menu.append(&show_item);
+                                            let _ = menu.append(&PredefinedMenuItem::separator());
+                                            let _ = menu.append(&quit_item);
+
+                                            let tray_res = TrayIconBuilder::new().with_menu(Box::new(menu)).with_tooltip(&tooltip).with_icon(ic).build();
+                                            
+                                            match tray_res {
+                                                Ok(t) => { state.tray = Some(t); }
+                                                Err(e) => { println!("[PYTRON NATIVE] Failed to create tray: {}", e); }
+                                            }
+                                        }
                                     }
                                 }
                                 UserEvent::TrayMenuClick(id) => {
@@ -451,13 +574,23 @@ impl NativeWebview {
 
                                 UserEvent::OpenExternal(url) => {
                                     #[cfg(target_os = "windows")]
-                                    {
-                                        // Use powershell to ensure the URL is handled correctly by the default browser
-                                        let _ = std::process::Command::new("powershell")
-                                            .arg("-NoProfile")
-                                            .arg("-Command")
-                                            .arg(format!("Start-Process '{}'", url))
-                                            .spawn();
+                                    unsafe {
+                                        use windows::Win32::UI::Shell::ShellExecuteW;
+                                        use windows::Win32::Foundation::HWND;
+                                        use windows::core::PCWSTR;
+                                        use windows::Win32::UI::WindowsAndMessaging::SHOW_WINDOW_CMD;
+
+                                        let url_wide: Vec<u16> = url.encode_utf16().chain(std::iter::once(0)).collect();
+                                        let operation: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+                                        
+                                        ShellExecuteW(
+                                            HWND(0),
+                                            PCWSTR(operation.as_ptr()),
+                                            PCWSTR(url_wide.as_ptr()),
+                                            None,
+                                            None,
+                                            SHOW_WINDOW_CMD(1), // SW_SHOWNORMAL
+                                        );
                                     }
                                     #[cfg(target_os = "macos")]
                                     {
@@ -471,6 +604,15 @@ impl NativeWebview {
                                             .arg(&url)
                                             .spawn();
                                     }
+                                }
+
+                                UserEvent::StateUpdate(key, val) => {
+                                    let js = format!(r#"window.dispatchEvent(new CustomEvent('pytron:state-update', {{ detail: {{ key: '{}', value: {} }} }}));"#, key, val);
+                                    let _ = state.webview.evaluate_script(&js);
+                                }
+
+                                UserEvent::SetPreventClose(p) => {
+                                    state.prevent_close = p;
                                 }
 
                                 _ => {} 
@@ -490,7 +632,13 @@ impl NativeWebview {
                                  }
                                  *control_flow = ControlFlow::Wait;
                              } else {
-                                 *control_flow = ControlFlow::Exit; 
+                                 // IMMEDIATE UX IMPROVEMENT: Hide + Zap off-screen
+                                 state.window.set_outer_position(tao::dpi::PhysicalPosition::new(-10000, -10000));
+                                 state.window.set_visible(false);
+                                 
+                                 if !state.is_utility {
+                                     *control_flow = ControlFlow::Exit; 
+                                 }
                              }
                         }
                         _ => (),
@@ -503,6 +651,7 @@ impl NativeWebview {
 
     pub fn set_title(&self, t: String) { let _ = self.proxy.send_event(UserEvent::SetTitle(t)); }
     pub fn set_size(&self, w: i32, h: i32, hints: u32) { let _ = self.proxy.send_event(UserEvent::SetSize(w, h, hints)); }
+    pub fn set_bounds(&self, x: i32, y: i32, w: i32, h: i32) { let _ = self.proxy.send_event(UserEvent::SetBounds(x, y, w, h)); }
     pub fn navigate(&self, u: String) { let _ = self.proxy.send_event(UserEvent::Navigate(u)); }
     pub fn eval(&self, j: String) { let _ = self.proxy.send_event(UserEvent::Eval(j)); }
     pub fn bind(&self, n: String, f: PyObject) { 
@@ -610,7 +759,12 @@ impl NativeWebview {
         let _ = self.proxy.send_event(UserEvent::SetPreventClose(p));
     }
     
-    pub fn create_tray(&self, icon_path: String, tooltip: String) {
-        let _ = self.proxy.send_event(UserEvent::CreateTray(icon_path, tooltip));
+    #[pyo3(signature = (tooltip, icon_path=None))]
+    pub fn create_tray(&self, tooltip: String, icon_path: Option<String>) {
+        let _ = self.proxy.send_event(UserEvent::CreateTray(tooltip, icon_path));
+    }
+
+    pub fn set_is_utility(&self, u: bool) {
+        *self.is_utility.lock().unwrap() = u;
     }
 }

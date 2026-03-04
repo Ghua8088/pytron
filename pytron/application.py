@@ -10,7 +10,7 @@ from .shortcuts import ShortcutManager
 from .apputils.codegen import CodegenMixin
 from .apputils.native import NativeMixin
 from .apputils.config import ConfigMixin
-from .apputils.windows import WindowMixin
+from .apputils.window_mixin import WindowMixin
 from .apputils.extras import ExtrasMixin
 from .apputils.shell import Shell
 from .inspector import Inspector
@@ -40,14 +40,34 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         # Router Init
         self.router = Router()
 
+        # Event Loop (Asyncio) - Shared for core async tasks
+        import asyncio
+
+        try:
+            self.loop = asyncio.get_event_loop()
+        except RuntimeError:
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
+
         # ConfigMixin setup
         self._setup_logging()
         self.router.logger = self.logger  # Share logger
+
+        from .state import log_shield
+
+        log_shield(f"App __init__ called. Frozen={getattr(sys, 'frozen', False)}")
+
         self.state = ReactiveState(self)
+        try:
+            log_shield(f"App State Mode: {self.state._store.__class__.__name__}")
+        except:
+            pass
+
         self._check_deep_link()
         self._load_config(config_file)
         _, safe_title = self._setup_identity()
         self._setup_storage(safe_title)
+        self._setup_crash_handler()
         self._resolve_resources()
         self._register_core_apis()
 
@@ -104,6 +124,18 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
             except Exception as e:
                 self.logger.debug(f"Initial codegen skipped: {e}")
 
+            # Register Inspector Shortcuts
+            self.logger.debug("Registering Inspector shortcuts (F12, Ctrl+Shift+I)")
+            # F12 often fails on Windows due to system/kernel debugger reservations
+            self.shortcut("F12", self.toggle_inspector)
+            self.shortcut("Ctrl+Shift+I", self.toggle_inspector)
+
+            # Additional fallback
+            self.shortcut("Shift+F12", self.toggle_inspector)
+
+            # Expose to JS for manual triggering if needed
+            self.expose(self.toggle_inspector, name="inspector_toggle")
+
         # Load Plugins
         # We must use the script/exe directory (sys.path[0]), NOT cwd, because cwd changes to AppData
         if getattr(sys, "frozen", False):
@@ -157,6 +189,61 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
                 self.logger.info(f"Scanning for plugins in: {p_dir}")
                 self.load_plugins(p_dir)
                 seen.add(p_dir)
+
+    def _setup_crash_handler(self):
+        """Registers a global exception hook to capture and log crashes."""
+        import traceback
+        import datetime
+
+        def _handle_exception(exc_type, exc_value, exc_traceback):
+            if issubclass(exc_type, KeyboardInterrupt):
+                sys.__excepthook__(exc_type, exc_value, exc_traceback)
+                return
+
+            crash_msg = "".join(
+                traceback.format_exception(exc_type, exc_value, exc_traceback)
+            )
+            self.logger.critical(f"FATAL CRASH:\n{crash_msg}")
+
+            # Save to storage
+            try:
+                crash_file = os.path.join(self.storage_path, "crash.log")
+                with open(crash_file, "a", encoding="utf-8") as f:
+                    f.write(f"\n--- CRASH AT {datetime.datetime.now()} ---\n")
+                    f.write(crash_msg)
+            except:
+                pass
+
+            # Show native alert if possible
+            try:
+                title = self.config.get("title", "Pytron App")
+                self.message_box(
+                    f"{title} - Fatal Error",
+                    f"The application has encountered a fatal error and must close.\n\nDetails saved to: {self.storage_path}/crash.log",
+                    style=0x10,  # MB_ICONERROR
+                )
+            except:
+                pass
+
+            sys.exit(1)
+
+        sys.excepthook = _handle_exception
+
+    def get_base_url(self) -> str:
+        """Returns the base URL for the current platform and engine."""
+        # 1. If a window exists, it is the authority on the current scheme
+        if self.windows:
+            return self.windows[0].base_url
+
+        # 2. Fallback to detection logic
+        # Chrome Engine (Electron) always uses pytron://
+        if getattr(self, "engine", "native") == "chrome":
+            return "pytron://localhost"
+
+        # Native Engine (WebView2) requires https:// on Windows
+        if sys.platform == "win32":
+            return "https://pytron.localhost"
+        return "pytron://localhost"
 
     def on_exit(self, func):
         """
@@ -294,14 +381,18 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         # Event Bus
         self.expose(self.publish, name="app_publish")
 
+        # Utility
+        self.expose(lambda: "pong", name="app_ping")
+
         # Updater APIs
         self.expose(self.check_updates, name="app_check_updates")
         self.expose(self.install_update, name="app_install_update")
 
-        # Inspector APIs
-        self.expose(
-            self.toggle_inspector, name="app_toggle_inspector", run_in_thread=False
-        )
+        # Inspector APIs (SECURITY: Only expose in debug mode)
+        if self.config.get("debug", False):
+            self.expose(
+                self.toggle_inspector, name="app_toggle_inspector", run_in_thread=False
+            )
 
     def check_updates(self, url: str):
         """
@@ -424,11 +515,12 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
 
                     # Update state with plugin metadata for the frontend
                     plugins_list = list(self.state.plugins or [])
+                    base_url = self.get_base_url()
                     plugin_meta = {
                         "name": plugin.name,
                         "version": plugin.version,
                         "ui_entry": (
-                            f"pytron://app/plugins/{item}/{plugin.ui_entry}"
+                            f"{base_url}/app/plugins/{item}/{plugin.ui_entry}"
                             if plugin.ui_entry
                             else None
                         ),

@@ -9,13 +9,16 @@ from ..webview import Webview
 class WindowMixin:
     def create_window(self, **kwargs):
         if "url" in kwargs and not getattr(sys, "frozen", False):
-            if not kwargs["url"].startswith(("http:", "https:", "file:")):
+            if not kwargs["url"].startswith(
+                ("http:", "https:", "file:", "data:", "pytron:")
+            ):
                 if not os.path.isabs(kwargs["url"]):
                     kwargs["url"] = os.path.join(self.app_root, kwargs["url"])
         window_config = self.config.copy()
         window_config.update(kwargs)
         window_config["__app__"] = self
-        # Only navigate if a URL was explicitly provided, or if this is the first (main) window
+
+        # Only navigate if a URL was explicitly provided, or if this is the first (main) window and no URL was given
         target_url = kwargs.get("url")
         if target_url is None and not self.windows:
             target_url = self.config.get("url")
@@ -29,6 +32,9 @@ class WindowMixin:
             window = ChromeWebView(config=window_config)
         else:
             window = Webview(config=window_config)
+
+        if "_is_utility" in kwargs:
+            window._is_utility = kwargs["_is_utility"]
 
         self.windows.append(window)
         for name, data in self._exposed_functions.items():
@@ -116,10 +122,20 @@ class WindowMixin:
         if sys.platform == "win32" and "storage_path" in kwargs:
             os.environ["WEBVIEW2_USER_DATA_FOLDER"] = kwargs["storage_path"]
 
-        if not self.windows:
-            self.create_window()
+        # Improved: Identify the intended primary application window.
+        # We prioritize windows that are not utilities (like the Inspector).
+        main_window = None
+        for win in self.windows:
+            if getattr(win, "_is_utility", False):
+                continue
+            main_window = win
+            break
 
-        if len(self.windows) > 0:
+        # If all existing windows are utilities or none exist, create the default app window.
+        if not main_window:
+            main_window = self.create_window()
+
+        if main_window:
             # Only attempt to close PyInstaller splash if we are in a PyInstaller-managed environment
             if sys.platform == "win32":
                 try:
@@ -144,10 +160,9 @@ class WindowMixin:
                 if hasattr(self, "router"):
                     self.router.dispatch(url)
                 # Also notify the main window
-                if self.windows:
-                    self.windows[0].emit("pytron:deep-link", {"url": url})
+                main_window.emit("pytron:deep-link", {"url": url})
 
-            self.windows[0].start()
+            main_window.start()
 
         self.is_running = False
 

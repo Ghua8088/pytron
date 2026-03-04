@@ -36,6 +36,9 @@ class WindowsImplementation(PlatformInterface):
     def notification(self, w, title, message, icon=None):
         system.notification(w, title, message, icon)
 
+    def toast(self, w, config):
+        system.toast(w, config)
+
     def minimize(self, w):
         window.minimize(w)
 
@@ -50,6 +53,9 @@ class WindowsImplementation(PlatformInterface):
 
     def make_frameless(self, w):
         window.make_frameless(w)
+
+    def set_utility_window(self, w, enable):
+        window.set_utility_window(w, enable)
 
     def start_drag(self, w):
         window.start_drag(w)
@@ -134,3 +140,6 @@ class WindowsImplementation(PlatformInterface):
 
     def set_menu(self, w, menu_bar):
         window.set_menu(w, menu_bar)
+
+    def set_border_color(self, w, color_hex):
+        window.set_border_color(w, color_hex)

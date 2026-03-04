@@ -11,7 +11,7 @@ from ..console import (
 )
 import shutil
 
-from .helpers import get_venv_python_path
+from .helpers import get_venv_python_path, get_sanitized_env
 from .plugin import perform_plugin_install
 
 REQUIREMENTS_JSON = Path("requirements.json")
@@ -129,7 +129,8 @@ def cmd_install(args: argparse.Namespace) -> int:
             # Use run_command_with_output to stream logs cleanly above the progress bar
             ret = run_command_with_output(
                 [str(venv_python), "-m", "pip", "install", "--no-build-isolation"]
-                + packages_to_install
+                + packages_to_install,
+                env=get_sanitized_env(),
             )
 
             progress.stop()

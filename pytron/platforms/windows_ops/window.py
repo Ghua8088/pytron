@@ -209,6 +209,13 @@ def minimize(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
+    try:
+        from pytron.dependencies import pytron_os
+
+        pytron_os.minimize(hwnd)
+        return
+    except Exception:
+        pass
     user32.ShowWindow(hwnd, SW_MINIMIZE)
 
 
@@ -216,14 +223,15 @@ def set_bounds(w, x, y, width, height):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
+    try:
+        from pytron.dependencies import pytron_os
+
+        pytron_os.set_bounds(hwnd, int(x), int(y), int(width), int(height))
+        return
+    except Exception:
+        pass
     user32.SetWindowPos(
-        hwnd,
-        0,
-        int(x),
-        int(y),
-        int(width),
-        int(height),
-        SWP_NOZORDER | SWP_NOACTIVATE,
+        hwnd, 0, int(x), int(y), int(width), int(height), SWP_NOZORDER | SWP_NOACTIVATE
     )
 
 
@@ -231,6 +239,13 @@ def close(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
+    try:
+        from pytron.dependencies import pytron_os
+
+        pytron_os.close(hwnd)
+        return
+    except Exception:
+        pass
     user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
 
 
@@ -238,6 +253,12 @@ def toggle_maximize(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return False
+    try:
+        from pytron.dependencies import pytron_os
+
+        return pytron_os.toggle_maximize(hwnd)
+    except Exception:
+        pass
     is_zoomed = user32.IsZoomed(hwnd)
     if is_zoomed:
         user32.ShowWindow(hwnd, SW_RESTORE)
@@ -251,10 +272,15 @@ def set_always_on_top(w, enable):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
+    try:
+        from pytron.dependencies import pytron_os
 
+        pytron_os.set_always_on_top(hwnd, enable)
+        return
+    except Exception:
+        pass
     HWND_TOPMOST = -1
     HWND_NOTOPMOST = -2
-
     hwnd_insert_after = HWND_TOPMOST if enable else HWND_NOTOPMOST
     user32.SetWindowPos(
         hwnd, hwnd_insert_after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
@@ -265,16 +291,52 @@ def make_frameless(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
+    try:
+        from pytron.dependencies import pytron_os
+
+        pytron_os.make_frameless(hwnd)
+        return
+    except Exception:
+        pass
     style = user32.GetWindowLongW(hwnd, GWL_STYLE)
     style = style & ~WS_CAPTION
     user32.SetWindowLongW(hwnd, GWL_STYLE, style)
     user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, 0x0020 | 0x0001 | 0x0002 | 0x0004 | 0x0010)
 
 
+def set_utility_window(w, enable):
+    hwnd = get_hwnd(w)
+    if not hwnd:
+        return
+    try:
+        from pytron.dependencies import pytron_os
+
+        pytron_os.set_utility_window(hwnd, enable)
+        return
+    except Exception:
+        pass
+    ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+    if enable:
+        ex_style = (ex_style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW
+    else:
+        ex_style = (ex_style | WS_EX_APPWINDOW) & ~WS_EX_TOOLWINDOW
+    user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style)
+    user32.SetWindowPos(
+        hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED
+    )
+
+
 def start_drag(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
+    try:
+        from pytron.dependencies import pytron_os
+
+        pytron_os.start_drag(hwnd)
+        return
+    except Exception:
+        pass
     user32.ReleaseCapture()
     user32.SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0)
 
@@ -283,6 +345,13 @@ def hide(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
+    try:
+        from pytron.dependencies import pytron_os
+
+        pytron_os.hide(hwnd)
+        return
+    except Exception:
+        pass
     user32.ShowWindow(hwnd, SW_HIDE)
 
 
@@ -290,6 +359,12 @@ def is_visible(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return False
+    try:
+        from pytron.dependencies import pytron_os
+
+        return pytron_os.is_visible(hwnd)
+    except Exception:
+        pass
     return bool(user32.IsWindowVisible(hwnd))
 
 
@@ -297,6 +372,13 @@ def show(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
+    try:
+        from pytron.dependencies import pytron_os
+
+        pytron_os.show(hwnd)
+        return
+    except Exception:
+        pass
     user32.ShowWindow(hwnd, SW_SHOW)
     user32.SetForegroundWindow(hwnd)
 
@@ -305,6 +387,13 @@ def center(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
+    try:
+        from pytron.dependencies import pytron_os
+
+        pytron_os.center(hwnd)
+        return
+    except Exception:
+        pass
     rect = ctypes.wintypes.RECT()
     user32.GetWindowRect(hwnd, ctypes.byref(rect))
     width = rect.right - rect.left
@@ -356,6 +445,42 @@ def set_menu(w, menu_bar):
     _wnd_procs[hwnd] = (new_proc_inst, old_proc)
 
     # Cast to void ptr for SetWindowLongPtrW
-    new_proc_ptr = ctypes.cast(new_proc_inst, ctypes.c_void_p)
+    new_proc_ptr = (
+        ctypes.c_void_p(new_proc_inst) if hasattr(ctypes, "c_void_p") else new_proc_inst
+    )
     user32.SetWindowLongPtrW(hwnd, GWL_WNDPROC, new_proc_ptr)
     user32.DrawMenuBar(hwnd)
+
+
+def set_border_color(w, color_hex):
+    """Sets the border color of the window using DWM (Windows 11+)."""
+    hwnd = get_hwnd(w)
+    if not hwnd:
+        return
+
+    try:
+        # Convert hex #RRGGBB to COLORREF (0x00BBGGRR)
+        color_hex = color_hex.lstrip("#")
+        if len(color_hex) == 6:
+            r = int(color_hex[0:2], 16)
+            g = int(color_hex[2:4], 16)
+            b = int(color_hex[4:6], 16)
+            color_ref = b << 16 | g << 8 | r
+        elif len(color_hex) == 8:
+            # Handle ARGB if needed, but DWM expects COLORREF (24-bit)
+            r = int(color_hex[2:4], 16)
+            g = int(color_hex[4:6], 16)
+            b = int(color_hex[6:8], 16)
+            color_ref = b << 16 | g << 8 | r
+        else:
+            return
+
+        dwmapi = ctypes.windll.dwmapi
+        dwmapi.DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_BORDER_COLOR,
+            ctypes.byref(ctypes.c_int(color_ref)),
+            4,
+        )
+    except Exception:
+        pass

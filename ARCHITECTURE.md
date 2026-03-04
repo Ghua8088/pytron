@@ -60,3 +60,21 @@ Pytron uses a curated stack of robust open-source technologies to power its feat
     -   **[PyInstaller](https://pyinstaller.org/)**: The default choices for `pytron package` due to its excellent compatibility with complex scientific libraries (NumPy, Torch).
     -   **[Nuitka](https://nuitka.net/)**: Available via `--nuitka`. We support this for developers needing compilation to machine code (C++) for performance-critical applications.
 -   **Frontend Tooling**: Our CLI scaffolds projects using **[Vite](https://vitejs.dev/)**. We customized the Vite config to proxy requests to our Python backend, enabling a seamless "Hot Module Replacement" experience for dual-stack development.
+
+## Build & Security Pipeline
+
+Pytron introduces a sophisticated build pipeline designed to secure Python applications and ensure reliable dependency resolution.
+
+### Crystal Audit
+Traditional Python packagers often struggle with hidden imports, dynamic loading, and complex dependency trees. **Crystal Audit** is Pytron's answer to this challenge.
+*   **PEP 578 Surveillance**: Crystal Audit launches your application in a controlled environment and attaches a system audit hook (`sys.addaudithook`) to capture every import event as it happens in real-time.
+*   **Defanged Execution**: To safely analyze side-effects without damaging your system, Crystal "defangs" destructive operations (like `os.remove`, `subprocess.run`, `socket`) by replacing them with aggressive mocks during the audit.
+*   **Recursive Analysis**: It inspects exposed functions and classes, recursively traversing closures and bytecode to find hidden dependencies that static analysis misses.
+*   **Precision Manifest**: The result is a `requirements.lock.json` that lists exactly which modules and files were accessed, ensuring a 100% accurate build with zero bloat.
+
+### Secure Pipeline (Agentic Shield)
+For enterprise and commercial applications, protecting source code is paramount. The **Secure Pipeline** ensures that your Python logic is not exposed as easily decompilable bytecode.
+*   **Binary Compilation**: The main entry point and critical modules are compiled to native machine code (`.pyd` / `.so`) using **Cython**. This prevents trivial decompilation (like `uncompyle6`) and requires reverse engineering tools to analyze.
+*   **Native Bootloader**: A custom Rust-based bootloader ("Agentic Shield") initializes the environment and launches the compiled application, providing a secure native entry point.
+*   **Library Fusion**: Functionality to bundle distributed Python modules into a single `app.bundle` structure, reducing file clutter and obscuring the standard `_internal` directory layout.
+*   **Integrity Checks**: The pipeline ensures that the compiled components are correctly linked and loaded, preventing basic tampering.

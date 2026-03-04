@@ -9,38 +9,91 @@ from .assets import get_smart_assets
 from .metadata import MetadataEditor
 
 
+class FrontendModule(BuildModule):
+    def prepare(self, context: BuildContext):
+        import subprocess
+
+        log("Checking for Frontend Build hooks...", style="dim")
+
+        # 1. Detect Frontend Directory
+        frontend_dir = context.script_dir / "frontend"
+
+        # Check if custom frontend dir is specified in settings
+        custom_front = context.settings.get("frontend_dir")
+        if custom_front:
+            frontend_dir = context.script_dir / custom_front
+
+        if not frontend_dir.exists() or not (frontend_dir / "package.json").exists():
+            return
+
+        # Sky is blue check
+        log(f"Detected frontend project at: {frontend_dir.name}", style="info")
+
+        # Detect Package Manager
+        manager = "npm"
+        if (frontend_dir / "yarn.lock").exists():
+            manager = "yarn"
+        elif (frontend_dir / "pnpm-lock.yaml").exists():
+            manager = "pnpm"
+        elif (frontend_dir / "bun.lockb").exists():
+            manager = "bun"
+
+        # Check if we should install dependencies
+        node_modules = frontend_dir / "node_modules"
+        force_install = context.settings.get("force_install", False)
+
+        if not node_modules.exists() or force_install:
+            log(f"Installing frontend dependencies ({manager})...", style="dim")
+            try:
+                cmd = f"{manager} install"
+                subprocess.run(cmd, cwd=str(frontend_dir), shell=True, check=True)
+            except Exception as e:
+                log(f"Frontend install failed: {e}", style="error")
+                return
+
+        # Run Build
+        log(f"Building frontend ({manager} run build)...", style="dim")
+
+        # Clean previous builds to ensure explicit freshness (User Request)
+        dist_candidates = [frontend_dir / "dist", frontend_dir / "build"]
+        for d in dist_candidates:
+            if d.exists() and d.is_dir():
+                try:
+                    import shutil
+
+                    shutil.rmtree(d)
+                    log(f"Cleaned stale artifact: {d.name}", style="dim")
+                except Exception:
+                    pass
+
+        try:
+            cmd = f"{manager} run build"
+            subprocess.run(cmd, cwd=str(frontend_dir), shell=True, check=True)
+            log("Frontend build completed.", style="success")
+        except Exception as e:
+            log(f"Frontend build failed: {e}", style="error")
+            log(
+                "Proceeding with packaging, but frontend might be stale/missing.",
+                style="warning",
+            )
+
+
 class AssetModule(BuildModule):
     def prepare(self, context: BuildContext):
         log("Gathering project assets...", style="dim")
 
-        # 1. settings.json
-        settings_path = context.script_dir / "settings.json"
-        if settings_path.exists():
-            # Force debug=False and requested engine for production
-            clean_settings = context.settings.copy()
-            if clean_settings.get("debug") is True:
-                clean_settings["debug"] = False
-
-            # If the user packaged for a specific engine, force it in the config
-            if context.engine:
-                clean_settings["engine"] = context.engine
-                log(
-                    f"Enforcing engine: {context.engine} in production bundle",
-                    style="dim",
-                )
-
-            temp_settings_dir = context.build_dir / "pytron_assets"
-            temp_settings_dir.mkdir(parents=True, exist_ok=True)
-            temp_settings_path = temp_settings_dir / "settings.json"
-            temp_settings_path.write_text(json.dumps(clean_settings, indent=4))
-
-            context.add_data.append(f"{temp_settings_path}{os.pathsep}.")
-
-        # 2. Frontend Dist
+        # 1. Frontend Dist Discovery
         possible_dists = [
             context.script_dir / "frontend" / "dist",
             context.script_dir / "frontend" / "build",
         ]
+
+        # Check custom frontend dir from settings
+        custom_front = context.settings.get("frontend_dir")
+        if custom_front:
+            possible_dists.insert(0, context.script_dir / custom_front / "dist")
+            possible_dists.insert(1, context.script_dir / custom_front / "build")
+
         frontend_dist = None
         for d in possible_dists:
             if d.exists() and d.is_dir():
@@ -48,8 +101,67 @@ class AssetModule(BuildModule):
                 break
 
         if frontend_dist:
-            rel_path = frontend_dist.relative_to(context.script_dir)
-            context.add_data.append(f"{frontend_dist}{os.pathsep}{rel_path}")
+            # FLATTEN FRONTEND: Instead of bundling the 'dist' folder as a subfolder,
+            # we bundle its CONTENTS at the root level for a cleaner distribution.
+            # This makes the app feel more 'native' and less like a 'packed' script.
+            log(
+                f"Flattening frontend assets from: {frontend_dist.name} -> root",
+                style="info",
+            )
+            context.add_data.append(f"{frontend_dist}{os.pathsep}.")
+
+            # Record that we flattened the frontend for later settings adjustment
+            context.settings["_frontend_flattened"] = True
+
+        # 2. settings.json (NOW PREPARED AFTER FRONTEND DISCOVERY)
+        settings_path = context.script_dir / "settings.json"
+        if settings_path.exists():
+            clean_settings = context.settings.copy()
+
+            # Force production defaults
+            if clean_settings.get("debug") is True:
+                clean_settings["debug"] = False
+
+            if context.engine:
+                clean_settings["engine"] = context.engine
+                log(
+                    f"Enforcing engine: {context.engine} in production bundle",
+                    style="dim",
+                )
+
+            # ADJUST URL FOR FLATTENED FRONTEND
+            if clean_settings.get("_frontend_flattened"):
+                url = clean_settings.get("url", "")
+                # If URL starts with frontend/dist/ or similar, strip it
+                for candidate in [
+                    "frontend/dist/",
+                    "frontend/build/",
+                    "dist/",
+                    "build/",
+                ]:
+                    if url.startswith(candidate):
+                        new_url = url.replace(candidate, "", 1)
+                        log(
+                            f"Adjusting production URL: {url} -> {new_url}", style="dim"
+                        )
+                        clean_settings["url"] = new_url
+                        break
+
+                # If custom frontend dir was used
+                if custom_front:
+                    prefix = f"{custom_front}/dist/"
+                    if url.startswith(prefix):
+                        clean_settings["url"] = url.replace(prefix, "", 1)
+                    prefix = f"{custom_front}/build/"
+                    if url.startswith(prefix):
+                        clean_settings["url"] = url.replace(prefix, "", 1)
+
+            temp_settings_dir = context.build_dir / "pytron_assets"
+            temp_settings_dir.mkdir(parents=True, exist_ok=True)
+            temp_settings_path = temp_settings_dir / "settings.json"
+            temp_settings_path.write_text(json.dumps(clean_settings, indent=4))
+
+            context.add_data.append(f"{temp_settings_path}{os.pathsep}.")
 
         # 3. Smart Assets
         # (This is a simplified version of what was in package.py)
@@ -420,75 +532,22 @@ class HookModule(BuildModule):
                 except Exception as e:
                     log(f"Crystal Audit Failed: {e}", style="warning")
 
-            # Use Intelligent Introspection (AI Oracle)
-            try:
-                from .graph import GraphBuilder, DependencyOracle
+            # Nuclear Hook Generation Whitelist
+            import json
 
-                log("Spawning Dependency Oracle (ML Brain)...", style="info")
-                builder = GraphBuilder(context.script_dir)
-                graph = builder.scan_project()
-
-                oracle = DependencyOracle(graph)
-                oracle.predict()
-
-                smart_flags = []
-
-                # Convert Graph Predictions to PyInstaller Flags
-                for edge in graph.edges:
-                    if edge.type == "predicted":
-                        # Handle different prediction types
-                        if edge.target.endswith(".*"):
-                            # Wildcard -> Collect Submodules
-                            pkg = edge.target[:-2]
-                            flag = f"--collect-submodules={pkg}"
-                            smart_flags.append(flag)
-                        elif edge.target == "<resource_data>":
-                            # Generic Data -> Collect All (Safest for now)
-                            pkg = edge.source.split(".")[
-                                0
-                            ]  # Assuming source is module name
-                            flag = f"--collect-all={pkg}"
-                            smart_flags.append(flag)
-                        elif edge.target.startswith("collect_"):
-                            # Oracle explicit instruction "collect_all:pkg" etc
-                            # But our edge target usually is just the dependency
-                            pass
-                        else:
-                            # Standard hidden import
-                            flag = f"--hidden-import={edge.target}"
-                            smart_flags.append(flag)
-
-                # Deduplicate
-                smart_flags = list(set(smart_flags))
-
-                if smart_flags:
-                    log(
-                        f"Oracle: Predicted {len(smart_flags)} missing dependencies.",
-                        style="success",
-                    )
-                    for f in smart_flags:
-                        log(f"  + {f}", style="dim")
-                    context.extra_args.extend(smart_flags)
-
-                # We can still pass the whitelist to the nuclear hook generator if we want absolute redundancy,
-                # but --collect-all usually supersedes hook generation for specific packages.
-                # However, for non-collect-all packages, the hook generator is still useful for standard hidden imports.
-
-                # Let's rebuild the whitelist for the hook generator (standard safe fallback)
-                import json
-
-                if req_file.exists():
+            if req_file.exists():
+                try:
                     data = json.loads(req_file.read_text())
                     deps = data.get("dependencies", [])
                     if deps:
-                        whitelist = set()
+                        new_whitelist = set()
                         for d in deps:
                             clean = d.split("==")[0].split(">")[0].split("<")[0].strip()
                             if "/" not in clean and "\\" not in clean and clean:
-                                whitelist.add(clean)
-                        whitelist = list(whitelist)
-            except Exception as e:
-                log(f"Oracle prediction failed: {e}", style="warning")
+                                new_whitelist.add(clean)
+                        whitelist = list(new_whitelist)
+                except Exception:
+                    pass
 
         generate_nuclear_hooks(
             temp_hooks_dir,
@@ -501,6 +560,58 @@ class HookModule(BuildModule):
         # For now, let's add it to extra_args for PyInstaller.
         context.extra_args.append(f"--additional-hooks-dir={temp_hooks_dir}")
         log(f"Added nuclear hooks dir: {temp_hooks_dir}", style="dim")
+
+
+class PackModule(BuildModule):
+    """
+    Experimental: Fuses all frontend assets into a single .pytron archive.
+    Enables 'VAP' mode automatically at runtime.
+    """
+
+    def prepare(self, context: BuildContext):
+        import zipfile
+
+        # Check if we have frontend assets to pack
+        frontend_src = None
+        for entry in list(context.add_data):
+            if entry.endswith(f"{os.pathsep}."):
+                src = Path(entry.split(os.pathsep)[0])
+                if (src / "index.html").exists():
+                    frontend_src = src
+                    context.add_data.remove(entry)
+                    break
+
+        if not frontend_src:
+            return
+
+        log(f"VAP-ifying frontend: {frontend_src.name} -> app.pytron", style="cyan")
+
+        # Create the archive
+        archive_path = context.build_dir / "app.pytron"
+        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(frontend_src):
+                for file in files:
+                    full_path = Path(root) / file
+                    rel_path = full_path.relative_to(frontend_src)
+                    zipf.write(full_path, rel_path)
+
+        # Add the archive to the distribution
+        # In PyInstaller, '.' maps to the root or _internal depending on onefile
+        context.add_data.append(f"{archive_path}{os.pathsep}.")
+
+        # Update settings to inform runtime about VAP mode
+        context.settings["vap_mode"] = True
+        context.settings["vap_archive"] = "app.pytron"
+
+        # Rewrite settings.json to include VAP flags
+        for entry in context.add_data:
+            if "settings.json" in entry and "pytron_assets" in entry:
+                s_path = Path(entry.split(os.pathsep)[0])
+                s_path.write_text(json.dumps(context.settings, indent=4))
+                break
+
+    def post_build(self, context: BuildContext):
+        pass
 
 
 class IconModule(BuildModule):
@@ -613,6 +724,15 @@ class IconModule(BuildModule):
         # For now, let's DISABLE this implicit copy or rename it to avoid collision.
 
         if context.app_icon and os.path.exists(context.app_icon):
-            # We rename it in the bundle to avoid collision with the directory or other files
-            # context.add_data.append(f"{context.app_icon}{os.pathsep}resources/app_icon.ico")
-            pass
+            # SAFELY bundle it into 'resources' to avoid potential root collisions
+            # This allows runtime features (Tray, Notifications) to access the file
+            ext = Path(context.app_icon).suffix
+            # PyInstaller add_data DEST is a folder. We cannot rename files directly.
+            # We must copy to a temp file with the desired name, then bundle that.
+            context.build_dir.mkdir(parents=True, exist_ok=True)
+            temp_icon = context.build_dir / f"app_icon{ext}"
+            shutil.copy2(context.app_icon, temp_icon)
+
+            # Bundle into 'resources' dir. Result: resources/app_icon.ext
+            context.add_data.append(f"{temp_icon}{os.pathsep}resources")
+            log(f"Bundled runtime icon to resources/app_icon{ext}", style="dim")
