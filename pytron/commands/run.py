@@ -22,6 +22,7 @@ from .helpers import (
 try:
     from watchfiles import DefaultFilter
 except ImportError:
+
     class DefaultFilter:
         def __init__(self, **kwargs):
             pass

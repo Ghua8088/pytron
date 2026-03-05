@@ -355,7 +355,8 @@ export default defineConfig({{
                     app_jsx = target / "frontend" / "src" / "App.tsx"
 
                 if app_jsx.exists():
-                    app_jsx.write_text("""import { useState } from 'react'
+                    app_jsx.write_text(
+                        """import { useState } from 'react'
 import pytron from 'pytron-client'
 import './App.css'
 
@@ -387,7 +388,8 @@ function App() {
 }
 
 export default App
-""")
+"""
+                    )
                     log(
                         "Injected React starter code with Pytron Client",
                         style="success",
@@ -396,7 +398,8 @@ export default App
             elif "vue" in args.template:
                 app_vue = target / "frontend" / "src" / "App.vue"
                 if app_vue.exists():
-                    app_vue.write_text("""<script setup>
+                    app_vue.write_text(
+                        """<script setup>
 import { ref } from 'vue'
 import pytron from 'pytron-client'
 
@@ -436,7 +439,8 @@ button {
   cursor: pointer;
 }
 </style>
-""")
+"""
+                    )
                     log("Injected Vue starter code with Pytron Client", style="success")
 
         except subprocess.CalledProcessError as e:

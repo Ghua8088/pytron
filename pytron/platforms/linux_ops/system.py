@@ -197,7 +197,9 @@ Terminal=false
 
         # Update mime database and register
         try:
-            subprocess.run(["update-desktop-database", apps_dir], capture_output=True)  # nosec B603
+            subprocess.run(
+                ["update-desktop-database", apps_dir], capture_output=True
+            )  # nosec B603
 
             subprocess.run(
                 ["xdg-mime", "default", desktop_filename, f"x-scheme-handler/{scheme}"],
