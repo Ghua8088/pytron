@@ -79,7 +79,7 @@ impl NativeWebview {
             .with_title("Pytron App")
             // Linux Fix: Window must be visible for the handle to be "realized" 
             // before WRY can build a WebView on it.
-            .with_visible(cfg!(not(target_os = "linux"))) 
+            .with_visible(cfg!(target_os = "linux")) 
             .with_resizable(resizable)
             .with_decorations(!frameless)
             .build(&event_loop)
