@@ -76,7 +76,10 @@ jobs:
 
       - name: 🧪 Run Tests
         run: |
-          pip install pytest
+          python -m pip install --upgrade pip
+          # Install project runtime deps first (rich, cryptography, etc.)
+          python -m pip install .
+          python -m pip install pytest
           pytest
 
       - name: 📦 Build Platform Wheel

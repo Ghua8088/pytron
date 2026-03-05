@@ -197,12 +197,10 @@ Terminal=false
 
         # Update mime database and register
         try:
-            udd = shutil.which("update-desktop-database") or "update-desktop-database"
-            subprocess.run([udd, apps_dir], capture_output=True)  # nosec B603
+            subprocess.run(["update-desktop-database", apps_dir], capture_output=True)  # nosec B603
 
-            xm = shutil.which("xdg-mime") or "xdg-mime"
             subprocess.run(
-                [xm, "default", desktop_filename, f"x-scheme-handler/{scheme}"],
+                ["xdg-mime", "default", desktop_filename, f"x-scheme-handler/{scheme}"],
                 capture_output=True,
             )  # nosec B603
             return True

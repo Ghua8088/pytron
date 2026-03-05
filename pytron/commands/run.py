@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import json
 import os
+import types
 from pathlib import Path
 from rich.text import Text
 from ..console import log, console
@@ -21,7 +22,23 @@ from .helpers import (
 try:
     from watchfiles import DefaultFilter
 except ImportError:
-    DefaultFilter = object
+    class DefaultFilter:
+        def __init__(self, **kwargs):
+            pass
+
+        def __call__(self, change, path):
+            return True
+
+    # Provide a lightweight shim so tests that patch `watchfiles.watch`
+    # still work when the dependency is not installed.
+    shim = types.ModuleType("watchfiles")
+
+    def _watch_stub(*args, **kwargs):
+        return iter(())
+
+    shim.DefaultFilter = DefaultFilter
+    shim.watch = _watch_stub
+    sys.modules.setdefault("watchfiles", shim)
 
 
 class PytronFilter(DefaultFilter):
