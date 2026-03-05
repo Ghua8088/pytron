@@ -5,7 +5,15 @@ on:
     branches:
       - main
       - master
+    paths:
+      - 'pytron/**'
+      - 'tests/**'
+      - 'pyproject.toml'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-wheels:
@@ -62,6 +70,14 @@ jobs:
 
       - name: 🦾 Build Native Engine
         run: python pytron/engines/native/build.py
+
+      - name: 🦾 Build OS Platform Hook
+        run: python pytron/platforms/pytron_os/build.py
+
+      - name: 🧪 Run Tests
+        run: |
+          pip install pytest
+          pytest
 
       - name: 📦 Build Platform Wheel
         shell: bash

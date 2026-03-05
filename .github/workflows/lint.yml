@@ -1,6 +1,22 @@
 name: Lint
 
-on: [push, pull_request]
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - 'pytron/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+  pull_request:
+    branches: ["**"]
+    paths:
+      - 'pytron/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:

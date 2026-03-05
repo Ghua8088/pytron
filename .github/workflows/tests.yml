@@ -2,10 +2,22 @@ name: Tests
 
 on:
   push:
-    branches: ["**"]
+    branches-ignore: ["main", "master"]
+    paths:
+      - 'pytron/**'
+      - 'tests/**'
+      - 'pyproject.toml'
   pull_request:
     branches: ["**"]
+    paths:
+      - 'pytron/**'
+      - 'tests/**'
+      - 'pyproject.toml'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
