@@ -36,9 +36,13 @@ IS_ANDROID = False
 class Webview:
     def __init__(self, config):
         if not pytron_native:
+            from .utils import get_native_error_details
+
+            details = get_native_error_details()
             ext = ".pyd" if sys.platform == "win32" else ".so"
             raise NativeEngineError(
-                f"Pytron Native Engine binary (pytron_native{ext}) is missing or could not be loaded. "
+                f"Pytron Native Engine binary (pytron_native{ext}) is missing or could not be loaded.\n"
+                f"Cause: {details}\n"
                 "Ensure it is present in 'pytron/dependencies' or your path. "
                 "Try running 'pytron engine install native' to build it for your current system."
             )
