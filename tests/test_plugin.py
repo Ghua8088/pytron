@@ -35,13 +35,10 @@ def create_plugin(base_dir, name, setup_code=None, manifest_extra=None):
     with open(os.path.join(p_dir, "manifest.json"), "w") as f:
         json.dump(manifest, f)
 
-    code = (
-        setup_code
-        or """
+    code = setup_code or """
 def init(app):
     return "initialized"
 """
-    )
     with open(os.path.join(p_dir, "main.py"), "w") as f:
         f.write(code)
 
