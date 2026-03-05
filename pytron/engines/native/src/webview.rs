@@ -77,7 +77,9 @@ impl NativeWebview {
         
         let window = WindowBuilder::new()
             .with_title("Pytron App")
-            .with_visible(false)
+            // Linux Fix: Window must be visible for the handle to be "realized" 
+            // before WRY can build a WebView on it.
+            .with_visible(cfg!(not(target_os = "linux"))) 
             .with_resizable(resizable)
             .with_decorations(!frameless)
             .build(&event_loop)
@@ -315,6 +317,10 @@ impl NativeWebview {
 
         let webview = builder.build()
              .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to build WebView: {}", e)))?;
+
+        // Re-hide on Linux after successful build so it stays hidden until explicitly shown
+        #[cfg(target_os = "linux")]
+        window.set_visible(false);
 
         let state = Box::into_raw(Box::new(RuntimeState { 
             webview, 
