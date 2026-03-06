@@ -39,28 +39,34 @@ def _set_utf8_mode():
 
     # On Windows try to set the console code page to UTF-8 (65001).
     if sys.platform.startswith("win"):
+        _set_ok = False
+        # Try Rust extension first (no ctypes overhead)
         try:
-            import ctypes
-
-            kernel32 = ctypes.windll.kernel32
-
-            # Harden: Explicitly define signatures for robustness
-            kernel32.SetConsoleOutputCP.argtypes = [ctypes.c_uint]
-            kernel32.SetConsoleOutputCP.restype = ctypes.c_int
-
-            kernel32.SetConsoleCP.argtypes = [ctypes.c_uint]
-            kernel32.SetConsoleCP.restype = ctypes.c_int
-
-            # Check return values (Non-zero is success)
-            if kernel32.SetConsoleOutputCP(65001) == 0:
-                # logging.warning(f"Failed to SetConsoleOutputCP: {err}")
-                pass
-
-            if kernel32.SetConsoleCP(65001) == 0:
-                pass
-
+            from pytron.dependencies import pytron_os as _pytron_os
+            if _pytron_os:
+                _set_ok = _pytron_os.set_console_utf8()
         except Exception:
             pass
+
+        # Fallback to ctypes
+        if not _set_ok:
+            try:
+                import ctypes
+
+                kernel32 = ctypes.windll.kernel32
+
+                # Harden: Explicitly define signatures for robustness
+                kernel32.SetConsoleOutputCP.argtypes = [ctypes.c_uint]
+                kernel32.SetConsoleOutputCP.restype = ctypes.c_int
+
+                kernel32.SetConsoleCP.argtypes = [ctypes.c_uint]
+                kernel32.SetConsoleCP.restype = ctypes.c_int
+
+                kernel32.SetConsoleOutputCP(65001)
+                kernel32.SetConsoleCP(65001)
+
+            except Exception:
+                pass
 
     # Wrap or reconfigure stdio streams to UTF-8 with surrogatepass to avoid
     # raising UnicodeEncodeError when printing characters that the system

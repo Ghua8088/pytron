@@ -245,19 +245,23 @@ class Webview:
     def start(self):
         self.logger.info("Starting Native Event Loop...")
 
-        # Consume Pending Tray Config (from setup_tray_standard)
-        if self.app and self.app.config.get("_pending_native_tray"):
-            cfg = self.app.config.pop("_pending_native_tray")
-            self.logger.info("Initializing Defered Native Tray...")
-            try:
-                self.create_tray(cfg["icon"], cfg["title"])
-                self.config["close_to_tray"] = cfg["close_to_tray"]
-            except Exception as e:
-                self.logger.error(f"Failed to create deferred tray: {e}")
+        # Consume deferred close-to-tray flag queued by setup_tray_standard when
+        # windows weren't ready yet.  We only need to enable the behaviour here;
+        # the Python SystemTray owns the actual Shell_NotifyIcon and popup menu.
+        if self.app:
+            if self.app.config.get("_pending_close_to_tray"):
+                self.app.config.pop("_pending_close_to_tray")
+                self.config["close_to_tray"] = True
+
+            # Legacy key: kept for any direct callers outside setup_tray_standard.
+            if self.app.config.get("_pending_native_tray"):
+                cfg = self.app.config.pop("_pending_native_tray")
+                self.config["close_to_tray"] = cfg.get("close_to_tray", True)
 
         # Register Native Event Handlers (Direct Binding)
         self.native.bind("pytron_on_close", self._on_close_requested)
-        self.native.bind("pytron_tray_click", self._on_tray_click)
+        # pytron_tray_click is intentionally NOT bound here; the native engine tray
+        # is deprecated.  Python SystemTray owns all tray interaction.
 
         # Configure Close Behavior
         if self.config.get("close_to_tray", False):
@@ -634,25 +638,26 @@ class Webview:
         self.native.minimize()
 
     def toggle_maximize(self):
-        # Native Toggle using HWND check because Native Engine is async state
+        # Native Toggle using pytron_os check
         if sys.platform == "win32" and self.hwnd:
-            import ctypes
+            from .dependencies import pytron_os
+            if pytron_os:
+                try:
+                    return pytron_os.toggle_maximize(self.hwnd)
+                except Exception:
+                    pass
 
-            is_maximized = ctypes.windll.user32.IsZoomed(self.hwnd)
-            if is_maximized:
-                self.restore()
-            else:
-                self.maximize()
-        else:
-            self.native.maximize()
+        self.native.maximize()
 
     def is_visible(self):
         """Checks if the window is currently visible."""
-        # Use simple platform check if possible
         if sys.platform == "win32" and self.hwnd:
-            import ctypes
-
-            return bool(ctypes.windll.user32.IsWindowVisible(self.hwnd))
+            from .dependencies import pytron_os
+            if pytron_os:
+                try:
+                    return pytron_os.is_visible(self.hwnd)
+                except Exception:
+                    pass
         return True  # Default fallback
 
     def hide(self):
@@ -666,16 +671,13 @@ class Webview:
         if call_native:
             call_native(enable)
         elif sys.platform == "win32" and self.hwnd:
-            import ctypes
-
-            HWND_TOPMOST = -1
-            HWND_NOTOPMOST = -2
-            SWP_NOMOVE = 0x0002
-            SWP_NOSIZE = 0x0001
-            z_order = HWND_TOPMOST if enable else HWND_NOTOPMOST
-            ctypes.windll.user32.SetWindowPos(
-                self.hwnd, z_order, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE
-            )
+            from .dependencies import pytron_os
+            if pytron_os:
+                try:
+                    pytron_os.set_always_on_top(self.hwnd, enable)
+                    return
+                except Exception:
+                    pass
 
     def set_resizable(self, enable):
         call_native = getattr(self.native, "set_resizable", None)
@@ -769,22 +771,6 @@ class Webview:
         return None
 
     def message_box(self, *args, **kwargs):
-        if hasattr(self.native, "message_box"):
-            title = kwargs.get("title") or (args[0] if args else "Message")
-            message = kwargs.get("message") or (args[1] if len(args) > 1 else "")
-            style = kwargs.get("style") or (args[2] if len(args) > 2 else 0)
-
-            # Map Windows MessageBox styles to Native levels
-            # 0x10 = MB_ICONERROR, 0x30 = MB_ICONWARNING, 0x40 = MB_ICONINFORMATION
-            level = "info"
-            if isinstance(style, int):
-                if style & 0x10:
-                    level = "error"
-                elif style & 0x30:
-                    level = "warning"
-
-            return self.native.message_box(title, message, level)
-
         if self._platform and self.hwnd:
             return self._platform.message_box(self.hwnd, *args, **kwargs)
         return 0
@@ -843,8 +829,13 @@ class Webview:
 
     # --- Native Tray & Close Handling ---
     def create_tray(self, icon_path, tooltip="Pytron App"):
-        if hasattr(self.native, "create_tray"):
-            self.native.create_tray(tooltip, icon_path)
+        # DEPRECATED: The native engine tray has no API for custom menu items.
+        # Python SystemTray (pytron/tray.py) is the sole tray owner on all engines.
+        # Calling this method is now a no-op; it will be removed in a future release.
+        self.logger.warning(
+            "[Tray] create_tray() is deprecated and does nothing. "
+            "Use app.setup_tray() / app.setup_tray_standard() instead."
+        )
 
     def set_prevent_close(self, prevent):
         if hasattr(self.native, "set_prevent_close"):

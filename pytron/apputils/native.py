@@ -2,6 +2,11 @@ import sys
 import os
 from typing import Optional
 
+try:
+    from pytron.dependencies import pytron_os
+except Exception:
+    pytron_os = None
+
 
 class NativeMixin:
     """
@@ -22,11 +27,10 @@ class NativeMixin:
 
         # Attempt native Rust implementation first for performance
         try:
-            from pytron.dependencies import pytron_os
-
-            exe_path = sys.executable
-            if pytron_os.set_launch_on_boot(safe_name, exe_path, enable):
-                return True
+            if pytron_os is not None:
+                exe_path = sys.executable
+                if pytron_os.set_launch_on_boot(safe_name, exe_path, enable):
+                    return True
         except Exception:
             pass
 

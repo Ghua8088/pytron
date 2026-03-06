@@ -8,6 +8,11 @@ except ImportError:
 from .constants import *
 from .utils import get_hwnd
 
+try:
+    from pytron.dependencies import pytron_os
+except ImportError:
+    pytron_os = None
+
 # -------------------------------------------------------------------
 # Hardened User32
 # -------------------------------------------------------------------
@@ -155,97 +160,88 @@ _fullscreen_storage = {}
 
 
 def set_fullscreen(w, enable):
+    if pytron_os:
+        try:
+            return pytron_os.set_fullscreen(get_hwnd(w), enable)
+        except Exception:
+            pass
+
     hwnd = get_hwnd(w)
     if not hwnd:
         return
 
     if enable:
-        if hwnd in _fullscreen_storage:
-            return
-
-        # Save current state
+        # Save current style and rect so we can restore later
         rect = ctypes.wintypes.RECT()
         user32.GetWindowRect(hwnd, ctypes.byref(rect))
-        style = user32.GetWindowLongW(hwnd, GWL_STYLE)
-
-        _fullscreen_storage[hwnd] = {"style": style, "rect": rect}
-
-        # Remove borders
-        # We also remove WS_MAXIMIZEBOX | WS_MINIMIZEBOX to prevent users from breaking it
-        new_style = style & ~(WS_CAPTION | WS_THICKFRAME)
+        _fullscreen_storage[hwnd] = {
+            "style": user32.GetWindowLongW(hwnd, GWL_STYLE),
+            "rect": (rect.left, rect.top, rect.right, rect.bottom),
+        }
+        # Strip caption / thick-frame so the window covers the taskbar
+        new_style = _fullscreen_storage[hwnd]["style"] & ~WS_CAPTION & ~WS_THICKFRAME
         user32.SetWindowLongW(hwnd, GWL_STYLE, new_style)
 
-        # Get Monitor Info
-        MONITOR_DEFAULTTOPRIMARY = 1
-        monitor = user32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY)
-        monitor_info = MONITORINFO()
-        monitor_info.cbSize = ctypes.sizeof(MONITORINFO)
-        user32.GetMonitorInfoW(monitor, ctypes.byref(monitor_info))
-
-        rc = monitor_info.rcMonitor
-        width = rc.right - rc.left
-        height = rc.bottom - rc.top
-
-        # SWP_FRAMECHANGED = 0x0020
+        # Stretch across the monitor that owns this window
+        hmon = user32.MonitorFromWindow(hwnd, 2)  # MONITOR_DEFAULTTONEAREST
+        mi = MONITORINFO()
+        mi.cbSize = ctypes.sizeof(MONITORINFO)
+        user32.GetMonitorInfoW(hmon, ctypes.byref(mi))
+        r = mi.rcMonitor
         user32.SetWindowPos(
-            hwnd, 0, rc.left, rc.top, width, height, SWP_NOZORDER | 0x0020
+            hwnd, -1,  # HWND_TOPMOST
+            r.left, r.top,
+            r.right - r.left, r.bottom - r.top,
+            SWP_FRAMECHANGED,
         )
     else:
-        if hwnd not in _fullscreen_storage:
-            return
-
-        saved = _fullscreen_storage.pop(hwnd)
-        user32.SetWindowLongW(hwnd, GWL_STYLE, saved["style"])
-        r = saved["rect"]
-        width = r.right - r.left
-        height = r.bottom - r.top
-
-        user32.SetWindowPos(
-            hwnd, 0, r.left, r.top, width, height, SWP_NOZORDER | 0x0020
-        )
+        if hwnd in _fullscreen_storage:
+            data = _fullscreen_storage.pop(hwnd)
+            user32.SetWindowLongW(hwnd, GWL_STYLE, data["style"])
+            left, top, right, bottom = data["rect"]
+            user32.SetWindowPos(
+                hwnd, 0,
+                left, top,
+                right - left, bottom - top,
+                SWP_FRAMECHANGED,
+            )
 
 
 def minimize(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    try:
-        from pytron.dependencies import pytron_os
-
-        pytron_os.minimize(hwnd)
-        return
-    except Exception:
-        pass
+    if pytron_os:
+        try:
+            return pytron_os.minimize(hwnd)
+        except Exception:
+            pass
     user32.ShowWindow(hwnd, SW_MINIMIZE)
 
 
 def set_bounds(w, x, y, width, height):
+    if pytron_os:
+        try:
+            return pytron_os.set_bounds(get_hwnd(w), int(x), int(y), int(width), int(height))
+        except Exception:
+            pass
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    try:
-        from pytron.dependencies import pytron_os
-
-        pytron_os.set_bounds(hwnd, int(x), int(y), int(width), int(height))
-        return
-    except Exception:
-        pass
     user32.SetWindowPos(
         hwnd, 0, int(x), int(y), int(width), int(height), SWP_NOZORDER | SWP_NOACTIVATE
     )
 
 
 def close(w):
+    if pytron_os:
+        try:
+            return pytron_os.close(get_hwnd(w))
+        except Exception:
+            pass
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    try:
-        from pytron.dependencies import pytron_os
-
-        pytron_os.close(hwnd)
-        return
-    except Exception:
-        pass
     user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
 
 
@@ -253,12 +249,11 @@ def toggle_maximize(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return False
-    try:
-        from pytron.dependencies import pytron_os
-
-        return pytron_os.toggle_maximize(hwnd)
-    except Exception:
-        pass
+    if pytron_os:
+        try:
+            return pytron_os.toggle_maximize(hwnd)
+        except Exception:
+            pass
     is_zoomed = user32.IsZoomed(hwnd)
     if is_zoomed:
         user32.ShowWindow(hwnd, SW_RESTORE)
@@ -272,13 +267,11 @@ def set_always_on_top(w, enable):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    try:
-        from pytron.dependencies import pytron_os
-
-        pytron_os.set_always_on_top(hwnd, enable)
-        return
-    except Exception:
-        pass
+    if pytron_os:
+        try:
+            return pytron_os.set_always_on_top(hwnd, enable)
+        except Exception:
+            pass
     HWND_TOPMOST = -1
     HWND_NOTOPMOST = -2
     hwnd_insert_after = HWND_TOPMOST if enable else HWND_NOTOPMOST
@@ -291,13 +284,11 @@ def make_frameless(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    try:
-        from pytron.dependencies import pytron_os
-
-        pytron_os.make_frameless(hwnd)
-        return
-    except Exception:
-        pass
+    if pytron_os:
+        try:
+            return pytron_os.make_frameless(hwnd)
+        except Exception:
+            pass
     style = user32.GetWindowLongW(hwnd, GWL_STYLE)
     style = style & ~WS_CAPTION
     user32.SetWindowLongW(hwnd, GWL_STYLE, style)
@@ -308,13 +299,11 @@ def set_utility_window(w, enable):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    try:
-        from pytron.dependencies import pytron_os
-
-        pytron_os.set_utility_window(hwnd, enable)
-        return
-    except Exception:
-        pass
+    if pytron_os:
+        try:
+            return pytron_os.set_utility_window(hwnd, enable)
+        except Exception:
+            pass
     ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
     if enable:
         ex_style = (ex_style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW
@@ -330,13 +319,11 @@ def start_drag(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    try:
-        from pytron.dependencies import pytron_os
-
-        pytron_os.start_drag(hwnd)
-        return
-    except Exception:
-        pass
+    if pytron_os:
+        try:
+            return pytron_os.start_drag(hwnd)
+        except Exception:
+            pass
     user32.ReleaseCapture()
     user32.SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0)
 
@@ -345,13 +332,11 @@ def hide(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    try:
-        from pytron.dependencies import pytron_os
-
-        pytron_os.hide(hwnd)
-        return
-    except Exception:
-        pass
+    if pytron_os:
+        try:
+            return pytron_os.hide(hwnd)
+        except Exception:
+            pass
     user32.ShowWindow(hwnd, SW_HIDE)
 
 
@@ -359,12 +344,11 @@ def is_visible(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return False
-    try:
-        from pytron.dependencies import pytron_os
-
-        return pytron_os.is_visible(hwnd)
-    except Exception:
-        pass
+    if pytron_os:
+        try:
+            return pytron_os.is_visible(hwnd)
+        except Exception:
+            pass
     return bool(user32.IsWindowVisible(hwnd))
 
 
@@ -372,13 +356,11 @@ def show(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    try:
-        from pytron.dependencies import pytron_os
-
-        pytron_os.show(hwnd)
-        return
-    except Exception:
-        pass
+    if pytron_os:
+        try:
+            return pytron_os.show(hwnd)
+        except Exception:
+            pass
     user32.ShowWindow(hwnd, SW_SHOW)
     user32.SetForegroundWindow(hwnd)
 
@@ -387,13 +369,11 @@ def center(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    try:
-        from pytron.dependencies import pytron_os
-
-        pytron_os.center(hwnd)
-        return
-    except Exception:
-        pass
+    if pytron_os:
+        try:
+            return pytron_os.center(hwnd)
+        except Exception:
+            pass
     rect = ctypes.wintypes.RECT()
     user32.GetWindowRect(hwnd, ctypes.byref(rect))
     width = rect.right - rect.left
@@ -458,23 +438,30 @@ def set_border_color(w, color_hex):
     if not hwnd:
         return
 
-    try:
-        # Convert hex #RRGGBB to COLORREF (0x00BBGGRR)
-        color_hex = color_hex.lstrip("#")
-        if len(color_hex) == 6:
-            r = int(color_hex[0:2], 16)
-            g = int(color_hex[2:4], 16)
-            b = int(color_hex[4:6], 16)
-            color_ref = b << 16 | g << 8 | r
-        elif len(color_hex) == 8:
-            # Handle ARGB if needed, but DWM expects COLORREF (24-bit)
-            r = int(color_hex[2:4], 16)
-            g = int(color_hex[4:6], 16)
-            b = int(color_hex[6:8], 16)
-            color_ref = b << 16 | g << 8 | r
-        else:
-            return
+    if pytron_os:
+        try:
+            # Convert hex #RRGGBB to COLORREF (0x00BBGGRR)
+            color_hex = color_hex.lstrip("#")
+            if len(color_hex) == 6:
+                r = int(color_hex[0:2], 16)
+                g = int(color_hex[2:4], 16)
+                b = int(color_hex[4:6], 16)
+                color_ref = b << 16 | g << 8 | r
+            elif len(color_hex) == 8:
+                r = int(color_hex[2:4], 16)
+                g = int(color_hex[4:6], 16)
+                b = int(color_hex[6:8], 16)
+                color_ref = b << 16 | g << 8 | r
+            else:
+                return
 
+            pytron_os.set_border_color(hwnd, color_ref)
+            return
+        except Exception:
+            pass
+
+    try:
+        # Fallback to legacy ctypes
         dwmapi = ctypes.windll.dwmapi
         dwmapi.DwmSetWindowAttribute(
             hwnd,

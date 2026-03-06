@@ -7,6 +7,11 @@ from typing import Callable, List, Optional
 from .exceptions import TrayError
 from .utils import get_resource_path
 
+try:
+    from .dependencies import pytron_os
+except ImportError:
+    pytron_os = None
+
 # Platform-specific imports
 if sys.platform == "win32":
     import ctypes.wintypes
@@ -101,9 +106,15 @@ class SystemTray:
         platform = sys.platform
         if platform == "win32":
             self._stop_windows()
-            # Cleanup Icon handle to prevent leaks
+            # Cleanup icon handle to prevent leaks
             if self._hicon:
-                ctypes.windll.user32.DestroyIcon(self._hicon)
+                if pytron_os:
+                    try:
+                        pytron_os.tray_destroy_icon(self._hicon)
+                    except Exception:
+                        pass
+                else:
+                    ctypes.windll.user32.DestroyIcon(self._hicon)
                 self._hicon = None
 
     def _start_darwin(self, app):
@@ -204,6 +215,48 @@ class SystemTray:
         ready_event = threading.Event()
 
         def run_tray_thread():
+            if pytron_os and hasattr(pytron_os, "tray_v2_create"):
+                # ── RUST PATH v2 (tray-icon crate by Tauri team) ──────────
+                # Build items list and an id→MenuItem lookup table.
+                items = []
+                id_map = {}
+                for i, item in enumerate(self.menu_items):
+                    id_str = str(i)
+                    id_map[id_str] = item
+                    items.append((id_str, item.label, item.is_separator))
+
+                icon_path = None
+                if self.icon_path:
+                    icon_path = str(get_resource_path(self.icon_path))
+
+                try:
+                    pytron_os.tray_v2_create(self.title[:127], items, icon_path)
+                    self.logger.debug(f"[Tray] tray_v2_create OK — {len(items)} items")
+                    ready_event.set()
+
+                    while self._running:
+                        result = pytron_os.tray_v2_poll_event()
+                        if result is None:
+                            break  # WM_QUIT received — shutdown signal
+                        event_type, data = result
+                        self.logger.debug(f"[Tray] event={event_type} data={data!r}")
+                        if event_type in ("left_click", "double_click"):
+                            threading.Thread(target=app.show, daemon=True).start()
+                        elif event_type == "menu":
+                            item = id_map.get(data)
+                            if item and item.callback:
+                                threading.Thread(target=item.callback, daemon=True).start()
+                except Exception as e:
+                    self.logger.error(f"[Tray] v2 error: {e}", exc_info=True)
+                    ready_event.set()
+                finally:
+                    try:
+                        pytron_os.tray_v2_destroy()
+                    except Exception:
+                        pass
+                return  # done with rust v2 path
+
+            # ── CTYPES FALLBACK PATH ───────────────────────────────────────
             user32 = ctypes.windll.user32
             kernel32 = ctypes.windll.kernel32
             shell32 = ctypes.windll.shell32
@@ -361,7 +414,47 @@ class SystemTray:
         # Wait for tray to appear before returning (prevents race conditions)
         ready_event.wait(timeout=2.0)
 
+    def _show_menu_rs(self, hwnd):
+        """Show context menu using pytron_os (Rust path)."""
+        self.logger.warning(f"[Tray] _show_menu_rs called, {len(self.menu_items)} items, hwnd=0x{hwnd:X}")
+        if not self.menu_items:
+            self.logger.warning("[Tray] menu_items is empty — no menu to show")
+            return
+
+        hmenu = pytron_os.tray_create_popup_menu()
+        self.logger.warning(f"[Tray] CreatePopupMenu -> hmenu=0x{hmenu:X}")
+        if not hmenu:
+            self.logger.error("[Tray] CreatePopupMenu returned NULL")
+            return
+
+        for item in self.menu_items:
+            if item.is_separator:
+                pytron_os.tray_append_separator(hmenu)
+            else:
+                pytron_os.tray_append_menu_item(hmenu, MFT_STRING, item.id, item.label)
+                self.logger.warning(f"[Tray]   appended id={item.id} label={item.label!r}")
+
+        x, y = pytron_os.tray_get_cursor_pos()
+        self.logger.warning(f"[Tray] TrackPopupMenu at ({x}, {y})")
+
+        # TPM_RETURNCMD is OR'd in Rust; returns selected item ID directly (0 = dismissed).
+        # DestroyMenu is also called inside tray_track_popup_menu.
+        selected_id = pytron_os.tray_track_popup_menu(
+            hmenu, TPM_LEFTALIGN | TPM_RIGHTBUTTON, x, y, hwnd
+        )
+        self.logger.warning(f"[Tray] TrackPopupMenu returned selected_id={selected_id}")
+
+        if selected_id:
+            for item in self.menu_items:
+                if item.id == selected_id and item.callback:
+                    try:
+                        threading.Thread(target=item.callback, daemon=True).start()
+                    except Exception as e:
+                        self.logger.error(f"Menu callback failed: {e}")
+                    break
+
     def _show_menu(self, hwnd):
+        """Show context menu using ctypes (fallback path)."""
         hmenu = ctypes.windll.user32.CreatePopupMenu()
 
         for item in self.menu_items:
@@ -381,30 +474,39 @@ class SystemTray:
 
     def _stop_windows(self):
         self._running = False
+        # Unblock the v2 tray poll thread which is blocking in GetMessageW.
+        if pytron_os and hasattr(pytron_os, "tray_v2_interrupt"):
+            try:
+                pytron_os.tray_v2_interrupt()
+            except Exception:
+                pass
         if self._hwnd:
-            # Force wake up the message loop to exit?
-            # GetMessage is blocking. We need to post a dummy message or WM_NULL/WM_CLOSE
-            ctypes.windll.user32.PostMessageW(self._hwnd, 0x0010, 0, 0)  # WM_CLOSE
+            if pytron_os:
+                try:
+                    pytron_os.tray_remove_icon(self._hwnd, 1)
+                except Exception:
+                    pass
+                try:
+                    pytron_os.tray_post_message(self._hwnd, 0x0010, 0, 0)  # WM_CLOSE
+                except Exception:
+                    pass
+            else:
+                # ctypes fallback: delete icon then wake message loop
+                nid = NOTIFYICONDATAW()
+                nid.cbSize = ctypes.sizeof(NOTIFYICONDATAW)
+                nid.hWnd = self._hwnd
+                nid.uID = 1
+                shell32 = ctypes.windll.shell32
+                shell32.Shell_NotifyIconW.argtypes = [
+                    ctypes.c_ulong,
+                    ctypes.POINTER(NOTIFYICONDATAW),
+                ]
+                shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
+                ctypes.windll.user32.PostMessageW(self._hwnd, 0x0010, 0, 0)  # WM_CLOSE
+            self._hwnd = None
 
         # Wait for thread to finish to prevent zombies
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2.0)
             if self._thread.is_alive():
                 self.logger.warning("Tray thread did not exit cleanly.")
-
-        # Also delete icon
-        if self._hwnd:
-            nid = NOTIFYICONDATAW()
-            nid.cbSize = ctypes.sizeof(NOTIFYICONDATAW)
-            nid.hWnd = self._hwnd
-            nid.uID = 1
-
-            shell32 = ctypes.windll.shell32
-            # Use strict argtypes with shared structure
-            shell32.Shell_NotifyIconW.argtypes = [
-                ctypes.c_ulong,
-                ctypes.POINTER(NOTIFYICONDATAW),
-            ]
-
-            shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
-            self._hwnd = None

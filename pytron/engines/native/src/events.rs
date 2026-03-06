@@ -18,16 +18,12 @@ pub enum UserEvent {
     SetVisible(bool),
     DragWindow,
     SetAlwaysOnTop(bool),
-    Notification(String, String), // Title, Message
     TaskbarProgress(i32, i32, i32), // State, Value, Max
     SetResizable(bool),
     SetFullscreen(bool),
     CenterWindow,
     SetPreventClose(bool),
-    CreateTray(String, Option<String>), // tooltip, icon_path
-    TrayMenuClick(String), // id
     SetDecorations(bool),
-    MessageBox(String, String, String, String), // Title, Message, Level, Seq
     OpenExternal(String),
     StateUpdate(String, String), // Key, Value (JSON)
 }

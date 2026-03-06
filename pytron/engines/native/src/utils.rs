@@ -32,11 +32,4 @@ impl<T: Clone> Clone for SendWrapper<T> {
     }
 }
 
-#[cfg(not(target_os = "android"))]
-pub fn load_icon(path: &std::path::Path) -> Result<tray_icon::Icon, Box<dyn std::error::Error>> {
-    let image = image::open(path)?;
-    let rgba = image.to_rgba8();
-    let (width, height) = rgba.dimensions();
-    let rgba_bytes = rgba.into_raw();
-    Ok(tray_icon::Icon::from_rgba(rgba_bytes, width, height)?)
-}
+// load_icon removed — icon loading for tray is now owned by pytron_os

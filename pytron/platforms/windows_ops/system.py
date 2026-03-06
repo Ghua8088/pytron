@@ -6,6 +6,11 @@ from .utils import get_hwnd
 from . import toasts
 
 try:
+    from pytron.dependencies import pytron_os
+except ImportError:
+    pytron_os = None
+
+try:
     import winreg
 except ImportError:
     winreg = None
@@ -127,6 +132,15 @@ if user32 and shell32 and kernel32 and comdlg32:
 
 
 def notification(w, title, message, icon=None):
+    if pytron_os:
+        try:
+            hwnd = get_hwnd(w)
+            if hwnd:
+                pytron_os.show_notification(hwnd, title, message, str(os.path.abspath(icon)) if icon else None)
+                return
+        except Exception as e:
+            print(f"[Pytron] Notification error (pytron_os): {e}")
+
     try:
         hwnd = get_hwnd(w)
         # Even if hwnd is None (e.g. hidden mode), we might need a dummy HWND for the tray api.
@@ -193,6 +207,11 @@ def toast(w, config):
 
 
 def message_box(w, title, message, style=0):
+    if pytron_os:
+        try:
+            return pytron_os.message_box(get_hwnd(w), title, message, style)
+        except Exception:
+            pass
     hwnd = get_hwnd(w)
     return user32.MessageBoxW(hwnd, message, title, style)
 
@@ -200,6 +219,12 @@ def message_box(w, title, message, style=0):
 def set_window_icon(w, icon_path):
     if not icon_path or not os.path.exists(icon_path):
         return
+    if pytron_os:
+        try:
+            pytron_os.set_window_icon(get_hwnd(w), str(os.path.abspath(icon_path)))
+            return
+        except Exception:
+            pass
     hwnd = get_hwnd(w)
     try:
         # LR_LOADFROMFILE | LR_DEFAULTSIZE
@@ -259,6 +284,14 @@ def _prepare_ofn(w, title, default_path, file_types, file_buffer_size=1024):
 
 
 def open_file_dialog(w, title, default_path=None, file_types=None):
+    if pytron_os:
+        try:
+            res = pytron_os.open_file_dialog(get_hwnd(w), title, default_path, str(file_types))
+            if res:
+                return res
+        except Exception:
+            pass
+
     ofn, buff = _prepare_ofn(w, title, default_path, file_types)
     ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR
 
@@ -268,6 +301,14 @@ def open_file_dialog(w, title, default_path=None, file_types=None):
 
 
 def save_file_dialog(w, title, default_path=None, default_name=None, file_types=None):
+    if pytron_os:
+        try:
+            res = pytron_os.save_file_dialog(get_hwnd(w), title, default_path, default_name, str(file_types))
+            if res:
+                return res
+        except Exception:
+            pass
+
     path = default_path
     if default_name:
         if path:
@@ -284,6 +325,14 @@ def save_file_dialog(w, title, default_path=None, default_name=None, file_types=
 
 
 def open_folder_dialog(w, title, default_path=None):
+    if pytron_os:
+        try:
+            res = pytron_os.open_folder_dialog(get_hwnd(w), title, default_path)
+            if res:
+                return res
+        except Exception:
+            pass
+
     bif = BROWSEINFOW()
     bif.hwndOwner = get_hwnd(w)
     bif.lpszTitle = title
@@ -354,154 +403,46 @@ def set_launch_on_boot(app_name, exe_path, enable=True):
 
 
 def set_app_id(app_id):
+    if pytron_os:
+        try:
+            pytron_os.set_app_id(app_id)
+            return
+        except Exception:
+            pass
     try:
         shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
     except Exception as e:
         print(f"[Pytron] Debug: Failed to set app model ID: {e}")
 
 
-# Taskbar Progress (Using COM - Requires valid ITaskbarList3 definition)
-# For robustness, we catch exceptions but don't strictly type COM interfaces here
-# as that requires a larger struct definition block which is already present but complex.
-_taskbar_list = None
-
-
-def _init_taskbar():
-    global _taskbar_list
-    if _taskbar_list:
-        return _taskbar_list
-    try:
-        try:
-            if hasattr(ctypes, "windll"):
-                ctypes.windll.ole32.CoInitialize(0)
-        except Exception as e:
-            print(f"[Pytron] Debug: Failed to initialize COM: {e}")
-            return None
-
-        CLSID_TaskbarList = "{56FDF344-FD6D-11d0-958A-006097C9A090}"
-        import comtypes.client
-        from comtypes import GUID, IUnknown, COMMETHOD, HRESULT
-
-        class ITaskbarList3(IUnknown):
-            _iid_ = GUID("{EA1AFB91-9E28-4B86-90E9-9E9F8A5EEFAF}")
-            _methods_ = [
-                COMMETHOD([], HRESULT, "HrInit"),
-                COMMETHOD(
-                    [], HRESULT, "AddTab", (["in"], ctypes.wintypes.HWND, "hwnd")
-                ),
-                COMMETHOD(
-                    [], HRESULT, "DeleteTab", (["in"], ctypes.wintypes.HWND, "hwnd")
-                ),
-                COMMETHOD(
-                    [], HRESULT, "ActivateTab", (["in"], ctypes.wintypes.HWND, "hwnd")
-                ),
-                COMMETHOD(
-                    [], HRESULT, "SetActiveAlt", (["in"], ctypes.wintypes.HWND, "hwnd")
-                ),
-                COMMETHOD(
-                    [],
-                    HRESULT,
-                    "MarkFullscreenWindow",
-                    (["in"], ctypes.wintypes.HWND, "hwnd"),
-                    (["in"], ctypes.c_int, "fFullscreen"),
-                ),
-                COMMETHOD(
-                    [],
-                    HRESULT,
-                    "SetProgressValue",
-                    (["in"], ctypes.wintypes.HWND, "hwnd"),
-                    (["in"], ctypes.c_ulonglong, "ullCompleted"),
-                    (["in"], ctypes.c_ulonglong, "ullTotal"),
-                ),
-                COMMETHOD(
-                    [],
-                    HRESULT,
-                    "SetProgressState",
-                    (["in"], ctypes.wintypes.HWND, "hwnd"),
-                    (["in"], ctypes.c_int, "tbpFlags"),
-                ),
-            ]
-
-        _taskbar_list = comtypes.client.CreateObject(
-            CLSID_TaskbarList, interface=ITaskbarList3
-        )
-        _taskbar_list.HrInit()
-        return _taskbar_list
-    except Exception as e:
-        print(f"[Pytron] Taskbar Init Failed: {e}")
-        return None
-
-
 def set_taskbar_progress(w, state="normal", value=0, max_value=100):
-    try:
-        tbl = _init_taskbar()
-        if not tbl:
+    if pytron_os:
+        try:
+            hwnd = get_hwnd(w)
+            pytron_os.set_taskbar_progress(hwnd, state, int(value), int(max_value))
             return
-        hwnd = get_hwnd(w)
-        flags = TBPF_NOPROGRESS
-        if state == "indeterminate":
-            flags = TBPF_INDETERMINATE
-        elif state == "normal":
-            flags = TBPF_NORMAL
-        elif state == "error":
-            flags = TBPF_ERROR
-        elif state == "paused":
-            flags = TBPF_PAUSED
-        tbl.SetProgressState(hwnd, flags)
-        if state in ("normal", "error", "paused"):
-            tbl.SetProgressValue(hwnd, int(value), int(max_value))
-    except Exception as e:
-        print(f"[Pytron] Taskbar progress error: {e}")
+        except Exception as e:
+            print(f"[Pytron] Taskbar progress error (pytron_os): {e}")
 
 
 def set_clipboard_text(text: str):
     """Copies text to the system clipboard."""
-    if not user32:
-        return False
-    try:
-        if not user32.OpenClipboard(0):
-            return False
-
-        user32.EmptyClipboard()
-
-        text_unicode = text
-        size = (len(text_unicode) + 1) * 2
-        h_mem = kernel32.GlobalAlloc(0x0042, size)  # GMEM_MOVEABLE | GMEM_ZEROINIT
-
-        p_mem = kernel32.GlobalLock(h_mem)
-        ctypes.memmove(p_mem, text_unicode, size)
-        kernel32.GlobalUnlock(h_mem)
-
-        user32.SetClipboardData(13, h_mem)  # CF_UNICODETEXT
-        user32.CloseClipboard()
-        return True
-    except Exception as e:
-        print(f"[Pytron] Clipboard Set Error: {e}")
-        return False
+    if pytron_os:
+        try:
+            return pytron_os.set_clipboard_text(text)
+        except Exception as e:
+            print(f"[Pytron] Clipboard Set Error (pytron_os): {e}")
+    return False
 
 
 def get_clipboard_text():
     """Returns text from the system clipboard."""
-    if not user32:
-        return None
-    try:
-        if not user32.OpenClipboard(0):
-            return None
-
-        h_mem = user32.GetClipboardData(13)
-        if not h_mem:
-            user32.CloseClipboard()
-            return None
-
-        p_mem = kernel32.GlobalLock(h_mem)
-        text = ctypes.c_wchar_p(p_mem).value
-        kernel32.GlobalUnlock(p_mem)
-
-        user32.CloseClipboard()
-        return text
-    except Exception as e:
-        print(f"[Pytron] Clipboard Get Error: {e}")
-        return None
+    if pytron_os:
+        try:
+            return pytron_os.get_clipboard_text()
+        except Exception as e:
+            print(f"[Pytron] Clipboard Get Error (pytron_os): {e}")
+    return None
 
 
 def get_system_info():
