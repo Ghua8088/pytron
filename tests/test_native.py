@@ -6,10 +6,10 @@ import pytest
 from unittest.mock import MagicMock, patch, call
 from pytron.apputils.native import NativeMixin
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 class MockApp(NativeMixin):
     def __init__(self):
@@ -34,6 +34,7 @@ def app_with_window():
 # set_start_on_boot — dev mode guard
 # ---------------------------------------------------------------------------
 
+
 def test_set_start_on_boot_dev_mode_returns_false(app):
     """Not frozen → always skip without touching OS."""
     with patch("sys.frozen", False, create=True):
@@ -52,6 +53,7 @@ def test_set_start_on_boot_dev_mode_never_calls_pytron_os(app):
 # ---------------------------------------------------------------------------
 # set_start_on_boot — pytron_os (Rust) path
 # ---------------------------------------------------------------------------
+
 
 def test_set_start_on_boot_via_pytron_os(app):
     """Rust path succeeds → returns True, correct args forwarded."""
@@ -87,6 +89,7 @@ def test_set_start_on_boot_safe_name_sanitisation(app):
 # ---------------------------------------------------------------------------
 # set_start_on_boot — platform fallback (pytron_os absent / returns False)
 # ---------------------------------------------------------------------------
+
 
 def test_set_start_on_boot_windows_fallback_when_pytron_os_none(app):
     """pytron_os=None → Windows impl is called."""
@@ -155,7 +158,9 @@ def test_set_start_on_boot_darwin_fallback(app):
     with patch("sys.frozen", True, create=True):
         with patch("pytron.apputils.native.pytron_os", None):
             with patch("platform.system", return_value="Darwin"):
-                with patch("pytron.platforms.darwin.DarwinImplementation") as MockDarwin:
+                with patch(
+                    "pytron.platforms.darwin.DarwinImplementation"
+                ) as MockDarwin:
                     MockDarwin.return_value.set_launch_on_boot.return_value = True
                     result = app.set_start_on_boot(True)
     MockDarwin.return_value.set_launch_on_boot.assert_called_once()
@@ -186,6 +191,7 @@ def test_set_start_on_boot_no_window_delegation(app):
 # message_box
 # ---------------------------------------------------------------------------
 
+
 def test_message_box_delegates_to_first_window(app_with_window):
     app_with_window.message_box("Title", "Msg")
     app_with_window.windows[0].message_box.assert_called_with("Title", "Msg", 0)
@@ -208,6 +214,7 @@ def test_message_box_returns_zero_without_window(app):
 # ---------------------------------------------------------------------------
 # dialogs
 # ---------------------------------------------------------------------------
+
 
 def test_dialog_save_file_delegates(app_with_window):
     app_with_window.dialog_save_file("Save")
@@ -246,6 +253,7 @@ def test_dialog_open_folder_returns_none_without_window(app):
 # ---------------------------------------------------------------------------
 # system_notification
 # ---------------------------------------------------------------------------
+
 
 def test_system_notification_delegates(app_with_window):
     app_with_window.config["icon"] = "icon.ico"
@@ -299,6 +307,7 @@ def test_system_notification_tries_next_window_on_exception(app):
 # show_toast
 # ---------------------------------------------------------------------------
 
+
 def test_show_toast_delegates(app_with_window):
     cfg = {"title": "Hello", "body": "World"}
     app_with_window.show_toast(cfg)
@@ -320,6 +329,7 @@ def test_show_toast_stops_after_first_success(app):
 # ---------------------------------------------------------------------------
 # clipboard
 # ---------------------------------------------------------------------------
+
 
 def test_copy_to_clipboard_delegates(app_with_window):
     app_with_window.windows[0]._platform.set_clipboard_text.return_value = True
@@ -345,8 +355,11 @@ def test_get_clipboard_text_returns_none_without_window(app):
 # get_system_info
 # ---------------------------------------------------------------------------
 
+
 def test_get_system_info_delegates(app_with_window):
-    app_with_window.windows[0]._platform.get_system_info.return_value = {"os": "Windows"}
+    app_with_window.windows[0]._platform.get_system_info.return_value = {
+        "os": "Windows"
+    }
     assert app_with_window.get_system_info() == {"os": "Windows"}
 
 

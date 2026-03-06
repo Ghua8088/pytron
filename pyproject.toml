@@ -28,7 +28,6 @@ dependencies = [
   "pyinstaller",
   "Pillow",
   "rich",
-  "lief",
   "nuitka",
   "zstandard",
   "comtypes; sys_platform == 'win32'",

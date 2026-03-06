@@ -1,5 +1,6 @@
 try:
     from pytron.dependencies import pytron_os
+
     print("pytron_os is available")
     print(f"Functions: {dir(pytron_os)}")
 except ImportError as e:

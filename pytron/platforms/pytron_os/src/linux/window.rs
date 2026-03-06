@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use std::os::raw::{c_char, c_int, c_void, c_double};
+use std::os::raw::{c_char, c_int, c_void};
 use std::ffi::CString;
 
 // ─── GTK/GDK extern C ────────────────────────────────────────────────────────
@@ -174,7 +174,9 @@ pub fn set_fullscreen(hwnd_val: usize, enable: bool) -> PyResult<()> {
 
 #[pyfunction]
 #[pyo3(signature = (hwnd_val, title, message, icon_path=None))]
-pub fn show_notification(_hwnd_val: usize, title: String, message: String, _icon_path: Option<String>) -> PyResult<()> {
+pub fn show_notification(hwnd_val: usize, title: String, message: String, icon_path: Option<String>) -> PyResult<()> {
+    let _ = hwnd_val;
+    let _ = icon_path;
     // Use notify-send (libnotify CLI, present on most desktops)
     std::process::Command::new("notify-send")
         .arg("--")

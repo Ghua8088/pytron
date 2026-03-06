@@ -155,7 +155,9 @@ pub fn set_fullscreen(hwnd_val: usize, enable: bool) -> PyResult<()> {
 
 #[pyfunction]
 #[pyo3(signature = (hwnd_val, title, message, icon_path=None))]
-pub fn show_notification(_hwnd_val: usize, title: String, message: String, _icon_path: Option<String>) -> PyResult<()> {
+pub fn show_notification(hwnd_val: usize, title: String, message: String, icon_path: Option<String>) -> PyResult<()> {
+    let _ = hwnd_val;
+    let _ = icon_path;
     unsafe {
         let center: id = msg_send![class!(NSUserNotificationCenter), defaultUserNotificationCenter];
         let notif: id = msg_send![class!(NSUserNotification), new];

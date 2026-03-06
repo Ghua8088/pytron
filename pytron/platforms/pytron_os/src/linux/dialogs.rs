@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 use std::os::raw::{c_char, c_int, c_void};
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 
 extern "C" {
     fn gtk_init_check(argc: *mut c_int, argv: *mut *mut *mut c_char) -> c_int;
@@ -61,7 +61,7 @@ pub fn message_box(py: Python<'_>, _hwnd_val: usize, title: String, message: Str
     Ok(result)
 }
 
-unsafe fn run_file_chooser(title: &str, action: c_int) -> Option<String> {
+unsafe fn run_file_chooser(title: &str, _action: c_int) -> Option<String> {
     let c_title  = CString::new(title.as_bytes()).unwrap();
     let c_ok     = CString::new("_OK").unwrap();
     let c_cancel = CString::new("_Cancel").unwrap();

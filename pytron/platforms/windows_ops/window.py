@@ -189,9 +189,12 @@ def set_fullscreen(w, enable):
         user32.GetMonitorInfoW(hmon, ctypes.byref(mi))
         r = mi.rcMonitor
         user32.SetWindowPos(
-            hwnd, -1,  # HWND_TOPMOST
-            r.left, r.top,
-            r.right - r.left, r.bottom - r.top,
+            hwnd,
+            -1,  # HWND_TOPMOST
+            r.left,
+            r.top,
+            r.right - r.left,
+            r.bottom - r.top,
             SWP_FRAMECHANGED,
         )
     else:
@@ -200,9 +203,12 @@ def set_fullscreen(w, enable):
             user32.SetWindowLongW(hwnd, GWL_STYLE, data["style"])
             left, top, right, bottom = data["rect"]
             user32.SetWindowPos(
-                hwnd, 0,
-                left, top,
-                right - left, bottom - top,
+                hwnd,
+                0,
+                left,
+                top,
+                right - left,
+                bottom - top,
                 SWP_FRAMECHANGED,
             )
 
@@ -222,7 +228,9 @@ def minimize(w):
 def set_bounds(w, x, y, width, height):
     if pytron_os:
         try:
-            return pytron_os.set_bounds(get_hwnd(w), int(x), int(y), int(width), int(height))
+            return pytron_os.set_bounds(
+                get_hwnd(w), int(x), int(y), int(width), int(height)
+            )
         except Exception:
             pass
     hwnd = get_hwnd(w)

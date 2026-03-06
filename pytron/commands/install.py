@@ -128,8 +128,7 @@ def cmd_install(args: argparse.Namespace) -> int:
 
             # Use run_command_with_output to stream logs cleanly above the progress bar
             ret = run_command_with_output(
-                [str(venv_python), "-m", "pip", "install", "--no-build-isolation"]
-                + packages_to_install,
+                [str(venv_python), "-m", "pip", "install"] + packages_to_install,
                 env=get_sanitized_env(),
             )
 
@@ -245,8 +244,7 @@ def cmd_install(args: argparse.Namespace) -> int:
                 task = progress.add_task("Syncing Dependencies...", total=None)
 
                 ret = run_command_with_output(
-                    [str(venv_python), "-m", "pip", "install", "--no-build-isolation"]
-                    + current_deps
+                    [str(venv_python), "-m", "pip", "install"] + current_deps
                 )
 
                 progress.stop()

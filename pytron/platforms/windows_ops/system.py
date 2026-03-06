@@ -136,7 +136,9 @@ def notification(w, title, message, icon=None):
         try:
             hwnd = get_hwnd(w)
             if hwnd:
-                pytron_os.show_notification(hwnd, title, message, str(os.path.abspath(icon)) if icon else None)
+                pytron_os.show_notification(
+                    hwnd, title, message, str(os.path.abspath(icon)) if icon else None
+                )
                 return
         except Exception as e:
             print(f"[Pytron] Notification error (pytron_os): {e}")
@@ -286,7 +288,9 @@ def _prepare_ofn(w, title, default_path, file_types, file_buffer_size=1024):
 def open_file_dialog(w, title, default_path=None, file_types=None):
     if pytron_os:
         try:
-            res = pytron_os.open_file_dialog(get_hwnd(w), title, default_path, str(file_types))
+            res = pytron_os.open_file_dialog(
+                get_hwnd(w), title, default_path, str(file_types)
+            )
             if res:
                 return res
         except Exception:
@@ -303,7 +307,9 @@ def open_file_dialog(w, title, default_path=None, file_types=None):
 def save_file_dialog(w, title, default_path=None, default_name=None, file_types=None):
     if pytron_os:
         try:
-            res = pytron_os.save_file_dialog(get_hwnd(w), title, default_path, default_name, str(file_types))
+            res = pytron_os.save_file_dialog(
+                get_hwnd(w), title, default_path, default_name, str(file_types)
+            )
             if res:
                 return res
         except Exception:

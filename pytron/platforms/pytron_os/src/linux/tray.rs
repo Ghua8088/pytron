@@ -76,13 +76,13 @@ fn ensure_gtk_init() {
 // ─── GLib signal callback ────────────────────────────────────────────────────
 
 // Called when the status icon is activated (left-click)
-unsafe extern "C" fn on_activate(icon: *mut c_void, data: *mut c_void) {
+unsafe extern "C" fn on_activate(_icon: *mut c_void, data: *mut c_void) {
     let hwnd_val = data as usize;
     push_msg(hwnd_val, 0x0201, 0, 0); // WM_LBUTTONDOWN-style
 }
 
 // Called for right-click popup-menu request
-unsafe extern "C" fn on_popup_menu(icon: *mut c_void, button: c_uint, time: u32, data: *mut c_void) {
+unsafe extern "C" fn on_popup_menu(_icon: *mut c_void, _button: c_uint, _time: u32, data: *mut c_void) {
     let hwnd_val = data as usize;
     push_msg(hwnd_val, 0x0205, 0, 0); // WM_RBUTTONUP-style
 }

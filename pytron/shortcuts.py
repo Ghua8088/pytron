@@ -232,7 +232,9 @@ class ShortcutManager:
             sent = False
             if pytron_os:
                 try:
-                    sent = pytron_os.post_thread_message(self._thread_id, WM_APP_REGISTER, 0, 0)
+                    sent = pytron_os.post_thread_message(
+                        self._thread_id, WM_APP_REGISTER, 0, 0
+                    )
                 except Exception:
                     pass
 
@@ -245,6 +247,7 @@ class ShortcutManager:
                     if success:
                         break
                     import time
+
                     time.sleep(0.05)
                 else:
                     self.logger.error(
@@ -373,7 +376,9 @@ class ShortcutManager:
                 sent = False
                 if pytron_os:
                     try:
-                        sent = pytron_os.post_thread_message(self._thread_id, 0x0012, 0, 0)
+                        sent = pytron_os.post_thread_message(
+                            self._thread_id, 0x0012, 0, 0
+                        )
                     except Exception:
                         pass
                 if not sent:

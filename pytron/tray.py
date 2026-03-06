@@ -245,7 +245,9 @@ class SystemTray:
                         elif event_type == "menu":
                             item = id_map.get(data)
                             if item and item.callback:
-                                threading.Thread(target=item.callback, daemon=True).start()
+                                threading.Thread(
+                                    target=item.callback, daemon=True
+                                ).start()
                 except Exception as e:
                     self.logger.error(f"[Tray] v2 error: {e}", exc_info=True)
                     ready_event.set()
@@ -416,7 +418,9 @@ class SystemTray:
 
     def _show_menu_rs(self, hwnd):
         """Show context menu using pytron_os (Rust path)."""
-        self.logger.warning(f"[Tray] _show_menu_rs called, {len(self.menu_items)} items, hwnd=0x{hwnd:X}")
+        self.logger.warning(
+            f"[Tray] _show_menu_rs called, {len(self.menu_items)} items, hwnd=0x{hwnd:X}"
+        )
         if not self.menu_items:
             self.logger.warning("[Tray] menu_items is empty — no menu to show")
             return
@@ -432,7 +436,9 @@ class SystemTray:
                 pytron_os.tray_append_separator(hmenu)
             else:
                 pytron_os.tray_append_menu_item(hmenu, MFT_STRING, item.id, item.label)
-                self.logger.warning(f"[Tray]   appended id={item.id} label={item.label!r}")
+                self.logger.warning(
+                    f"[Tray]   appended id={item.id} label={item.label!r}"
+                )
 
         x, y = pytron_os.tray_get_cursor_pos()
         self.logger.warning(f"[Tray] TrackPopupMenu at ({x}, {y})")

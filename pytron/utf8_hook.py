@@ -43,6 +43,7 @@ def _set_utf8_mode():
         # Try Rust extension first (no ctypes overhead)
         try:
             from pytron.dependencies import pytron_os as _pytron_os
+
             if _pytron_os:
                 _set_ok = _pytron_os.set_console_utf8()
         except Exception:

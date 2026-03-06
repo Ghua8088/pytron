@@ -641,6 +641,7 @@ class Webview:
         # Native Toggle using pytron_os check
         if sys.platform == "win32" and self.hwnd:
             from .dependencies import pytron_os
+
             if pytron_os:
                 try:
                     return pytron_os.toggle_maximize(self.hwnd)
@@ -653,6 +654,7 @@ class Webview:
         """Checks if the window is currently visible."""
         if sys.platform == "win32" and self.hwnd:
             from .dependencies import pytron_os
+
             if pytron_os:
                 try:
                     return pytron_os.is_visible(self.hwnd)
@@ -672,6 +674,7 @@ class Webview:
             call_native(enable)
         elif sys.platform == "win32" and self.hwnd:
             from .dependencies import pytron_os
+
             if pytron_os:
                 try:
                     pytron_os.set_always_on_top(self.hwnd, enable)
