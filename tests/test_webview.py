@@ -16,8 +16,7 @@ def mock_native():
     native_inst = MagicMock()
     native_mod.NativeWebview.return_value = native_inst
 
-    with patch("pytron.webview.pytron_native", native_mod), \
-         patch("threading.Thread"):
+    with patch("pytron.webview.pytron_native", native_mod), patch("threading.Thread"):
         yield native_mod, native_inst
 
 
@@ -36,6 +35,7 @@ def webview_config():
 def _make_webview(config, native_mod):
     """Import inside function to avoid module-level side-effects."""
     from pytron.webview import Webview
+
     return Webview(config)
 
 
@@ -43,16 +43,14 @@ def test_webview_init_error_handling(webview_config):
     from pytron.webview import Webview
 
     # 1. Binary missing
-    with patch("pytron.webview.pytron_native", None), \
-         patch("threading.Thread"):
+    with patch("pytron.webview.pytron_native", None), patch("threading.Thread"):
         with pytest.raises(NativeEngineError) as exc:
             Webview(webview_config)
         assert "binary" in str(exc.value)
 
     # 2. WebView2 conflict 0x8007139F
     native_mod = MagicMock()
-    with patch("pytron.webview.pytron_native", native_mod), \
-         patch("threading.Thread"):
+    with patch("pytron.webview.pytron_native", native_mod), patch("threading.Thread"):
         with patch.object(
             native_mod,
             "NativeWebview",
@@ -65,6 +63,7 @@ def test_webview_init_error_handling(webview_config):
 
 def test_webview_init_success(mock_native, webview_config):
     from pytron.webview import Webview
+
     native_mod, native_inst = mock_native
 
     wv = Webview(webview_config)
@@ -72,9 +71,9 @@ def test_webview_init_success(mock_native, webview_config):
     native_mod.NativeWebview.assert_called_with(
         webview_config["debug"],
         "about:blank",
-        ANY,   # root_path
+        ANY,  # root_path
         True,  # resizable
-        False, # frameless
+        False,  # frameless
         None,  # store_instance
     )
     assert wv._start_url.endswith("index.html")
@@ -82,6 +81,7 @@ def test_webview_init_success(mock_native, webview_config):
 
 def test_webview_navigate(mock_native, webview_config):
     from pytron.webview import Webview
+
     native_mod, native_inst = mock_native
 
     wv = Webview(webview_config)
@@ -93,6 +93,7 @@ def test_webview_navigate(mock_native, webview_config):
 
 def test_webview_set_title(mock_native, webview_config):
     from pytron.webview import Webview
+
     _, native_inst = mock_native
 
     wv = Webview(webview_config)
@@ -102,6 +103,7 @@ def test_webview_set_title(mock_native, webview_config):
 
 def test_webview_eval(mock_native, webview_config):
     from pytron.webview import Webview
+
     _, native_inst = mock_native
 
     wv = Webview(webview_config)
@@ -111,6 +113,7 @@ def test_webview_eval(mock_native, webview_config):
 
 def test_webview_bind(mock_native, webview_config):
     from pytron.webview import Webview
+
     _, native_inst = mock_native
 
     wv = Webview(webview_config)
@@ -120,6 +123,7 @@ def test_webview_bind(mock_native, webview_config):
 
 def test_webview_platform_methods(mock_native, webview_config):
     from pytron.webview import Webview
+
     _, native_inst = mock_native
 
     wv = Webview(webview_config)
@@ -139,6 +143,7 @@ def test_webview_platform_methods(mock_native, webview_config):
 
 def test_webview_close(mock_native, webview_config):
     from pytron.webview import Webview
+
     _, native_inst = mock_native
 
     wv = Webview(webview_config)
@@ -148,6 +153,7 @@ def test_webview_close(mock_native, webview_config):
 
 def test_webview_hide_show(mock_native, webview_config):
     from pytron.webview import Webview
+
     _, native_inst = mock_native
 
     cfg = {**webview_config, "start_hidden": True}
@@ -168,10 +174,12 @@ def test_webview_windows_specific(webview_config):
 
     cfg = {**webview_config, "hide_from_taskbar": True}
 
-    with patch("pytron.webview.pytron_native", native_mod), \
-         patch("threading.Thread"), \
-         patch("sys.platform", "win32"), \
-         patch("pytron.platforms.windows.WindowsImplementation") as mock_win, \
-         patch.object(Webview, "hwnd", new_callable=PropertyMock, return_value=12345):
+    with patch("pytron.webview.pytron_native", native_mod), patch(
+        "threading.Thread"
+    ), patch("sys.platform", "win32"), patch(
+        "pytron.platforms.windows.WindowsImplementation"
+    ) as mock_win, patch.object(
+        Webview, "hwnd", new_callable=PropertyMock, return_value=12345
+    ):
         wv = Webview(cfg)
         mock_win.return_value.set_utility_window.assert_called_with(12345, True)
