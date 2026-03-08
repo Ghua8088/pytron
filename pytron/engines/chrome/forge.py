@@ -2,7 +2,7 @@ import os
 import zipfile
 import shutil
 import requests
-import platform
+import sys
 import logging
 from ...exceptions import ForgeError
 
@@ -13,10 +13,10 @@ ELECTRON_VERSION = "30.0.6"  # Stable version used for the Mojo Bridge
 
 
 def get_electron_url():
-    system = platform.system().lower()
+    system = sys.platform  # 'win32', 'darwin', or 'linux'
     arch = "x64"  # Default to x64 for now
 
-    if system == "windows":
+    if system == "win32":
         return f"https://github.com/electron/electron/releases/download/v{ELECTRON_VERSION}/electron-v{ELECTRON_VERSION}-win32-{arch}.zip"
     elif system == "darwin":
         return f"https://github.com/electron/electron/releases/download/v{ELECTRON_VERSION}/electron-v{ELECTRON_VERSION}-darwin-{arch}.zip"
@@ -143,7 +143,7 @@ class ChromeForge:
 
     def provision(self):
         """Ensures the Chrome engine is installed and ready."""
-        exe_name = "electron.exe" if platform.system() == "Windows" else "electron"
+        exe_name = "electron.exe" if sys.platform == "win32" else "electron"
         exe_path = os.path.join(self.target_dir, exe_name)
 
         if not os.path.exists(exe_path):

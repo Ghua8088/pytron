@@ -48,7 +48,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://pytron-kit.github.io/"
 Repository = "https://github.com/Ghua8088/pytron-kit"
-
+asyncio_mode = "auto"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v -ra --tb=short"

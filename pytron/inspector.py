@@ -3,7 +3,7 @@ import traceback
 import base64
 import time
 import os
-import platform
+import sys
 from collections import deque
 from .serializer import pytron_serialize
 
@@ -88,7 +88,7 @@ class Inspector:
                 "uptime": round(time.time() - self.start_time, 1),
                 "pid": os.getpid(),
                 "threads": self._proc.num_threads(),
-                "platform": f"{platform.system()} {platform.release()}",
+                "platform": sys.platform,
             }
         except Exception:
             return {

@@ -1,7 +1,6 @@
 import os
 import sys
 import subprocess
-import platform
 import logging
 import shutil
 
@@ -22,7 +21,7 @@ class ServoForge:
 
     def provision(self):
         """Ensures the Servo engine (miniservo rust binary) is compiled and ready."""
-        exe_name = "miniservo.exe" if platform.system() == "Windows" else "miniservo"
+        exe_name = "miniservo.exe" if sys.platform == "win32" else "miniservo"
         exe_path = os.path.join(self.target_dir, exe_name)
 
         if not os.path.exists(exe_path):
@@ -53,7 +52,7 @@ class ServoForge:
 
             # Copy the binary to target_dir
             target_debug_exe = (
-                "servo-shell.exe" if platform.system() == "Windows" else "servo-shell"
+                "servo-shell.exe" if sys.platform == "win32" else "servo-shell"
             )
             compiled_bin = os.path.join(
                 shell_dir, "target", "release", target_debug_exe

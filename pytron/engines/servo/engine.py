@@ -3,7 +3,6 @@ import sys
 import json
 import logging
 import ctypes
-import platform
 import subprocess
 import urllib.parse
 from ...webview import Webview
@@ -112,7 +111,7 @@ class ServoBridge:
 
     def webview_get_window(self, w):
         # On Windows, returning the real HWND allows native features (Taskbar, Menus) to work.
-        if platform.system() == "Windows":
+        if sys.platform == "win32":
             return self.real_hwnd
         return 0
 
@@ -319,22 +318,22 @@ class ServoWebView(Webview):
 
         # --- Platform Helpers (All Platforms) ---
         self._platform = None
-        current_sys = platform.system()
+        current_sys = sys.platform
         try:
-            if current_sys == "Windows":
+            if current_sys == "win32":
                 from ...platforms.windows import WindowsImplementation
 
                 self._platform = WindowsImplementation()
-            elif current_sys == "Darwin":
+            elif current_sys == "darwin":
                 from ...platforms.darwin import DarwinImplementation
 
                 self._platform = DarwinImplementation()
-            elif current_sys == "Linux":
+            elif current_sys == "linux":
                 from ...platforms.linux import LinuxImplementation
 
                 self._platform = LinuxImplementation()
         except Exception as e:
-            self.logger.warning(f"Failed to load {current_sys} Platform helpers: {e}")
+            self.logger.warning(f"Failed to load platform helpers: {e}")
 
         # 7. JS Init Shim (With Proxy for Dynamic Methods)
         init_js = f"""

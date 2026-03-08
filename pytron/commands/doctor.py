@@ -2,7 +2,6 @@ import os
 import sys
 import shutil
 import subprocess
-import platform
 import argparse
 from pathlib import Path
 from ..console import console, print_rule
@@ -44,7 +43,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     console.print(f"[bold]Python Environment[/bold]")
     console.print(f"  [success]✓[/success] Python: {py_ver} ({py_arch})")
     console.print(
-        f"  [success]✓[/success] Platform: {platform.system()} {platform.release()}"
+        f"  [success]✓[/success] Platform: {sys.platform}"
     )
 
     # Check if in VENV
@@ -115,7 +114,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 f"  [error]✗[/error] PyInstaller: Not found (Required for 'pytron package')"
             )
 
-    if platform.system() == "Windows":
+    if sys.platform == "win32":
         # Check NSIS
         from ..pack.installers import find_makensis
 
