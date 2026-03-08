@@ -77,14 +77,20 @@ def test_updater_download_full(updater):
                 }
 
                 with patch("urllib.request.urlretrieve"):
-                    with patch("hashlib.sha256") as mock_hash:
-                        mock_sha = mock_hash.return_value
+                    # Patch hashlib inside pytron.updater (local import inside method)
+                    with patch("pytron.updater.hashlib") as mock_hashlib:
+                        mock_sha = MagicMock()
                         mock_sha.hexdigest.return_value = "abc"
+                        mock_hashlib.sha256.return_value = mock_sha
 
-                        # Mock open for reading the downloaded file to verify hash
+                        # mock_open: first read returns data, second returns b"" to end loop
                         m = mock_open(read_data=b"file content")
+                        m.return_value.read.side_effect = [b"file content", b""]
                         with patch("builtins.open", m):
-                            with patch("sys.exit") as mock_exit:
-                                with patch("subprocess.Popen"):
+                            # Patch subprocess and os inside updater so platform-specific
+                            # code (chmod on Linux, creationflags on Windows) never touches
+                            # the real filesystem.
+                            with patch("pytron.updater.subprocess"), patch("os.chmod"):
+                                with patch("sys.exit") as mock_exit:
                                     updater.download_and_install(update_info)
                                     mock_exit.assert_called_with(0)
