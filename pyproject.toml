@@ -50,7 +50,7 @@ Homepage = "https://pytron-kit.github.io/"
 Repository = "https://github.com/Ghua8088/pytron-kit"
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "."]
+testpaths = ["tests"]
 addopts = "-v -ra --tb=short"
 norecursedirs = [
     "template_vite",
@@ -62,7 +62,6 @@ norecursedirs = [
     "node_modules",
     "*/main/assets/python"
 ]
-asyncio_mode = "auto"
 
 [project.scripts]
 pytron = "pytron.cli:main"
