@@ -81,6 +81,7 @@ def cmd_login(args: argparse.Namespace) -> int:
                 )
 
                 import keyring
+
                 keyring.set_password(SERVICE_NAME, ACCOUNT_NAME, token)
                 log(f"Successfully logged in as @{username}!", style="success")
                 return 0
@@ -105,6 +106,7 @@ def cmd_login(args: argparse.Namespace) -> int:
 def cmd_logout(args: argparse.Namespace) -> int:
     try:
         import keyring
+
         keyring.delete_password(SERVICE_NAME, ACCOUNT_NAME)
         log("Logged out. GitHub token removed from keyring.", style="success")
         return 0
@@ -124,6 +126,7 @@ def get_github_token() -> str | None:
     # Priority 2: Keyring
     try:
         import keyring
+
         return keyring.get_password(SERVICE_NAME, ACCOUNT_NAME)
     except Exception:
         return None

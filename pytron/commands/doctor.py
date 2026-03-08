@@ -42,9 +42,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     py_ver, py_arch = get_python_info()
     console.print(f"[bold]Python Environment[/bold]")
     console.print(f"  [success]✓[/success] Python: {py_ver} ({py_arch})")
-    console.print(
-        f"  [success]✓[/success] Platform: {sys.platform}"
-    )
+    console.print(f"  [success]✓[/success] Platform: {sys.platform}")
 
     # Check if in VENV
     is_venv = sys.prefix != sys.base_prefix
