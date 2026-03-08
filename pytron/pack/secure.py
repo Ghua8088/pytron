@@ -50,8 +50,15 @@ import pytron
 # 'app' is a built-in module linked statically into this executable.
 try:
     import app 
-except ImportError as e:
-    print(f"Boot Error: Failed to load built-in app: {e}")
+except Exception as e:
+    # LOUD FAILURE: Write to log and show messagebox if on Windows
+    msg = f"Boot Error: Failed to load built-in app: {e}"
+    with open("pytron_boot.log", "w") as f:
+        import traceback
+        f.write(msg + "\\n" + traceback.format_exc())
+    if os.name == 'nt':
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, msg, "Security Shield", 0x10)
     sys.exit(1)
 
 if __name__ == "__main__":
@@ -139,6 +146,14 @@ if __name__ == "__main__":
                 for f in files:
                     # Capture code only for fused packages to keep them clean
                     if f.endswith((".pyc", ".py")):
+                        # SIDECAR CHECK: If a native binary exists with the same name, leave the code loose
+                        stem = Path(f).stem
+                        if any(
+                            (Path(root) / (stem + ext)).exists()
+                            for ext in [".pyd", ".dll", ".so"]
+                        ):
+                            continue
+
                         full_path = Path(root) / f
                         rel_path = full_path.relative_to(internal_dir)
                         bundle.write(full_path, rel_path)

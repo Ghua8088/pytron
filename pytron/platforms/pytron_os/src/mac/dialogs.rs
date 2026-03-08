@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 use objc::{class, msg_send, sel, sel_impl};
-use cocoa::base::{id, nil};
+use cocoa::base::id;
 use std::ffi::CStr;
 
 unsafe fn nsstring(s: &str) -> id {

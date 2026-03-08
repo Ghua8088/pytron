@@ -894,7 +894,7 @@ def test_get_system_info_cpu_count_matches_os():
 
 def test_get_system_info_os_is_windows():
     info = system.get_system_info()
-    assert info["os"] == "Windows"
+    assert info["os"] == "win32"
 
 
 def test_get_system_info_optional_psutil_keys():

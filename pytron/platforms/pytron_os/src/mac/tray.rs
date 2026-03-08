@@ -18,7 +18,6 @@ use once_cell::sync::Lazy;
 use dashmap::DashMap;
 use std::sync::{Mutex, Condvar};
 use std::collections::VecDeque;
-use std::ffi::CStr;
 
 // ─── Platform message queue ──────────────────────────────────────────────────
 
@@ -64,7 +63,7 @@ static DELEGATE_CLASS: Lazy<usize> = Lazy::new(|| {
     unsafe {
         decl.add_method(sel!(itemClicked:), item_clicked as extern "C" fn(&Object, Sel, id));
     }
-    decl.register() as usize
+    decl.register() as *const objc::runtime::Class as usize
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -150,7 +149,7 @@ pub fn tray_add_icon(hwnd_val: usize, hicon_val: usize, _id: u32, tip: String, _
         }
 
         // Create & attach delegate
-        let cls   = unsafe { &*(*DELEGATE_CLASS as *const objc::runtime::Class) };
+        let cls   = &*(*DELEGATE_CLASS as *const objc::runtime::Class);
         let del: id = msg_send![cls, new];
         (*del).set_ivar("registeredHwnd", hwnd_val);
 

@@ -95,7 +95,7 @@ def test_set_start_on_boot_windows_fallback_when_pytron_os_none(app):
     """pytron_os=None → Windows impl is called."""
     with patch("sys.frozen", True, create=True):
         with patch("pytron.apputils.native.pytron_os", None):
-            with patch("platform.system", return_value="Windows"):
+            with patch("sys.platform", "win32"):
                 with patch("pytron.platforms.windows.WindowsImplementation") as MockWin:
                     MockWin.return_value.set_launch_on_boot.return_value = True
                     result = app.set_start_on_boot(True)
@@ -107,7 +107,7 @@ def test_set_start_on_boot_windows_fallback_args(app):
     """Windows impl receives sanitised name, exe path, and enable flag."""
     with patch("sys.frozen", True, create=True):
         with patch("pytron.apputils.native.pytron_os", None):
-            with patch("platform.system", return_value="Windows"):
+            with patch("sys.platform", "win32"):
                 with patch("pytron.platforms.windows.WindowsImplementation") as MockWin:
                     MockWin.return_value.set_launch_on_boot.return_value = True
                     app.set_start_on_boot(False)
@@ -122,7 +122,7 @@ def test_set_start_on_boot_falls_through_when_pytron_os_returns_false(app):
     mock_os.set_launch_on_boot.return_value = False
     with patch("sys.frozen", True, create=True):
         with patch("pytron.apputils.native.pytron_os", mock_os):
-            with patch("platform.system", return_value="Windows"):
+            with patch("sys.platform", "win32"):
                 with patch("pytron.platforms.windows.WindowsImplementation") as MockWin:
                     MockWin.return_value.set_launch_on_boot.return_value = True
                     result = app.set_start_on_boot(True)
@@ -133,10 +133,11 @@ def test_set_start_on_boot_falls_through_when_pytron_os_returns_false(app):
 def test_set_start_on_boot_falls_through_when_pytron_os_raises(app):
     """pytron_os raises → silently falls through, no exception propagated."""
     mock_os = MagicMock()
+    # It would be RuntimeError in real use
     mock_os.set_launch_on_boot.side_effect = RuntimeError("no pyd")
     with patch("sys.frozen", True, create=True):
         with patch("pytron.apputils.native.pytron_os", mock_os):
-            with patch("platform.system", return_value="Windows"):
+            with patch("sys.platform", "win32"):
                 with patch("pytron.platforms.windows.WindowsImplementation") as MockWin:
                     MockWin.return_value.set_launch_on_boot.return_value = True
                     result = app.set_start_on_boot(True)  # must not raise
@@ -146,7 +147,7 @@ def test_set_start_on_boot_falls_through_when_pytron_os_raises(app):
 def test_set_start_on_boot_linux_fallback(app):
     with patch("sys.frozen", True, create=True):
         with patch("pytron.apputils.native.pytron_os", None):
-            with patch("platform.system", return_value="Linux"):
+            with patch("sys.platform", "linux"):
                 with patch("pytron.platforms.linux.LinuxImplementation") as MockLin:
                     MockLin.return_value.set_launch_on_boot.return_value = True
                     result = app.set_start_on_boot(True)
@@ -157,7 +158,7 @@ def test_set_start_on_boot_linux_fallback(app):
 def test_set_start_on_boot_darwin_fallback(app):
     with patch("sys.frozen", True, create=True):
         with patch("pytron.apputils.native.pytron_os", None):
-            with patch("platform.system", return_value="Darwin"):
+            with patch("sys.platform", "darwin"):
                 with patch(
                     "pytron.platforms.darwin.DarwinImplementation"
                 ) as MockDarwin:
@@ -170,7 +171,7 @@ def test_set_start_on_boot_darwin_fallback(app):
 def test_set_start_on_boot_unknown_platform_returns_false(app):
     with patch("sys.frozen", True, create=True):
         with patch("pytron.apputils.native.pytron_os", None):
-            with patch("platform.system", return_value="FreeBSD"):
+            with patch("sys.platform", "freebsd"):
                 result = app.set_start_on_boot(True)
     assert result is False
 
@@ -181,7 +182,7 @@ def test_set_start_on_boot_no_window_delegation(app):
     app.windows.append(mock_window)
     with patch("sys.frozen", True, create=True):
         with patch("pytron.apputils.native.pytron_os", None):
-            with patch("platform.system", return_value="Windows"):
+            with patch("sys.platform", "win32"):
                 with patch("pytron.platforms.windows.WindowsImplementation"):
                     app.set_start_on_boot(True)
     mock_window._platform.set_launch_on_boot.assert_not_called()
@@ -352,8 +353,63 @@ def test_get_clipboard_text_returns_none_without_window(app):
 
 
 # ---------------------------------------------------------------------------
-# get_system_info
+# storage
 # ---------------------------------------------------------------------------
+
+
+def test_native_mixin_store_set_calls_super(app):
+    # We need to mock the super() call.
+    # Since NativeMixin doesn't inherit from anything that defines store_set in our MockApp,
+    # it hits the 'return False' fallback.
+    assert app.store_set("key", "value") is False
+
+
+def test_native_mixin_store_get_calls_super(app):
+    assert app.store_get("key", default="def") == "def"
+
+
+def test_native_mixin_store_delete_calls_super(app):
+    assert app.store_delete("key") is False
+
+
+class AppWithStorage:
+    def __init__(self):
+        self.storage = {}
+
+    def store_set(self, k, v):
+        self.storage[k] = v
+        return True
+
+    def store_get(self, k, d=None):
+        return self.storage.get(k, d)
+
+    def store_delete(self, k):
+        if k in self.storage:
+            del self.storage[k]
+            return True
+        return False
+
+
+def test_native_mixin_with_actual_storage():
+    # This specifically tests the 'if hasattr(super(), ...)' logic
+    # by using a class that implements the storage methods.
+
+    class CorrectMROApp(NativeMixin, AppWithStorage):
+        # MRO: [CorrectMROApp, NativeMixin, AppWithStorage, object]
+        def __init__(self):
+            # We don't call super().__init__() here because NativeMixin doesn't have one
+            # and AppWithStorage needs its storage dict.
+            AppWithStorage.__init__(self)
+
+    app = CorrectMROApp()
+    # Mock config for NativeMixin methods if needed (though not used in storage methods)
+    app.config = {}
+
+    assert app.store_set("a", 1) is True
+    assert app.storage["a"] == 1
+    assert app.store_get("a") == 1
+    assert app.store_delete("a") is True
+    assert "a" not in app.storage
 
 
 def test_get_system_info_delegates(app_with_window):

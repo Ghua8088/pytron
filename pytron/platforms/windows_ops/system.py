@@ -453,13 +453,17 @@ def get_clipboard_text():
 
 def get_system_info():
     """Returns platform core information."""
-    import platform
+    import os
+    import sys
 
+    # Avoid platform.system() as it may hang on some Windows environments
     info = {
-        "os": platform.system(),
-        "arch": platform.machine(),
-        "release": platform.release(),
-        "version": platform.version(),
+        "os": sys.platform,
+        "arch": os.environ.get("PROCESSOR_ARCHITECTURE", "unknown"),
+        "release": (
+            sys.getwindowsversion().major if sys.platform == "win32" else "unknown"
+        ),
+        "version": sys.version,
         "cpu_count": os.cpu_count(),
     }
 

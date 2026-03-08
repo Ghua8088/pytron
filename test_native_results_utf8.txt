@@ -1,0 +1,269 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-8.4.1, pluggy-1.6.0 -- C:\Users\raghuraamm L\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: D:\playground\pytron
+configfile: pytest.ini
+plugins: anyio-4.12.1, langsmith-0.4.4, asyncio-1.3.0, cov-7.0.0, django-4.11.1, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 40 items
+
+tests/test_native.py::test_set_start_on_boot_dev_mode_returns_false FAILED
+tests/test_native.py::test_set_start_on_boot_dev_mode_never_calls_pytron_os FAILED
+tests/test_native.py::test_set_start_on_boot_via_pytron_os FAILED
+tests/test_native.py::test_set_start_on_boot_pytron_os_enable_false FAILED
+tests/test_native.py::test_set_start_on_boot_safe_name_sanitisation FAILED
+tests/test_native.py::test_set_start_on_boot_windows_fallback_when_pytron_os_none FAILED
+tests/test_native.py::test_set_start_on_boot_windows_fallback_args FAILED
+tests/test_native.py::test_set_start_on_boot_falls_through_when_pytron_os_returns_false FAILED
+tests/test_native.py::test_set_start_on_boot_falls_through_when_pytron_os_raises FAILED
+tests/test_native.py::test_set_start_on_boot_linux_fallback FAILED
+tests/test_native.py::test_set_start_on_boot_darwin_fallback Pytron Warning: Cocoa/ObjC not found: argument of type 'NoneType' is not iterable
+FAILED
+tests/test_native.py::test_set_start_on_boot_unknown_platform_returns_false FAILED
+tests/test_native.py::test_set_start_on_boot_no_window_delegation FAILED
+tests/test_native.py::test_message_box_delegates_to_first_window PASSED
+tests/test_native.py::test_message_box_forwards_style PASSED
+tests/test_native.py::test_message_box_returns_window_result PASSED
+tests/test_native.py::test_message_box_returns_zero_without_window PASSED
+tests/test_native.py::test_dialog_save_file_delegates PASSED
+tests/test_native.py::test_dialog_save_file_passes_kwargs PASSED
+tests/test_native.py::test_dialog_save_file_returns_none_without_window PASSED
+tests/test_native.py::test_dialog_open_file_delegates PASSED
+tests/test_native.py::test_dialog_open_file_returns_none_without_window PASSED
+tests/test_native.py::test_dialog_open_folder_delegates PASSED
+tests/test_native.py::test_dialog_open_folder_returns_none_without_window PASSED
+tests/test_native.py::test_system_notification_delegates PASSED
+tests/test_native.py::test_system_notification_default_title_from_author PASSED
+tests/test_native.py::test_system_notification_default_title_fallback_to_app_title PASSED
+tests/test_native.py::test_system_notification_no_icon_by_default PASSED
+tests/test_native.py::test_system_notification_silent_when_no_window PASSED
+tests/test_native.py::test_system_notification_stops_after_first_success PASSED
+tests/test_native.py::test_system_notification_tries_next_window_on_exception PASSED
+tests/test_native.py::test_show_toast_delegates PASSED
+tests/test_native.py::test_show_toast_silent_when_no_window PASSED
+tests/test_native.py::test_show_toast_stops_after_first_success PASSED
+tests/test_native.py::test_copy_to_clipboard_delegates PASSED
+tests/test_native.py::test_copy_to_clipboard_returns_false_without_window PASSED
+tests/test_native.py::test_get_clipboard_text_delegates PASSED
+tests/test_native.py::test_get_clipboard_text_returns_none_without_window PASSED
+tests/test_native.py::test_get_system_info_delegates PASSED
+tests/test_native.py::test_get_system_info_fallback_without_window PASSED
+
+================================== FAILURES ===================================
+________________ test_set_start_on_boot_dev_mode_returns_false ________________
+
+app = <tests.test_native.MockApp object at 0x000001F457AC4440>
+
+>   ???
+
+tests\test_native.py:41: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457AC4440>, enable = True
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+____________ test_set_start_on_boot_dev_mode_never_calls_pytron_os ____________
+
+app = <tests.test_native.MockApp object at 0x000001F457BB2C10>
+
+>   ???
+
+tests\test_native.py:49: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457BB2C10>, enable = True
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+____________________ test_set_start_on_boot_via_pytron_os _____________________
+
+app = <tests.test_native.MockApp object at 0x000001F457BB3390>
+
+>   ???
+
+tests\test_native.py:64: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457BB3390>, enable = True
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+________________ test_set_start_on_boot_pytron_os_enable_false ________________
+
+app = <tests.test_native.MockApp object at 0x000001F457AF7CE0>
+
+>   ???
+
+tests\test_native.py:74: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457AF7CE0>, enable = False
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+________________ test_set_start_on_boot_safe_name_sanitisation ________________
+
+app = <tests.test_native.MockApp object at 0x000001F457CAC510>
+
+>   ???
+
+tests\test_native.py:85: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457CAC510>, enable = True
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+_________ test_set_start_on_boot_windows_fallback_when_pytron_os_none _________
+
+app = <tests.test_native.MockApp object at 0x000001F457C1EE70>
+
+>   ???
+
+tests\test_native.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457C1EE70>, enable = True
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+________________ test_set_start_on_boot_windows_fallback_args _________________
+
+app = <tests.test_native.MockApp object at 0x000001F457C3D7B0>
+
+>   ???
+
+tests\test_native.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457C3D7B0>, enable = False
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+______ test_set_start_on_boot_falls_through_when_pytron_os_returns_false ______
+
+app = <tests.test_native.MockApp object at 0x000001F457C3C380>
+
+>   ???
+
+tests\test_native.py:128: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457C3C380>, enable = True
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+_________ test_set_start_on_boot_falls_through_when_pytron_os_raises __________
+
+app = <tests.test_native.MockApp object at 0x000001F457B66E50>
+
+>   ???
+
+tests\test_native.py:142: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457B66E50>, enable = True
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+____________________ test_set_start_on_boot_linux_fallback ____________________
+
+app = <tests.test_native.MockApp object at 0x000001F457B67750>
+
+>   ???
+
+tests\test_native.py:152: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457B67750>, enable = True
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+___________________ test_set_start_on_boot_darwin_fallback ____________________
+
+app = <tests.test_native.MockApp object at 0x000001F457CB07D0>
+
+>   ???
+
+tests\test_native.py:165: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457CB07D0>, enable = True
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+____________ test_set_start_on_boot_unknown_platform_returns_false ____________
+
+app = <tests.test_native.MockApp object at 0x000001F457CB18B0>
+
+>   ???
+
+tests\test_native.py:174: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457CB18B0>, enable = True
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+_________________ test_set_start_on_boot_no_window_delegation _________________
+
+app = <tests.test_native.MockApp object at 0x000001F457C0BE70>
+
+>   ???
+
+tests\test_native.py:186: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.test_native.MockApp object at 0x000001F457C0BE70>, enable = True
+
+>   ???
+E   UnboundLocalError: cannot access local variable 'sys' where it is not associated with a value
+
+pytron\apputils\native.py:24: UnboundLocalError
+============================== warnings summary ===============================
+C:\Users\raghuraamm L\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1291
+  C:\Users\raghuraamm L\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1291: PytestConfigWarning: assertions not in test modules or plugins will be ignored because assert statements are not executed by the underlying Python interpreter (are you using python -O?)
+  
+    self._warn_about_missing_assertion(mode)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_native.py::test_set_start_on_boot_dev_mode_returns_false - ...
+FAILED tests/test_native.py::test_set_start_on_boot_dev_mode_never_calls_pytron_os
+FAILED tests/test_native.py::test_set_start_on_boot_via_pytron_os - UnboundLo...
+FAILED tests/test_native.py::test_set_start_on_boot_pytron_os_enable_false - ...
+FAILED tests/test_native.py::test_set_start_on_boot_safe_name_sanitisation - ...
+FAILED tests/test_native.py::test_set_start_on_boot_windows_fallback_when_pytron_os_none
+FAILED tests/test_native.py::test_set_start_on_boot_windows_fallback_args - U...
+FAILED tests/test_native.py::test_set_start_on_boot_falls_through_when_pytron_os_returns_false
+FAILED tests/test_native.py::test_set_start_on_boot_falls_through_when_pytron_os_raises
+FAILED tests/test_native.py::test_set_start_on_boot_linux_fallback - UnboundL...
+FAILED tests/test_native.py::test_set_start_on_boot_darwin_fallback - Unbound...
+FAILED tests/test_native.py::test_set_start_on_boot_unknown_platform_returns_false
+FAILED tests/test_native.py::test_set_start_on_boot_no_window_delegation - Un...
+================== 13 failed, 27 passed, 1 warning in 0.20s ===================

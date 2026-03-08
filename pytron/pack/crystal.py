@@ -15,7 +15,7 @@ class AppAuditor:
     Executes the application under PEP 578 surveillance to capture the 'Live Code' universe.
     """
 
-    def __init__(self, script_path: Path, timeout: int = 10):
+    def __init__(self, script_path: Path, timeout: int = 15):
         self.script_path = script_path
         self.timeout = timeout
         self.manifest_path = script_path.parent / "requirements.lock.json"
@@ -41,6 +41,7 @@ import os
 import builtins
 from pathlib import Path
 import dis
+import inspect
 from unittest.mock import MagicMock
 
 # --- DEFANGER (Prevention of Side Effects during Audit) ---
@@ -87,223 +88,180 @@ _defang()
 # --- SURVEILLANCE SYSTEM ---
 live_modules = set()
 live_files = set()
+live_dlls = set()
 
 def audit_hook(event, args):
     try:
         if event == "import":
             module, filename, sys_path, sys_meta_path, sys_path_hooks = args
-            live_modules.add(module)
-            if filename:
-                live_files.add(str(filename))
+            if module: live_modules.add(module)
+            if filename: live_files.add(str(filename))
         elif event == "open" and len(args) > 0:
-            # Heuristic: file opens might be data assets
             path = args[0]
             if isinstance(path, (str, bytes, os.PathLike)):
-                live_files.add(str(path))
+                p_str = str(path)
+                # Filter out obvious junk
+                if not any(x in p_str.lower() for x in ["\\\\temp\\\\", "/tmp/", "pagefile.sys", ".pyc"]):
+                     live_files.add(p_str)
+        elif event in ["ctypes.dlopen", "os.add_dll_directory"]:
+            path = args[0]
+            if path: live_dlls.add(str(path))
     except Exception:
         pass
 
 # --- RECURSIVE ANALYSIS SYSTEM ---
-import inspect
-visited_functions = set()
+visited_objects = set()
 
-def recursive_inspect(func, depth=0):
-    if depth > 5: return # Anti-recursion depth limit
-    if func in visited_functions: return
+def recursive_inspect(obj, depth=0):
+    if depth > 10: return
+    if id(obj) in visited_objects: return
     try:
-        visited_functions.add(func)
-    except:
-        return
+        visited_objects.add(id(obj))
+    except: return
 
     try:
-        # Helper to trigger standard audit event so our hook captures it
         def _report(name, file=None):
              if name:
-                 # Mimic the standard import event arguments: (module, filename, sys.path, sys.meta_path, sys.path_hooks)
                  sys.audit("import", name, file, None, None, None)
 
-        # 1. Handle Classes/Instances
-        if inspect.isclass(func) or (not callable(func) and hasattr(func, "__dict__")):
-            if hasattr(func, "__module__") and func.__module__:
-                 _report(func.__module__)
-            for attr_name in dir(func):
-                if attr_name.startswith("_"): continue
-                try:
-                    val = getattr(func, attr_name)
-                    if inspect.isfunction(val) or inspect.ismethod(val):
-                        recursive_inspect(val, depth+1)
-                except: pass
+        if inspect.ismodule(obj):
+            _report(obj.__name__, getattr(obj, "__file__", None))
             return
 
-        if hasattr(func, "__module__") and func.__module__:
-            _report(func.__module__)
+        if hasattr(obj, "__module__") and obj.__module__:
+            _report(obj.__module__)
         
-        # 2. Inspect closures and globals
-        closures = inspect.getclosurevars(func)
-        
-        for name, value in closures.globals.items():
-            if inspect.ismodule(value):
-                _report(value.__name__, getattr(value, "__file__", None))
-            elif hasattr(value, "__module__") and value.__module__:
-                _report(value.__module__)
-                if inspect.isfunction(value) or inspect.isclass(value):
-                    recursive_inspect(value, depth+1)
-                    
-        for name, value in closures.nonlocals.items():
-            if hasattr(value, "__module__") and value.__module__:
-                _report(value.__module__)
-                if inspect.isfunction(value):
-                    recursive_inspect(value, depth+1)
-        
-        # 3. Bytecode Analysis
-        if hasattr(func, "__code__"):
-            for instr in dis.get_instructions(func):
-                if instr.opname == "IMPORT_NAME":
-                    _report(instr.argval)
+        if inspect.isfunction(obj) or inspect.ismethod(obj):
+            try:
+                closures = inspect.getclosurevars(obj)
+                for val in list(closures.globals.values()) + list(closures.nonlocals.values()):
+                    recursive_inspect(val, depth+1)
+            except: pass
 
+            if hasattr(obj, "__code__"):
+                for instr in dis.get_instructions(obj):
+                    if instr.opname in ["IMPORT_NAME", "IMPORT_FROM"]:
+                        _report(instr.argval)
     except Exception:
         pass
 
 # --- AUDIT SYSTEM REGISTRATION ---
-# CRITICAL: Register the hook defined above
 sys.addaudithook(audit_hook)
 
+# --- DYNAMIC ANALYSIS HELPERS (InvincibleMock) ---
+class InvincibleMock(MagicMock):
+    def __getattr__(self, name):
+        if name.startswith("__") and name.endswith("__"):
+            return super().__getattr__(name)
+        return InvincibleMock()
+    def __call__(self, *args, **kwargs):
+        return InvincibleMock()
+    def __int__(self): return 1
+    def __float__(self): return 1.0
+    def __str__(self): return "mock"
+    def __bool__(self): return True
+    def __iter__(self): return iter([InvincibleMock()])
+    def __getitem__(self, key): return InvincibleMock()
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+    def __await__(self):
+        async def _mock_coro(): return InvincibleMock()
+        return _mock_coro().__await__()
+
+def audit_exposed_functions_dynamic(app):
+    print(f"[Crystal] Running Deep Dynamic Execution Audit...")
+    # Trace for dynamic __import__
+    def trace_calls(frame, event, arg):
+        if event == 'call' and frame.f_code.co_name == '__import__':
+            try:
+                name = frame.f_locals.get('name') or frame.f_args[0]
+                if name: sys.audit("import", name, None, None, None, None)
+            except: pass
+        return trace_calls
+
+    sys.settrace(trace_calls)
+    try:
+        for name, data in app._exposed_functions.items():
+            func = data['func']
+            try:
+                sig = inspect.signature(func)
+                dummy_args = [InvincibleMock() for _ in sig.parameters]
+                func(*dummy_args)
+            except Exception: pass
+    finally:
+        sys.settrace(None)
 
 # --- MANIFEST DUMPER ---
-# --- MANIFEST DUMPER ---
 def dump_manifest():
-    # 1. Trigger App Heuristics (find hidden deps)
-    # 1. Trigger App Heuristics (find hidden deps)
     try:
         import gc
         import pytron
-        
-        # --- DYNAMIC ANALYSIS HELPERS (InvincibleMock) ---
-        from unittest.mock import MagicMock
-        
-        class InvincibleMock(MagicMock):
-            def __getattr__(self, name):
-                return self
-            def __call__(self, *args, **kwargs):
-                return self
-            def __int__(self): return 1
-            def __float__(self): return 1.0
-            def __str__(self): return "mock"
-            def __bool__(self): return True
-            def __iter__(self): return iter([])
-            def __getitem__(self, key): return self
-            
-        def audit_exposed_functions_dynamic(app):
-            print(f"[Crystal] Running Dynamic Execution Audit on {{len(app._exposed_functions)}} functions...")
-            for name, data in app._exposed_functions.items():
-                func = data['func']
-                try:
-                    # Get the number of arguments the function expects
-                    sig = inspect.signature(func)
-                    dummy_args = [InvincibleMock() for _ in sig.parameters]
-                    
-                    # We don't care if it returns garbage, we just want it to trigger imports
-                    # The MagicMock should absorb method calls on args
-                    func(*dummy_args)
-                except Exception:
-                    # Use a broad catch because we expect crashes from real logic interacting with Mocks
-                    # But the imports encountered before the crash are what we want.
-                    pass
-
-        # Look for App in memory
         for obj in gc.get_objects():
             if isinstance(obj, pytron.App):
-                print("[Crystal] Found App instance. Running Audits...")
-                
-                # 1. Static Audit (Original)
-                if hasattr(obj, "audit_dependencies"):
-                     obj.audit_dependencies()
-                
-                # 2. Dynamic Audit (New)
+                print("[Crystal] Found App instance. Running Deep Audit...")
+                # 1. Recursive Scan of Exposed
+                for name, data in obj._exposed_functions.items():
+                    recursive_inspect(data['func'])
+                # 2. Dynamic execution
                 audit_exposed_functions_dynamic(obj)
                 break
     except Exception as e:
         print(f"[Crystal] Heuristic Scan Warning: {{e}}")
 
-    # 2. Load existing lock file to merge
-    existing_data = {{"modules": [], "files": []}}
+    existing_data = {{"modules": [], "files": [], "dlls": []}}
     if os.path.exists(f"{escaped_manifest}"):
         try:
             with open(f"{escaped_manifest}", "r") as f:
                  existing_data = json.load(f)
         except: pass
 
-    # 3. Merge
-    final_modules = sorted(list(set(existing_data.get("modules", []) + list(live_modules))))
-    final_files = sorted(list(set(existing_data.get("files", []) + list(live_files))))
-
     data = {{
-        "modules": final_modules,
-        "files": final_files
+        "modules": sorted(list(set(existing_data.get("modules", []) + list(live_modules)))),
+        "files": sorted(list(set(existing_data.get("files", []) + list(live_files)))),
+        "dlls": sorted(list(set(existing_data.get("dlls", []) + list(live_dlls))))
     }}
     try:
         with open(f"{escaped_manifest}", "w") as f:
             json.dump(data, f, indent=4)
-        print(f"[Crystal] Lock File Updated: {{len(final_modules)}} modules, {{len(final_files)}} files.")
+        print(f"[Crystal] Lock File Updated: {{len(data['modules'])}} modules, {{len(data['dlls'])}} DLLs.")
     except Exception as e:
         print(f"[Crystal] Failed to dump manifest: {{e}}")
 
-# Register exit handler to ensure we dump data even if app crashes or exits
 import atexit
 atexit.register(dump_manifest)
 
-
 # --- MONKEY PATCHING PYTRON ---
-# We want to intercept app.expose calls
 def patch_pytron_app():
     try:
-        # We try to import pytron from the sys.path (which includes target dir)
         import pytron
         OriginalApp = pytron.App
-        
         class AuditedApp(OriginalApp):
             def expose(self, func=None, name=None, secure=False, run_in_thread=True):
-                # Trigger analysis immediately if we have a function
                 if func is not None:
                     try:
-                        n = getattr(func, "__name__", str(func))
-                        print(f"[Crystal] Analyzing exposed: {{n}}")
                         recursive_inspect(func)
                     except: pass
-                
-                # IMPORTANT: Support default args/kwargs to avoid breaking complex @expose usages
                 return super().expose(func, name=name, secure=secure, run_in_thread=run_in_thread)
-        
         pytron.App = AuditedApp
-        print("[Crystal] 'pytron.App.expose' patched successfully.")
-    except Exception:
-        pass
+        print("[Crystal] 'pytron.App.expose' patched.")
+    except Exception: pass
 
-# Apply patch before running script
 patch_pytron_app()
 
 print("[Crystal] Surveillance Active. Launching Target...")
-
-# --- TARGET LAUNCH ---
 target_script = "{escaped_script}"
 target_dir = os.path.dirname(target_script)
-
-# Set cwd to target script dir to mimic real execution
 os.chdir(target_dir)
 sys.path.insert(0, target_dir)
 
 try:
-    # We use runpy or exec to run the script in this process
     with open(target_script, "r", encoding="utf-8") as f:
         code = compile(f.read(), target_script, "exec")
         exec(code, {{'__name__': '__main__', '__file__': target_script}})
-except SystemExit:
-    pass
+except SystemExit: pass
 except Exception as e:
-    # App usage errors are expected if arguments are missing, but imports should have happened
-    print(f"[Crystal] Target Execution Interrupted: {{e}}")
+    print(f"[Crystal] Target Interrupted: {{e}}")
 
-# Dump one last time
 dump_manifest()
 """
 
@@ -312,8 +270,7 @@ dump_manifest()
         Spawns the surveillance subprocess and monitors it.
         Returns the loaded manifest data.
         """
-        log("Initializing Crystal Surveillance (PEP 578 Audit)...", style="cyan")
-        log("Running imports  please terminate if not needed", style="yellow")
+        log("Initializing Crystal 2.0 (Deep Audit Engine)...", style="cyan")
         runner_code = self._generate_surveillance_runner()
         runner_path = self.script_path.parent / "crystal_runner.py"
         runner_path.write_text(runner_code, encoding="utf-8")
@@ -322,9 +279,6 @@ dump_manifest()
 
         p = None
         try:
-            # Run the audit process
-            # We don't want to capture output, we want the user to see it if the app prints stuff
-            # But we also don't want it to block forever.
             log(
                 f"  + Launching {self.script_path.name} in audit mode (Timeout: {self.timeout}s)...",
                 style="dim",
@@ -338,13 +292,11 @@ dump_manifest()
                 text=True,
             )
 
-            # Wait for timeout or completion
             try:
-                # We give it some time to initialize imports and settle
                 stdout, stderr = p.communicate(timeout=self.timeout)
             except subprocess.TimeoutExpired:
                 log(
-                    "  + Timeout reached. Terminating application to harvest data...",
+                    "  + Timeout reached. Harvesting captured data...",
                     style="dim",
                 )
                 p.terminate()
@@ -357,7 +309,7 @@ dump_manifest()
                 try:
                     data = json.loads(self.manifest_path.read_text())
                     log(
-                        f"Crystal Audit Complete. Captured {len(data.get('modules', []))} live modules.",
+                        f"Crystal Audit Complete. Captured {len(data.get('modules', []))} live modules and {len(data.get('dlls', []))} DLLs.",
                         style="success",
                     )
                     return data
@@ -365,15 +317,11 @@ dump_manifest()
                     log(f"Failed to parse Crystal manifest: {e}", style="error")
             else:
                 log("Crystal Audit failed to produce a manifest.", style="error")
-                if p and p.stderr:
-                    log(f"Stderr: {p.stderr.read()}", style="dim")
 
         except Exception as e:
             log(f"Crystal Surveillance Error: {e}", style="error")
         finally:
-            # Cleanup
             if runner_path.exists():
                 os.remove(runner_path)
-            # We keep the manifest for inspection/reference
 
         return None

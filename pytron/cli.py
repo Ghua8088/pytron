@@ -150,12 +150,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument(
         "--chrome", action="store_true", help="Shortcut for --engine chrome"
     )
-    p_run.add_argument(
-        "extra_args",
-        nargs=argparse.REMAINDER,
-        help="Extra args to forward to script",
-        default=[],
-    )
     p_run.set_defaults(func=cmd_run)
 
     p_pkg = sub.add_parser(
@@ -362,8 +356,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Pytron v{__version__}")
             return 0
 
-    # 2. Re-inject remaining args if it's 'run' command
-    if args.command == "run" and remaining:
+    # 2. Re-inject remaining args if it's 'run' or 'package' command
+    if args.command in ("run", "package") and remaining:
         # Append unknown flags to extra_args
         if not hasattr(args, "extra_args"):
             args.extra_args = []

@@ -226,7 +226,8 @@ INSPECTOR_HTML = r"""
             <div class="nav-item" onclick="showView('network')">Network</div>
             <div class="nav-item" onclick="showView('stats')">Stats</div>
         </nav>
-        <div id="uptime-display" style="margin-left:auto; font-size:11px; color:var(--text-dim);">Uptime: 0s</div>
+        <div id="uptime-display" style="margin-left:auto; font-size:11px; color:var(--text-dim); margin-right: 15px;">Uptime: 0s</div>
+        <button id="trace-toggle" class="btn-small" style="margin-right: 8px;" onclick="toggleTrace()">Trace IPC: OFF</button>
     </header>
 
     <main>
@@ -251,6 +252,10 @@ INSPECTOR_HTML = r"""
         <!-- NETWORK (IPC) -->
         <div id="network" class="view">
             <div class="table-wrap">
+                <div style="margin-bottom: 15px; display: flex; gap: 10px;">
+                    <button class="btn-small" onclick="runPing()">Run Diagnostic Ping</button>
+                    <span id="ping-status" style="font-size: 11px; align-self: center;"></span>
+                </div>
                 <table>
                     <thead>
                         <tr><th>Time</th><th>Method</th><th>Latency</th><th>Status</th></tr>
@@ -455,6 +460,29 @@ INSPECTOR_HTML = r"""
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        let isTraceOn = false;
+        async function toggleTrace() {
+            isTraceOn = !isTraceOn;
+            document.getElementById('trace-toggle').innerText = `Trace IPC: ${isTraceOn ? 'ON' : 'OFF'}`;
+            document.getElementById('trace-toggle').style.borderColor = isTraceOn ? 'var(--accent)' : 'var(--border)';
+            
+            // Tell ALL windows to enable verbose logging
+            await pytron.publish('pytron:set-verbose', isTraceOn);
+        }
+
+        async function runPing() {
+            const status = document.getElementById('ping-status');
+            status.innerText = "Pinging...";
+            try {
+                const res = await pytron.ping();
+                status.innerText = `[${res.status}] Latency: ${res.latency}ms | State Sync: ${res.hasState?'YES':'NO'}`;
+                status.style.color = res.status === 'OK' ? 'var(--success)' : 'var(--error)';
+            } catch(e) {
+                status.innerText = "Ping Failed: " + e.message;
+                status.style.color = 'var(--error)';
+            }
         }
 
         setInterval(refreshData, 2000);

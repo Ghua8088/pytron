@@ -1,7 +1,0 @@
-pyinstaller
-watchfiles
-pytest
-pytest-asyncio
-comtypes; sys_platform == 'win32'
-keyring
-requests

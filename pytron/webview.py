@@ -5,7 +5,6 @@ import threading
 import asyncio
 import inspect
 import pathlib
-import platform
 import mimetypes
 import logging
 import os
@@ -90,7 +89,7 @@ class Webview:
         else:
             self._scheme = (
                 "https://pytron.localhost"
-                if platform.system() == "Windows"
+                if sys.platform == "win32"
                 else "pytron://localhost"
             )
 
@@ -187,7 +186,7 @@ class Webview:
             )
 
         self._platform = None
-        if platform.system() == "Windows":
+        if sys.platform == "win32":
             try:
                 from .platforms.windows import WindowsImplementation
 
@@ -311,6 +310,7 @@ class Webview:
         self.bind("pytron_maximize", self.maximize, run_in_thread=False)
         self.bind("pytron_center", self.center, run_in_thread=False)
         self.bind("pytron_sync_state", self._sync_state, run_in_thread=False)
+        self.bind("pytron_log", lambda msg: print(f"[JS] {msg}"), run_in_thread=False)
         self.bind("__pytron_vap_get", self._get_binary_asset, run_in_thread=True)
 
         # VAP Asset Server MUST be bound raw because it's called directly from Rust protocol handler
@@ -423,16 +423,54 @@ class Webview:
                     res = python_func(*args)
                     _respond(0, _serialize_result(res))
                 except Exception as e:
-                    self.logger.error(f"Error in {name}: {e}")
-                    _respond(1, str(e))
+                    import traceback
+
+                    err_type = type(e).__name__
+                    err_msg = str(e)
+                    stack = traceback.format_exc()
+
+                    # 1. LOUD terminal logging
+                    print("\n" + "=" * 60)
+                    print(f"❌ PYTRON BACKEND ERROR: {name}")
+                    print("-" * 60)
+                    print(stack.strip())
+                    print("=" * 60 + "\n")
+
+                    # 2. Structured response for the browser
+                    error_payload = {
+                        "pytron_error": True,
+                        "type": err_type,
+                        "message": err_msg,
+                        "traceback": stack if self.config.get("debug") else None,
+                        "function": name,
+                    }
+                    _respond(1, error_payload)
 
             async def _async_runner():
                 try:
                     res = await python_func(*args)
                     _respond(0, _serialize_result(res))
                 except Exception as e:
-                    self.logger.error(f"Error in {name}: {e}")
-                    _respond(1, str(e))
+                    import traceback
+
+                    err_type = type(e).__name__
+                    err_msg = str(e)
+                    stack = traceback.format_exc()
+
+                    print("\n" + "!" * 60)
+                    print(f"❌ PYTRON ASYNC ERROR: {name}")
+                    print("-" * 60)
+                    print(stack.strip())
+                    print("!" * 60 + "\n")
+
+                    error_payload = {
+                        "pytron_error": True,
+                        "type": err_type,
+                        "message": err_msg,
+                        "traceback": stack if self.config.get("debug") else None,
+                        "function": name,
+                    }
+                    _respond(1, error_payload)
 
             if is_async:
                 asyncio.run_coroutine_threadsafe(_async_runner(), self.loop)
@@ -637,6 +675,18 @@ class Webview:
     def minimize(self):
         self.native.minimize()
 
+    def maximize(self):
+        self.native.maximize()
+
+    def restore(self):
+        """Restores the window from minimized or maximized state."""
+        # Check if native engine has restore (most do)
+        if hasattr(self.native, "restore"):
+            self.native.restore()
+        else:
+            # Fallback for engines that only have unmaximize
+            self.unmaximize()
+
     def toggle_maximize(self):
         # Native Toggle using pytron_os check
         if sys.platform == "win32" and self.hwnd:
@@ -648,7 +698,10 @@ class Webview:
                 except Exception:
                     pass
 
-        self.native.maximize()
+        # Fallback: We don't know the state, so we just maximize
+        # Engines like WebView2 handle "toggle" internally if we call maximize while maximized?
+        # Usually we want a real toggle or just maximization.
+        self.maximize()
 
     def is_visible(self):
         """Checks if the window is currently visible."""
@@ -664,6 +717,9 @@ class Webview:
 
     def hide(self):
         self.native.hide()
+
+    def show(self):
+        self.native.show()
 
     def start_drag(self):
         self.native.start_drag()
@@ -687,18 +743,9 @@ class Webview:
         if call_native:
             call_native(enable)
 
-    def maximize(self):
-        self.native.maximize()
-
     def unmaximize(self):
         if hasattr(self.native, "unmaximize"):
             self.native.unmaximize()
-
-    def restore(self):
-        self.unmaximize()
-
-    def show(self):
-        self.native.show()
 
     def set_fullscreen(self, enable):
         self.native.set_fullscreen(enable)

@@ -1,5 +1,6 @@
-use pyo3::prelude::*;
+#![allow(unexpected_cfgs)]
 
+use pyo3::prelude::*;
 #[cfg(target_os = "windows")]
 mod win;
 
