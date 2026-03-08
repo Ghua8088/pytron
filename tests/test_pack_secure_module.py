@@ -59,10 +59,12 @@ def test_security_module_build_wrapper_success(
     context = BuildContext(script=tmp_path / "main.py", out_name="testapp")
     context.package_dir = tmp_path / "pkg"
 
-    # Mock bootloader lib
+    # Mock bootloader lib — create both Windows and Unix variants so this test
+    # passes on any CI platform (Windows uses .lib, macOS/Linux uses .a)
     bootloader_bin = context.package_dir / "pytron" / "pack" / "secure_loader" / "bin"
     bootloader_bin.mkdir(parents=True)
     (bootloader_bin / "pytron_rust_bootloader.lib").write_text("dummy lib")
+    (bootloader_bin / "libpytron_rust_bootloader.a").write_text("dummy lib")
 
     # Mock compiled exe
     mock_compile.return_value = tmp_path / "compiled.exe"

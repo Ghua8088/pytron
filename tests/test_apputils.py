@@ -40,7 +40,7 @@ def test_deadmansswitch_monitor_triggers(mock_thread, mock_exit):
 
 # Shell Tests
 @patch("sys.platform", "win32")
-@patch("os.startfile")
+@patch("os.startfile", create=True)
 @patch("subprocess.run")
 def test_shell_open_external_windows(mock_run, mock_startfile):
     Shell.open_external("https://google.com")

@@ -39,6 +39,8 @@ def webview_config():
         "title": "Test App",
         "dimensions": [1024, 768],
         "debug": True,
+        "resizable": True,
+        "frameless": False,
     }
 
 
