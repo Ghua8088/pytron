@@ -297,6 +297,11 @@ class ServoAdapter:
         self._flush_lock = threading.Lock()
 
     def start(self):
+        if self.binary_path == "NATIVE":
+            logger.info("Native Bridge Mode: Skipping IPC server and loop.")
+            self.ready = True
+            return
+
         self.ipc = ServoIPCServer()
 
         # Start the server thread
@@ -309,6 +314,11 @@ class ServoAdapter:
         # WAIT FOR THE PIPE NAME
         if not self.ipc.listening_event.wait(timeout=10.0):
             raise RuntimeError("Failed to init IPC pipe within 10 seconds")
+
+        if self.binary_path == "NATIVE":
+            logger.info("Native Bridge Mode: Skipping subprocess spawn.")
+            self.ready = True  # Native bridge is ready immediately
+            return
 
         app_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "shell"))
 

@@ -84,6 +84,10 @@ class ConfigMixin:
                 # So we should probably dispatch in app.run().
 
     def _load_config(self, config_file):
+        if isinstance(config_file, dict):
+            self.config = config_file
+            return
+
         self.config = {}
         path = get_resource_path(config_file)
         self.logger.debug(f"Resolved settings path: {path}")

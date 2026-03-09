@@ -1,12 +1,18 @@
 use pyo3::prelude::*;
-use libservo; 
+use libservo::{
+    ServoBuilder, WebViewBuilder, WindowRenderingContext, WebView, WebViewDelegate,
+    embedder_traits::EventLoopWaker,
+};
 use std::sync::{Arc, Mutex};
+use std::rc::Rc;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::WindowBuilder,
+    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
 };
 use std::num::NonZeroU32;
+use url::Url;
 
 extern crate gl;
 
@@ -20,6 +26,32 @@ enum UserEvent {
     SetTitle(String),
     Navigate(String),
     Close,
+    Wake,
+}
+
+#[derive(Clone)]
+struct Waker(winit::event_loop::EventLoopProxy<UserEvent>);
+
+impl EventLoopWaker for Waker {
+    fn clone_box(&self) -> Box<dyn EventLoopWaker> {
+        Box::new(Self(self.0.clone()))
+    }
+
+    fn wake(&self) {
+        if let Err(e) = self.0.send_event(UserEvent::Wake) {
+            println!("[Servo-Pyd] Failed to wake: {:?}", e);
+        }
+    }
+}
+
+struct AppState {
+    window: Arc<winit::window::Window>,
+}
+
+impl WebViewDelegate for AppState {
+    fn notify_new_frame_ready(&self, _: WebView) {
+        self.window.request_redraw();
+    }
 }
 
 #[pyclass]

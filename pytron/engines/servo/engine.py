@@ -5,9 +5,19 @@ import logging
 import ctypes
 import subprocess
 import urllib.parse
+import threading
+import asyncio
+import inspect
+import pathlib
+import time
 from ...webview import Webview
 from .adapter import ServoAdapter
 from ...serializer import pytron_serialize
+
+try:
+    from ...dependencies import pytron_servo
+except ImportError:
+    pytron_servo = None
 
 
 def _to_str(b):
@@ -25,6 +35,9 @@ class ServoBridge:
         self.adapter = adapter
         self._callbacks = {}
         self.real_hwnd = 0
+        self.engine = None
+        if pytron_servo:
+            self.engine = pytron_servo.ServoEngine()
 
     def webview_create(self, debug, window, root_path=None):
         self.adapter.send(
@@ -61,13 +74,23 @@ class ServoBridge:
         return 1
 
     def webview_show(self, w):
-        self.adapter.send({"action": "show"})
+        if self.engine:
+            self.engine.show()
+        else:
+            self.adapter.send({"action": "show"})
 
     def webview_hide(self, w):
-        self.adapter.send({"action": "hide"})
+        if self.engine:
+            self.engine.hide()
+        else:
+            self.adapter.send({"action": "hide"})
 
     def webview_set_title(self, w, title):
-        self.adapter.send({"action": "set_title", "title": _to_str(title)})
+        t = _to_str(title)
+        if self.engine:
+            self.engine.set_title(t)
+        else:
+            self.adapter.send({"action": "set_title", "title": t})
 
     def webview_set_icon(self, w, icon_path):
         self.adapter.send({"action": "set_icon", "icon": str(icon_path)})
@@ -76,7 +99,11 @@ class ServoBridge:
         self.adapter.send({"action": "set_size", "width": width, "height": height})
 
     def webview_navigate(self, w, url):
-        self.adapter.send({"action": "navigate", "url": _to_str(url)})
+        u = _to_str(url)
+        if self.engine:
+            self.engine.navigate(u)
+        else:
+            self.adapter.send({"action": "navigate", "url": u})
 
     def webview_eval(self, w, js):
         self.adapter.send({"action": "eval", "code": _to_str(js)})
@@ -85,11 +112,20 @@ class ServoBridge:
         self.adapter.send({"action": "init_script", "js": _to_str(js)})
 
     def webview_run(self, w):
-        if self.adapter.process:
+        if self.engine:
+            # We need to run the loop. Note: this blocks!
+            title = self.adapter.config.get("title", "Pytron")
+            width = self.adapter.config.get("width", 1024)
+            height = self.adapter.config.get("height", 768)
+            self.engine.run(title, width, height)
+        elif self.adapter.process:
             self.adapter.process.wait()
 
     def webview_destroy(self, w):
-        self.adapter.send({"action": "close"})
+        if self.engine:
+            self.engine.close()
+        else:
+            self.adapter.send({"action": "close"})
 
     def webview_bind(self, w, name, fn, arg):
         n = _to_str(name)
@@ -108,6 +144,53 @@ class ServoBridge:
         self.adapter.send(
             {"action": "reply", "id": _to_str(seq), "status": status, "result": res_obj}
         )
+
+    def webview_set_fullscreen(self, w, fullscreen):
+        self.adapter.send({"action": "set_fullscreen", "fullscreen": bool(fullscreen)})
+
+    def webview_set_resizable(self, w, resizable):
+        self.adapter.send({"action": "set_resizable", "resizable": bool(resizable)})
+
+    def webview_set_always_on_top(self, w, always_on_top):
+        self.adapter.send(
+            {"action": "set_always_on_top", "always_on_top": bool(always_on_top)}
+        )
+
+    def webview_dialog_open_file(self, title, default_path, filters):
+        # This is a bit tricky as it needs to be synchronous or handle callbacks.
+        # For now, we'll send the action and the shell should handle it.
+        # In a real Servo implementation, this might be a blocking call.
+        self.adapter.send(
+            {
+                "action": "dialog_open_file",
+                "title": _to_str(title),
+                "default_path": _to_str(default_path) if default_path else None,
+                "filters": _to_str(filters) if filters else None,
+            }
+        )
+        return []
+
+    def webview_dialog_save_file(self, title, default_path, default_name, filters):
+        self.adapter.send(
+            {
+                "action": "dialog_save_file",
+                "title": _to_str(title),
+                "default_path": _to_str(default_path) if default_path else None,
+                "default_name": _to_str(default_name) if default_name else None,
+                "filters": _to_str(filters) if filters else None,
+            }
+        )
+        return None
+
+    def webview_dialog_open_folder(self, title, default_path):
+        self.adapter.send(
+            {
+                "action": "dialog_open_folder",
+                "title": _to_str(title),
+                "default_path": _to_str(default_path) if default_path else None,
+            }
+        )
+        return None
 
     def webview_get_window(self, w):
         # On Windows, returning the real HWND allows native features (Taskbar, Menus) to work.
@@ -142,26 +225,26 @@ class ServoWebView(Webview):
 
         # --- Replicate Webview Basic Init ---
         self.config = config
-        self.id = config.get("id") or str(int(__import__("time").time() * 1000))
+        self.id = config.get("id") or str(int(time.time() * 1000))
 
         # 1. Resolve Root
         self.app = config.get("__app__")
 
         if self.app and hasattr(self.app, "app_root"):
-            self._app_root = __import__("pathlib").Path(self.app.app_root)
+            self._app_root = pathlib.Path(self.app.app_root)
         elif getattr(sys, "frozen", False):
-            self._app_root = __import__("pathlib").Path(sys.executable).parent
+            self._app_root = pathlib.Path(sys.executable).parent
             if hasattr(sys, "_MEIPASS"):
-                self._app_root = __import__("pathlib").Path(sys._MEIPASS)
+                self._app_root = pathlib.Path(sys._MEIPASS)
         else:
-            self._app_root = __import__("pathlib").Path.cwd()
+            self._app_root = pathlib.Path.cwd()
 
         if self.app:
             self.thread_pool = self.app.thread_pool
         else:
-            self.thread_pool = __import__(
-                "concurrent.futures"
-            ).futures.ThreadPoolExecutor(max_workers=5)
+            from concurrent.futures import ThreadPoolExecutor
+
+            self.thread_pool = ThreadPoolExecutor(max_workers=5)
 
         # Determine Scheme (Always pytron:// for Servo engine)
         self._scheme = "pytron://localhost"
@@ -179,7 +262,7 @@ class ServoWebView(Webview):
                     f"{exe_name}.exe",
                     f"{exe_name}-Renderer.exe",
                     f"{exe_name}-Engine.exe",
-                    "miniservo.exe",
+                    "servo-shell.exe",
                 ]
                 base_dir = os.path.dirname(sys.executable)
                 std_dir = os.path.join(base_dir, "pytron", "dependencies", "servo")
@@ -210,7 +293,7 @@ class ServoWebView(Webview):
                 shell_path = renamed_engine
             else:
                 global_path = os.path.expanduser(
-                    "~/.pytron/engines/servo/miniservo.exe"
+                    "~/.pytron/engines/servo/servo-shell.exe"
                 )
                 if os.path.exists(global_path):
                     shell_path = global_path
@@ -219,13 +302,16 @@ class ServoWebView(Webview):
                         os.path.join(
                             os.getcwd(),
                             "..",
-                            "pytron-miniservo-engine",
+                            "pytron-servo-shell-engine",
                             "bin",
-                            "miniservo.exe",
+                            "servo-shell.exe",
                         )
                     )
                     if os.path.exists(search_path):
                         shell_path = search_path
+                    if pytron_servo:
+                        self.logger.info("Using Native Servo Pyd bridge.")
+                        shell_path = "NATIVE"
                     else:
                         self.logger.warning(
                             "Servo Engine not found. Auto-provisioning..."
@@ -240,7 +326,7 @@ class ServoWebView(Webview):
         navigate_url = raw_url
 
         if not raw_url.startswith(("http:", "https:", "pytron:")):
-            p = __import__("pathlib").Path(raw_url).resolve()
+            p = pathlib.Path(raw_url).resolve()
             # Assume standard structure: <root>/frontend/dist/index.html
             # We want <root> to be the base.
             # Heuristic: Go up until we find 'plugins' folder or hit root
@@ -275,6 +361,10 @@ class ServoWebView(Webview):
         self.logger.info(f"Using Servo Shell (v3): {shell_path}")
         self.adapter = ServoAdapter(shell_path, config)
         self.bridge = ServoBridge(self.adapter)
+
+        # Connect the engine to the adapter so it can send events
+        if self.bridge.engine:
+            self.adapter.engine = self.bridge.engine
 
         self.adapter.start()
         self.adapter.bind_raw(self._handle_ipc_message)
@@ -441,6 +531,16 @@ class ServoWebView(Webview):
         """
         self.eval(init_js)
 
+        # 8. Event Loop (Asyncio)
+        self.loop = asyncio.new_event_loop()
+
+        def start_loop():
+            asyncio.set_event_loop(self.loop)
+            self.loop.run_forever()
+
+        t = threading.Thread(target=start_loop, daemon=True)
+        t.start()
+
         # Force Resizable Update (Fix gray maximize button)
         # Sometimes init flag is overridden by window style defaults in Electron
         self.bridge.adapter.send({"action": "set_resizable", "resizable": True})
@@ -453,9 +553,6 @@ class ServoWebView(Webview):
         return 0
 
     def _handle_ipc_message(self, msg):
-        import inspect
-        import asyncio
-
         msg_type = msg.get("type")
         payload = msg.get("payload")
 
@@ -489,29 +586,39 @@ class ServoWebView(Webview):
 
             if event in self._bound_functions:
                 func = self._bound_functions[event]
-                try:
-                    result = func(*args) if isinstance(args, list) else func(args)
 
-                    if inspect.iscoroutine(result):
-                        try:
-                            result = asyncio.run(result)
-                        except RuntimeError:
-                            pass
-
+                def _respond(status, result):
                     safe_obj = pytron_serialize(result, None)
                     serialized_json = json.dumps(safe_obj)
+                    if seq:
+                        self.bridge.webview_return(
+                            self.w, seq.encode("utf-8"), status, serialized_json
+                        )
 
-                    if seq:
-                        self.bridge.webview_return(
-                            self.w, seq.encode("utf-8"), 0, serialized_json
+                def _runner():
+                    try:
+                        res = func(*args) if isinstance(args, list) else func(args)
+                        _respond(0, res)
+                    except Exception as e:
+                        self.logger.error(f"ServoNative IPC Error in {event}: {e}")
+                        _respond(1, str(e))
+
+                async def _async_runner():
+                    try:
+                        res = func(*args) if isinstance(args, list) else func(args)
+                        if inspect.iscoroutine(res):
+                            res = await res
+                        _respond(0, res)
+                    except Exception as e:
+                        self.logger.error(
+                            f"ServoNative Async IPC Error in {event}: {e}"
                         )
-                except Exception as e:
-                    self.logger.error(f"ServoNative IPC Error in {event}: {e}")
-                    if seq:
-                        safe_err = pytron_serialize(str(e), None)
-                        self.bridge.webview_return(
-                            self.w, seq.encode("utf-8"), 1, json.dumps(safe_err)
-                        )
+                        _respond(1, str(e))
+
+                if inspect.iscoroutinefunction(func):
+                    asyncio.run_coroutine_threadsafe(_async_runner(), self.loop)
+                else:
+                    self.thread_pool.submit(_runner)
 
     def bind(self, name, func, run_in_thread=True, secure=False):
         self._bound_functions[name] = func
@@ -548,6 +655,15 @@ class ServoWebView(Webview):
     def minimize(self):
         self.bridge.adapter.send({"action": "minimize"})
 
+    def maximize(self):
+        self.bridge.adapter.send({"action": "maximize"})
+
+    def restore(self):
+        self.bridge.adapter.send({"action": "restore"})
+
+    def unmaximize(self):
+        self.bridge.adapter.send({"action": "unmaximize"})
+
     def show(self):
         self.bridge.webview_show(self.w)
 
@@ -569,28 +685,114 @@ class ServoWebView(Webview):
     def eval(self, js):
         self.bridge.webview_eval(self.w, js)
 
+    def reload(self):
+        self.eval("location.reload()")
+
     def toggle_maximize(self):
         self.bridge.adapter.send({"action": "toggle_maximize"})
+
+    def set_fullscreen(self, enable):
+        self.bridge.webview_set_fullscreen(self.w, enable)
+
+    def set_resizable(self, enable):
+        self.bridge.webview_set_resizable(self.w, enable)
+
+    def set_always_on_top(self, enable):
+        self.bridge.webview_set_always_on_top(self.w, enable)
 
     def make_frameless(self):
         self.bridge.adapter.send({"action": "set_frameless", "frameless": True})
 
     def start_drag(self):
-        pass
+        self.bridge.adapter.send({"action": "start_drag"})
 
     def set_menu(self, menu_bar):
+        # TODO: Implement native menu support for Servo
         pass
 
+    def emit(self, event, data=None):
+        payload = json.dumps(data)
+        js = f"window.dispatchEvent(new CustomEvent('{event}', {{ detail: {payload} }}));"
+        self.eval(js)
+
+    def _sync_state(self):
+        if self.app:
+            return self.app.state.to_dict()
+        return {}
+
+    # --- Dialogs ---
+    def dialog_open_file(self, *args, **kwargs):
+        title = kwargs.get("title", "Open File")
+        default_path = kwargs.get("default_path")
+        file_types = kwargs.get("file_types")
+        filters_str = None
+        if file_types:
+            parts = []
+            for name, pat in file_types:
+                exts = pat.replace("*.", "").replace(";", ",")
+                parts.append(f"{name}:{exts}")
+            filters_str = ";".join(parts)
+        return self.bridge.webview_dialog_open_file(title, default_path, filters_str)
+
+    def dialog_save_file(self, *args, **kwargs):
+        title = kwargs.get("title", "Save File")
+        default_path = kwargs.get("default_path")
+        default_name = kwargs.get("default_name")
+        file_types = kwargs.get("file_types")
+        filters_str = None
+        if file_types:
+            parts = []
+            for name, pat in file_types:
+                exts = pat.replace("*.", "").replace(";", ",")
+                parts.append(f"{name}:{exts}")
+            filters_str = ";".join(parts)
+        return self.bridge.webview_dialog_save_file(
+            title, default_path, default_name, filters_str
+        )
+
+    def dialog_open_folder(self, *args, **kwargs):
+        title = kwargs.get("title", "Select Folder")
+        default_path = kwargs.get("default_path")
+        return self.bridge.webview_dialog_open_folder(title, default_path)
+
+    def set_taskbar_progress(self, state="normal", value=0, max_value=100):
+        if self._platform and self.hwnd:
+            self._platform.set_taskbar_progress(self.hwnd, state, value, max_value)
+        else:
+            self.bridge.adapter.send(
+                {
+                    "action": "set_taskbar_progress",
+                    "state": state,
+                    "value": value,
+                    "max": max_value,
+                }
+            )
+
+    def system_notification(self, title, message, icon=None):
+        if self._platform and self.hwnd:
+            self._platform.notification(self.hwnd, title, message, icon)
+        else:
+            self.bridge.adapter.send(
+                {"action": "notification", "title": title, "message": message}
+            )
+
+    def toast(self, config):
+        if self._platform and self.hwnd:
+            self._platform.toast(self.hwnd, config)
+        else:
+            self.bridge.adapter.send({"action": "toast", "config": config})
+
     def start(self):
+        self.logger.info("Starting Servo Engine...")
+
+        # Register Native Event Handlers
+        self.bind("pytron_on_close", self._on_close_requested)
+
         try:
-            if self.adapter.process:
-                # Use a loop with timeout to allow for signal processing (like Ctrl+C)
-                while self.adapter.process.poll() is None:
-                    try:
-                        self.adapter.process.wait(timeout=0.5)
-                    except subprocess.TimeoutExpired:
-                        continue
+            # Delegate to bridge which handles both .pyd and subprocess
+            self.bridge.webview_run(self.w)
         except KeyboardInterrupt:
             self.close()
         finally:
             self.logger.info("Servo Engine stopped.")
+            self._running = False

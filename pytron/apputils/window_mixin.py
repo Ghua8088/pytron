@@ -30,6 +30,10 @@ class WindowMixin:
             from ..engines.chrome.engine import ChromeWebView
 
             window = ChromeWebView(config=window_config)
+        elif getattr(self, "engine", "native") == "servo":
+            from ..engines.servo.engine import ServoWebView
+
+            window = ServoWebView(config=window_config)
         else:
             window = Webview(config=window_config)
 
