@@ -152,3 +152,9 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
+          # Attestations are a production PyPI security feature — TestPyPI doesn't
+          # require them and re-uploading the same attestation causes a generic
+          # 400 Bad Request that skip-existing can't catch (it only handles 409s).
+          attestations: false
+          # Always show verbose output so 400s show the actual rejection reason.
+          verbose: true
