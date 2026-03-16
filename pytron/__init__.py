@@ -2,19 +2,18 @@ import sys
 import os
 import io
 
-# --- Linux Stability Guards ---
-# On modern Linux distros (including Pop!_OS/Ubuntu), we must avoid symbol collisions
-# between different versions of GLib/GObject when using the Native Engine.
+# --- Linux Stability Guards (Nuclear Edition) ---
 if sys.platform.startswith("linux"):
     # Force GSettings to memory to avoid the 'cannot register existing type GSettingsBackend' crash.
-    if "GSETTINGS_BACKEND" not in os.environ:
-        os.environ["GSETTINGS_BACKEND"] = "memory"
+    os.environ.setdefault("GSETTINGS_BACKEND", "memory")
     # Essential for VMs (VMware/VirtualBox) to avoid black screens or WebKit crashes.
-    if "WEBKIT_DISABLE_COMPOSITING_MODE" not in os.environ:
-        os.environ["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
+    os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
     # Ensure we use X11 backend for better stability in virtualized browsers.
-    if "WINIT_UNIX_BACKEND" not in os.environ:
-        os.environ["WINIT_UNIX_BACKEND"] = "x11"
+    os.environ.setdefault("WINIT_UNIX_BACKEND", "x11")
+    # PREVENT accessibility bus from auto-initializing GLib
+    os.environ.setdefault("NO_AT_BRIDGE", "1")
+    # PREVENT GIO from loading remote VFS modules that might collision
+    os.environ.setdefault("GIO_USE_VFS", "local")
 
 # Best-effort: configure stdio to UTF-8 early when pytron is imported. This
 # helps packaged apps avoid UnicodeEncodeError during prints/logging.

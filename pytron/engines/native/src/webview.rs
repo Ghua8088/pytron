@@ -74,10 +74,13 @@ impl NativeWebview {
         #[cfg(target_os = "linux")]
         {
             // Force X11 on VMs for better stability/handle support.
-            // Using env var is safer than unstable builder APIs across tao versions.
             if std::env::var("WINIT_UNIX_BACKEND").is_err() {
                 std::env::set_var("WINIT_UNIX_BACKEND", "x11");
             }
+            // Ensure GSettings doesn't try to load system backends that collision with Python
+            std::env::set_var("GSETTINGS_BACKEND", "memory");
+            // Disable remote VFS to avoid further GLib type collisions
+            std::env::set_var("GIO_USE_VFS", "local");
         }
 
         let event_loop = builder.build();
