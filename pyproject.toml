@@ -34,7 +34,8 @@ dependencies = [
   "cryptography",
   "keyring",
   "requests",
-  "Cython"
+  "Cython",
+  "python-xlib; sys_platform == 'linux'"
 ]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -48,8 +49,9 @@ classifiers = [
 [project.urls]
 Homepage = "https://pytron-kit.github.io/"
 Repository = "https://github.com/Ghua8088/pytron-kit"
-asyncio_mode = "auto"
+
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-v -ra --tb=short"
 norecursedirs = [

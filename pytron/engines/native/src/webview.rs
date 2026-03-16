@@ -77,13 +77,28 @@ impl NativeWebview {
         
         let window = WindowBuilder::new()
             .with_title("Pytron App")
-            // Linux Fix: Window must be visible for the handle to be "realized" 
-            // before WRY can build a WebView on it.
-            .with_visible(cfg!(target_os = "linux")) 
+            // Linux: window must be visible so GTK realizes it (allocates the
+            // GdkWindow handle) before wry tries to embed WebKit into it.
+            .with_visible(cfg!(target_os = "linux"))
             .with_resizable(resizable)
             .with_decorations(!frameless)
             .build(&event_loop)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to create window: {}", e)))?;
+
+        // Linux: force GTK to fully realize the window before wry embeds WebKit.
+        // With no GPU (VMware/VMs), also disable WebKit hardware compositing.
+        #[cfg(target_os = "linux")]
+        {
+            if std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").is_err() {
+                std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+            }
+            // Pump the GTK event loop until the GdkWindow handle is allocated.
+            // 5 iterations is enough on real hardware; more drains VMware's queue.
+            let ctx = glib::MainContext::default();
+            for _ in 0..10 {
+                ctx.iteration(false);
+            }
+        }
         
         #[cfg(target_os = "windows")]
         let hwnd = {

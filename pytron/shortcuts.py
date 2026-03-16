@@ -92,6 +92,31 @@ VK_MAP = {
     "DELETE": 0x2E,
 }
 
+# X11 Keysyms for Linux (python-xlib)
+XK_MAP = {
+    "SPACE":     0x0020,
+    "ENTER":     0xFF0D,
+    "ESCAPE":    0xFF1B,
+    "BACKSPACE": 0xFF08,
+    "TAB":       0xFF09,
+    "LEFT":      0xFF51,
+    "UP":        0xFF52,
+    "RIGHT":     0xFF53,
+    "DOWN":      0xFF54,
+    "DELETE":    0xFFFF,
+    "F1":  0xFFBE, "F2":  0xFFBF, "F3":  0xFFC0, "F4":  0xFFC1,
+    "F5":  0xFFC2, "F6":  0xFFC3, "F7":  0xFFC4, "F8":  0xFFC5,
+    "F9":  0xFFC6, "F10": 0xFFC7, "F11": 0xFFC8, "F12": 0xFFC9,
+}
+
+# X11 modifier masks
+_X11_SHIFT   = 1    # ShiftMask
+_X11_CONTROL = 4    # ControlMask
+_X11_ALT     = 8    # Mod1Mask (Alt)
+_X11_SUPER   = 64   # Mod4Mask (Win/Super)
+_X11_NUMLOCK = 16   # Mod2Mask  — noise modifier, must iterate
+_X11_LOCK    = 2    # LockMask  — noise modifier, must iterate
+
 
 class ShortcutManager:
     def __init__(self):
@@ -103,6 +128,10 @@ class ShortcutManager:
         self._reg_queue = queue.Queue()
         self._thread_id = None
         self._queue_ready = threading.Event()
+        # Linux / X11
+        self._xlib_display = None
+        self._xlib_root = None
+        self._xlib_lock = threading.Lock()
 
     def register(self, combo: str, callback: Callable):
         """Registers a global shortcut (e.g., 'Ctrl+Alt+S')."""
@@ -111,6 +140,8 @@ class ShortcutManager:
             self._register_windows(combo, callback)
         elif platform == "darwin":
             self._register_darwin(combo, callback)
+        elif platform.startswith("linux"):
+            self._register_linux(combo, callback)
         else:
             self.logger.warning(f"Global shortcuts not implemented for {platform}")
 
@@ -172,6 +203,142 @@ class ShortcutManager:
 
         except ImportError:
             self.logger.error("macOS Shortcuts require 'pyobjc-framework-Quartz'.")
+
+    # ------------------------------------------------------------------ Linux
+
+    def _x11_mod_mask(self, modifiers: int) -> int:
+        mask = 0
+        if modifiers & MOD_CONTROL: mask |= _X11_CONTROL
+        if modifiers & MOD_ALT:     mask |= _X11_ALT
+        if modifiers & MOD_SHIFT:   mask |= _X11_SHIFT
+        if modifiers & MOD_WIN:     mask |= _X11_SUPER
+        return mask
+
+    def _register_linux(self, combo: str, callback: Callable):
+        """X11 global hotkey via python-xlib. Silently skips on Wayland."""
+        import os
+        if not os.environ.get("DISPLAY"):
+            self.logger.warning(
+                "Global shortcuts: no DISPLAY found (Wayland/headless). Skipping."
+            )
+            return
+        try:
+            from Xlib import display as xdisplay  # noqa: F401
+        except ImportError:
+            self.logger.error(
+                "Global shortcuts on Linux require 'python-xlib'. "
+                "Install: pip install python-xlib"
+            )
+            return
+
+        modifiers, _ = self._parse_combo(combo)
+        xmods = self._x11_mod_mask(modifiers)
+
+        key_part = combo.upper().split("+")[-1]
+        keysym = XK_MAP.get(key_part) or (
+            ord(key_part.lower()) if len(key_part) == 1 else None
+        )
+        if not keysym:
+            self.logger.error(f"Cannot resolve X11 keysym for: {combo}")
+            return
+
+        if not self._running:
+            self._start_xlib_loop()
+            if not self._queue_ready.wait(timeout=2.0):
+                self.logger.error("X11 shortcut loop failed to start.")
+                return
+
+        with self._xlib_lock:
+            disp = self._xlib_display
+        if disp is None:
+            self.logger.error("X11 display not available.")
+            return
+
+        keycode = disp.keysym_to_keycode(keysym)
+        if not keycode:
+            self.logger.error(f"No X11 keycode for 0x{keysym:04X} ({combo})")
+            return
+
+        sid = self._next_id
+        self._next_id += 1
+        self.shortcuts[sid] = {
+            "combo": combo,
+            "modifiers": modifiers,
+            "xmods": xmods,
+            "xkeycode": keycode,
+            "callback": callback,
+            "registered": False,
+        }
+        self._xlib_grab(sid)
+
+    def _start_xlib_loop(self):
+        self._running = True
+        self._queue_ready.clear()
+        self._thread = threading.Thread(
+            target=self._xlib_loop, daemon=True, name="pytron-xlib-hotkeys"
+        )
+        self._thread.start()
+
+    def _xlib_loop(self):
+        """Background thread: listens for X11 KeyPress events on root window."""
+        try:
+            from Xlib import X
+            from Xlib import display as xdisplay
+        except ImportError:
+            self.logger.error("python-xlib missing — X11 loop aborted.")
+            self._queue_ready.set()
+            return
+
+        try:
+            disp = xdisplay.Display()
+        except Exception as e:
+            self.logger.error(f"Cannot open X display: {e}")
+            self._queue_ready.set()
+            return
+
+        root = disp.screen().root
+        root.change_attributes(event_mask=X.KeyPressMask)
+
+        with self._xlib_lock:
+            self._xlib_display = disp
+            self._xlib_root = root
+
+        self._queue_ready.set()
+        self.logger.info("X11 global shortcut loop started.")
+
+        _NOISE = _X11_NUMLOCK | _X11_LOCK
+        while self._running:
+            try:
+                event = disp.next_event()
+            except Exception:
+                break
+            if event.type != X.KeyPress:
+                continue
+            keycode = event.detail
+            state = event.state & ~_NOISE
+            for data in self.shortcuts.values():
+                if data.get("xkeycode") == keycode and data.get("xmods") == state:
+                    threading.Thread(target=data["callback"], daemon=True).start()
+
+        disp.close()
+
+    def _xlib_grab(self, sid: int):
+        """Grab key with all noise-modifier combos so NumLock/CapsLock don't block it."""
+        from Xlib import X
+        data = self.shortcuts[sid]
+        root = self._xlib_root
+        keycode = data["xkeycode"]
+        xmods = data["xmods"]
+        for extra in [0, _X11_NUMLOCK, _X11_LOCK, _X11_NUMLOCK | _X11_LOCK]:
+            root.grab_key(
+                keycode, xmods | extra,
+                True, X.GrabModeAsync, X.GrabModeAsync,
+            )
+        data["registered"] = True
+        self.logger.info(
+            f"Registered X11 shortcut: {data['combo']} "
+            f"(keycode={keycode}, xmods=0x{xmods:02X})"
+        )
 
     def _parse_combo(self, combo: str):
         parts = combo.upper().split("+")
