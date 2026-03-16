@@ -14,6 +14,8 @@ use wry::WebViewBuilder;
 
 #[cfg(target_os = "windows")]
 use wry::WebViewBuilderExtWindows; 
+#[cfg(target_os = "linux")]
+use tao::platform::unix::EventLoopBuilderExtUnix;
 #[cfg(target_os = "windows")]
 use tao::platform::windows::EventLoopBuilderExtWindows;
 
@@ -38,10 +40,14 @@ pub struct NativeWebview {
 unsafe impl Send for NativeWebview {}
 unsafe impl Sync for NativeWebview {}
 
+#[cfg(target_os = "linux")]
+static TAO_INIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 #[pymethods]
 impl NativeWebview {
     #[new]
     pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool, store: NativeState) -> PyResult<Self> {
+
     // Wait, I need to match existing signature.
     // The existing signature is:
     // pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool, store: NativeState) -> PyResult<Self>
@@ -64,9 +70,17 @@ impl NativeWebview {
 
         let mut builder = EventLoopBuilder::<UserEvent>::with_user_event();
         
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         {
             builder.with_any_thread(true);
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // Force X11 on VMs for better stability/handle support.
+            // Tao 0.28+ has Backend::X11.
+            use tao::platform::unix::Backend;
+            builder.with_backend(Backend::X11);
         }
 
         let event_loop = builder.build();
