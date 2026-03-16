@@ -88,10 +88,9 @@ jobs:
           if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
             python -m build --wheel
             pip install auditwheel
-            for whl in dist/*.whl; do
-              new_whl=$(echo $whl | sed 's/linux_x86_64/manylinux_2_35_x86_64/g')
-              mv "$whl" "$new_whl"
-            done
+            # Properly repair the wheel instead of just renaming it
+            auditwheel repair dist/*.whl --plat manylinux_2_35_x86_64 -w dist/
+            rm dist/*linux_x86_64.whl  # Remove the original unrepaired wheel
           else
             python -m build --wheel
           fi
