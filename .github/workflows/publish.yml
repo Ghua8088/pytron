@@ -34,7 +34,7 @@ jobs:
               - 'pytron/pack/secure_loader/Cargo.toml'
 
       - name: 🐍 Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -126,7 +126,7 @@ jobs:
       - name: 🔍 Checkout code
         uses: actions/checkout@v4
       - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: 📦 Build SDist
