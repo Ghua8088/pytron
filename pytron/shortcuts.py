@@ -94,28 +94,37 @@ VK_MAP = {
 
 # X11 Keysyms for Linux (python-xlib)
 XK_MAP = {
-    "SPACE":     0x0020,
-    "ENTER":     0xFF0D,
-    "ESCAPE":    0xFF1B,
+    "SPACE": 0x0020,
+    "ENTER": 0xFF0D,
+    "ESCAPE": 0xFF1B,
     "BACKSPACE": 0xFF08,
-    "TAB":       0xFF09,
-    "LEFT":      0xFF51,
-    "UP":        0xFF52,
-    "RIGHT":     0xFF53,
-    "DOWN":      0xFF54,
-    "DELETE":    0xFFFF,
-    "F1":  0xFFBE, "F2":  0xFFBF, "F3":  0xFFC0, "F4":  0xFFC1,
-    "F5":  0xFFC2, "F6":  0xFFC3, "F7":  0xFFC4, "F8":  0xFFC5,
-    "F9":  0xFFC6, "F10": 0xFFC7, "F11": 0xFFC8, "F12": 0xFFC9,
+    "TAB": 0xFF09,
+    "LEFT": 0xFF51,
+    "UP": 0xFF52,
+    "RIGHT": 0xFF53,
+    "DOWN": 0xFF54,
+    "DELETE": 0xFFFF,
+    "F1": 0xFFBE,
+    "F2": 0xFFBF,
+    "F3": 0xFFC0,
+    "F4": 0xFFC1,
+    "F5": 0xFFC2,
+    "F6": 0xFFC3,
+    "F7": 0xFFC4,
+    "F8": 0xFFC5,
+    "F9": 0xFFC6,
+    "F10": 0xFFC7,
+    "F11": 0xFFC8,
+    "F12": 0xFFC9,
 }
 
 # X11 modifier masks
-_X11_SHIFT   = 1    # ShiftMask
-_X11_CONTROL = 4    # ControlMask
-_X11_ALT     = 8    # Mod1Mask (Alt)
-_X11_SUPER   = 64   # Mod4Mask (Win/Super)
-_X11_NUMLOCK = 16   # Mod2Mask  — noise modifier, must iterate
-_X11_LOCK    = 2    # LockMask  — noise modifier, must iterate
+_X11_SHIFT = 1  # ShiftMask
+_X11_CONTROL = 4  # ControlMask
+_X11_ALT = 8  # Mod1Mask (Alt)
+_X11_SUPER = 64  # Mod4Mask (Win/Super)
+_X11_NUMLOCK = 16  # Mod2Mask  — noise modifier, must iterate
+_X11_LOCK = 2  # LockMask  — noise modifier, must iterate
 
 
 class ShortcutManager:
@@ -208,15 +217,20 @@ class ShortcutManager:
 
     def _x11_mod_mask(self, modifiers: int) -> int:
         mask = 0
-        if modifiers & MOD_CONTROL: mask |= _X11_CONTROL
-        if modifiers & MOD_ALT:     mask |= _X11_ALT
-        if modifiers & MOD_SHIFT:   mask |= _X11_SHIFT
-        if modifiers & MOD_WIN:     mask |= _X11_SUPER
+        if modifiers & MOD_CONTROL:
+            mask |= _X11_CONTROL
+        if modifiers & MOD_ALT:
+            mask |= _X11_ALT
+        if modifiers & MOD_SHIFT:
+            mask |= _X11_SHIFT
+        if modifiers & MOD_WIN:
+            mask |= _X11_SUPER
         return mask
 
     def _register_linux(self, combo: str, callback: Callable):
         """X11 global hotkey via python-xlib. Silently skips on Wayland."""
         import os
+
         if not os.environ.get("DISPLAY"):
             self.logger.warning(
                 "Global shortcuts: no DISPLAY found (Wayland/headless). Skipping."
@@ -325,14 +339,18 @@ class ShortcutManager:
     def _xlib_grab(self, sid: int):
         """Grab key with all noise-modifier combos so NumLock/CapsLock don't block it."""
         from Xlib import X
+
         data = self.shortcuts[sid]
         root = self._xlib_root
         keycode = data["xkeycode"]
         xmods = data["xmods"]
         for extra in [0, _X11_NUMLOCK, _X11_LOCK, _X11_NUMLOCK | _X11_LOCK]:
             root.grab_key(
-                keycode, xmods | extra,
-                True, X.GrabModeAsync, X.GrabModeAsync,
+                keycode,
+                xmods | extra,
+                True,
+                X.GrabModeAsync,
+                X.GrabModeAsync,
             )
         data["registered"] = True
         self.logger.info(
