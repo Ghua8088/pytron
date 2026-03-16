@@ -186,7 +186,7 @@ impl ChromeIPC {
 
                 #[cfg(not(target_os = "windows"))]
                 {
-                    if let Some(mut stream) = stream_read.as_mut() {
+                    if let Some(stream) = stream_read.as_mut() {
                         let mut header = [0u8; 4];
                         if stream.read_exact(&mut header).is_err() { break; }
                         let msg_len = u32::from_le_bytes(header) as usize;
@@ -235,7 +235,7 @@ impl ChromeIPC {
         #[cfg(not(target_os = "windows"))]
         {
             let mut lock = self.stream.lock().unwrap();
-            if let Some(mut stream) = lock.as_mut() {
+            if let Some(stream) = lock.as_mut() {
                 py.allow_threads(move || {
                     let _ = stream.write_all(&full_msg);
                 });
