@@ -1,0 +1,7 @@
+flowchart LR
+  S[Source: entry_script.py] --> Cython[Cython -> app.c]
+  Cython --> Patch[Append WinMain/_fltused (if needed)]
+  Patch --> Zig[zig build-exe + bootloader_lib]
+  Zig --> Link[Link Python runtime + system libs]
+  Link --> BIN[Fused static executable (app or app.exe)]
+  BIN --> DONE[Done]

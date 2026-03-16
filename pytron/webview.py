@@ -63,9 +63,13 @@ class Webview:
         if self.app:
             self.thread_pool = self.app.thread_pool
         else:
+            from .utils import com_thread_initializer
+
             self.thread_pool = __import__(
                 "concurrent.futures"
-            ).futures.ThreadPoolExecutor(max_workers=5)
+            ).futures.ThreadPoolExecutor(
+                max_workers=5, initializer=com_thread_initializer
+            )
 
         self._served_data = {}
         self._running = False

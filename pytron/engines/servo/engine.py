@@ -243,8 +243,11 @@ class ServoWebView(Webview):
             self.thread_pool = self.app.thread_pool
         else:
             from concurrent.futures import ThreadPoolExecutor
+            from pytron.utils import com_thread_initializer
 
-            self.thread_pool = ThreadPoolExecutor(max_workers=5)
+            self.thread_pool = ThreadPoolExecutor(
+                max_workers=5, initializer=com_thread_initializer
+            )
 
         # Determine Scheme (Always pytron:// for Servo engine)
         self._scheme = "pytron://localhost"

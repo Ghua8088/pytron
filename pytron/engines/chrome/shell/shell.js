@@ -265,6 +265,58 @@ function handlePythonCommand(cmd) {
             case 'set_frameless':
                 // Can't change frameless dynamically easily in Electron without recreation
                 break;
+            case 'set_bounds':
+                if (mainWindow) {
+                    try {
+                        const x = parseInt(command.x || 0);
+                        const y = parseInt(command.y || 0);
+                        const w = parseInt(command.width || WINDOW_CONFIG.width);
+                        const h = parseInt(command.height || WINDOW_CONFIG.height);
+                        mainWindow.setBounds({ x, y, width: w, height: h });
+                    } catch (e) { log(`set_bounds error: ${e.message}`); }
+                }
+                break;
+            case 'set_resizable':
+                if (mainWindow) {
+                    try {
+                        mainWindow.setResizable(!!command.resizable);
+                    } catch (e) { log(`set_resizable error: ${e.message}`); }
+                }
+                break;
+            case 'set_menu':
+                try {
+                    // Command.menu is expected as a simple array of { label, id, submenu }
+                    const template = (command.menu || []).map(item => {
+                        const it = { label: item.label || '' };
+                        if (item.submenu && Array.isArray(item.submenu)) {
+                            it.submenu = item.submenu.map(si => ({ label: si.label || '', click: () => sendToPython('ipc', { event: si.id, data: [] }) }));
+                        } else if (item.id) {
+                            it.click = () => sendToPython('ipc', { event: item.id, data: [] });
+                        }
+                        return it;
+                    });
+                    const { Menu } = require('electron');
+                    const menu = Menu.buildFromTemplate(template);
+                    Menu.setApplicationMenu(menu);
+                } catch (e) { log(`set_menu error: ${e.message}`); }
+                break;
+            case 'toast':
+                try {
+                    const title = command.title || '';
+                    const message = command.message || '';
+                    const notif = new Notification({ title: title, body: message });
+                    notif.show();
+                } catch (e) { log(`toast error: ${e.message}`); }
+                break;
+            case 'prevent_close':
+                try {
+                    global._pytron_prevent_close = !!command.prevent;
+                } catch (e) { log(`prevent_close error: ${e.message}`); }
+                break;
+            case 'start_drag':
+                // Best-effort: focus the window — real drag requires renderer cooperation
+                try { if (mainWindow) mainWindow.focus(); } catch (e) { }
+                break;
             case 'set_progress':
                 // command.value: 0.0 to 1.0.  -1 to remove.
                 // command.mode: 'none', 'normal', 'indeterminate', 'error', 'paused'
@@ -464,7 +516,17 @@ async function createWindow(options = {}) {
         }
     });
 
-    mainWindow.on('close', () => sendToPython('lifecycle', 'close'));
+    mainWindow.on('close', (e) => {
+        try {
+            if (global._pytron_prevent_close) {
+                // prevent default close and notify python runtime
+                if (e && e.preventDefault) e.preventDefault();
+                sendToPython('lifecycle', 'close');
+                return;
+            }
+        } catch (ex) {}
+        sendToPython('lifecycle', 'close');
+    });
 
     // Prevent HTML <title> from overriding the Window Title
     mainWindow.on('page-title-updated', (e) => {

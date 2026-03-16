@@ -231,3 +231,20 @@ def _log_shield(msg):
 def get_native_error_details():
     """Returns the last trapped error from native resolution if any."""
     return _NATIVE_CACHE.get("last_error", "No error captured.")
+
+
+def com_thread_initializer():
+    """
+    Initializes COM for background threads on Windows.
+    This prevents 'CoInitialize has not been called' errors when using native Windows APIs
+    (like pywintypes or pywin32) inside Pytron's background thread pool.
+    """
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            # 2 = COINIT_APARTMENTTHREADED (STA), which is safer for UI/pywintypes compatibility.
+            # 0 = COINIT_MULTITHREADED (MTA)
+            ctypes.windll.ole32.CoInitializeEx(None, 2)
+        except Exception:
+            pass

@@ -1,0 +1,11 @@
+flowchart TD
+  CLI[User runs `pytron run`] --> APP[`pytron.application`]
+  APP --> ROUTER[`pytron.router` resolves route]
+  ROUTER --> ENGINE[Select Engine (native/chrome/servo)]
+  ENGINE --> WEBVIEW[`pytron.webview` initializes]
+  WEBVIEW --> NATIVE[Native engine process / wry/tokio]
+  NATIVE --> IPC[IPC bridge (framed messages)]
+  IPC --> JS[Injected JS bridge (`pytron://` protocol)]
+  JS --> PLUGINS[Plugin APIs exposed to JS]
+  PLUGINS --> APP
+  APP --> UI[Render UI in webview]
