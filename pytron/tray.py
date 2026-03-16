@@ -173,11 +173,9 @@ class SystemTray:
             raise TrayError(f"Failed to initialize macOS tray: {e}") from e
 
     def _start_linux(self, app):
-        # --- GLIB SCHISM FIX ---
-        # If we are using the Native Engine, importing 'gi' here will cause
-        # 'cannot register existing type' errors when the Rust side tries
-        # to initialize its own GTK/GObject context.
-        if getattr(app, "engine_type", "chrome") == "native":
+        # Match either 'engine' or 'engine_type' as used across different App versions
+        engine = getattr(app, "engine", getattr(app, "engine_type", "native"))
+        if engine == "native" or os.environ.get("PYTRON_ENGINE") == "native":
             self.logger.warning(
                 "Linux Tray: skipping gi-based tray to avoid symbol collision with Native Engine."
             )
