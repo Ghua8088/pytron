@@ -8,13 +8,12 @@ on:
 
 jobs:
   build-wheels:
-    name: 🏗️ Build (${{ matrix.os }} - Py${{ matrix.python-version }})
+    name: 🏗️ Build Wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.11"]
 
     steps:
       - name: 🔍 Checkout code
@@ -33,10 +32,10 @@ jobs:
               - 'pytron/pack/secure_loader/**'
               - 'pytron/pack/secure_loader/Cargo.toml'
 
-      - name: 🐍 Set up Python ${{ matrix.python-version }}
+      - name: 🐍 Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
           cache: 'pip'
           cache-dependency-path: 'pyproject.toml'
 
@@ -45,7 +44,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install build wheel setuptools
 
-      - name: 🐧 Install Linux Dependencies
+      # ─── Linux: install the GTK/WebKit/GLib system deps that wry+tao need ───
+      # We run on ubuntu-latest (a real runner, NOT a manylinux container) so
+      # apt-get works fine here. auditwheel repair then re-tags the wheel as
+      # manylinux_2_35 after verifying all symbols are satisfied.
+      - name: 🐧 Install Linux System Dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
@@ -57,9 +60,10 @@ jobs:
             python3-dev \
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
-            libayatana-indicator3-dev \
+            libayatana-appindicator3-dev \
             libxdo-dev \
-            gir1.2-gtk-4.0
+            libssl-dev \
+            patchelf
 
       - name: 🍎 Install macOS Dependencies
         if: matrix.os == 'macos-latest'
@@ -72,7 +76,7 @@ jobs:
       - name: 🕰️ Setup Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.os }}-python-${{ matrix.python-version }}
+          key: ${{ matrix.os }}
           workspaces: |
             pytron/engines/native
             pytron/pack/secure_loader
@@ -90,33 +94,28 @@ jobs:
         if: steps.filter.outputs.rust_native == 'true' || github.event_name == 'push' || startsWith(github.ref, 'refs/tags/v')
         run: python pytron/platforms/pytron_os/build.py
 
-      - name: 📦 Build Platform Wheel
-        shell: bash
+      - name: 📦 Build Wheel
+        run: python -m build --wheel
+
+      # ─── Linux only: use auditwheel repair to properly re-tag the wheel      ───
+      # --plat manylinux_2_35_x86_64 matches ubuntu-22.04+ (glibc 2.35).        ───
+      # auditwheel copies in any non-system .so files it finds, but because      ───
+      # wry/webkitgtk ARE system libs (installed above) they won't be bundled — ───
+      # the repaired wheel just gets the right manylinux platform tag.           ───
+      - name: 🩹 Repair Linux Wheel (auditwheel)
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-            # Build with a generic platform first
-            python -m build --wheel
-            
-            # Install auditwheel to transform the tag to manylinux
-            # This is mandatory for PyPI Linux uploads
-            pip install auditwheel
-            
-            # We use manylinux_2_35_x86_64 for Ubuntu 22.04+ compatibility
-            # Or manylinux2014_x86_64 if we want maximum legacy support
-            # auditwheel repair dist/*.whl --plat manylinux_2_35_x86_64 -w repaired_dist/
-            # For your hybrid build, simply hijacking the tag is often cleaner:
-            for whl in dist/*.whl; do
-              new_whl=$(echo $whl | sed 's/linux_x86_64/manylinux_2_35_x86_64/g')
-              mv "$whl" "$new_whl"
-            done
-          else
-            python -m build --wheel
-          fi
+          pip install auditwheel
+          auditwheel repair dist/*.whl \
+            --plat manylinux_2_35_x86_64 \
+            -w dist/
+          # Remove the original linux_x86_64 tagged wheel
+          rm -f dist/*-linux_x86_64.whl
 
       - name: 📤 Upload Wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
+          name: wheels-${{ matrix.os }}
           path: dist/*.whl
 
   build-sdist:
@@ -169,7 +168,7 @@ jobs:
 
       - name: 🎁 Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
           name: Pytron Kit v${{ steps.get_version.outputs.version }} 🧊

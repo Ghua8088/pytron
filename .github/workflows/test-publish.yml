@@ -17,12 +17,14 @@ concurrency:
 
 jobs:
   build-wheels:
-    name: 🏗️ Build (${{ matrix.os }} - Py${{ matrix.python-version }})
+    name: 🏗️ Build Wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-latest, windows-latest]
+        # Use ubuntu-latest everywhere for consistency — the condition below
+        # uses startsWith so it correctly matches both ubuntu-latest and ubuntu-22.04
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.11"]
 
     steps:
@@ -41,8 +43,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install build wheel setuptools
 
-      - name: 🐧 Install Linux Dependencies
-        if: matrix.os == 'ubuntu-latest'
+      # startsWith handles both ubuntu-latest and ubuntu-22.04 safely
+      - name: 🐧 Install Linux System Dependencies
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -53,9 +56,10 @@ jobs:
             python3-dev \
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
-            libayatana-indicator3-dev \
+            libayatana-appindicator3-dev \
             libxdo-dev \
-            gir1.2-gtk-4.0
+            libssl-dev \
+            patchelf
 
       - name: 🍎 Install macOS Dependencies
         if: matrix.os == 'macos-latest'
@@ -64,6 +68,15 @@ jobs:
 
       - name: 🦀 Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: 🕰️ Setup Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
+          workspaces: |
+            pytron/engines/native
+            pytron/pack/secure_loader
+            pytron/platforms/pytron_os
 
       - name: 🛡️ Build Rust Loader
         run: python pytron/pack/secure_loader/build_loader.py || echo "Skipping loader build"
@@ -76,24 +89,21 @@ jobs:
 
       - name: 🧪 Run Tests
         run: |
-          python -m pip install --upgrade pip
-          # Install project runtime deps first (rich, cryptography, etc.)
           python -m pip install .
           python -m pip install pytest
           pytest
 
-      - name: 📦 Build Platform Wheel
-        shell: bash
+      - name: 📦 Build Wheel
+        run: python -m build --wheel
+
+      - name: 🩹 Repair Linux Wheel (auditwheel)
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
-          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-            python -m build --wheel
-            pip install auditwheel
-            # Properly repair the wheel instead of just renaming it
-            auditwheel repair dist/*.whl --plat manylinux_2_35_x86_64 -w dist/
-            rm dist/*linux_x86_64.whl  # Remove the original unrepaired wheel
-          else
-            python -m build --wheel
-          fi
+          pip install auditwheel
+          auditwheel repair dist/*.whl \
+            --plat manylinux_2_35_x86_64 \
+            -w dist/
+          rm -f dist/*-linux_x86_64.whl
 
       - name: 📤 Upload Wheels
         uses: actions/upload-artifact@v4

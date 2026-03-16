@@ -50,20 +50,20 @@ jobs:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
         cache-dependency-path: 'pyproject.toml'
-    
+
     - name: 🦀 Install Rust
       uses: dtolnay/rust-toolchain@stable
 
     - name: 🕰️ Setup Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
-        key: ${{ matrix.os }}-python-${{ matrix.python-version }}
+        key: ${{ matrix.os }}
         workspaces: |
           pytron/engines/native
           pytron/pack/secure_loader
           pytron/platforms/pytron_os
 
-    - name: Install Linux Dependencies
+    - name: 🐧 Install Linux System Dependencies
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
@@ -75,14 +75,36 @@ jobs:
           python3-dev \
           libwebkit2gtk-4.1-dev \
           libgtk-3-dev \
-          libayatana-indicator3-dev \
+          libayatana-appindicator3-dev \
           libxdo-dev \
-          gir1.2-gtk-4.0
+          libssl-dev \
+          patchelf
 
-    - name: Install macOS Dependencies
+    - name: 🍎 Install macOS Dependencies
       if: matrix.os == 'macos-latest'
       run: |
         python -m pip install pyobjc-framework-Quartz pyobjc-framework-Cocoa
+
+    # On PRs: fast cargo check to catch compile errors without a full build
+    - name: 🪶 Fast Rust Check (PRs only)
+      if: github.event_name == 'pull_request' && (steps.filter.outputs.rust_native == 'true' || steps.filter.outputs.rust_loader == 'true')
+      shell: bash
+      run: |
+        if [ "${{ steps.filter.outputs.rust_native }}" == "true" ]; then
+          cargo check --manifest-path pytron/engines/native/Cargo.toml
+          cargo check --manifest-path pytron/platforms/pytron_os/Cargo.toml
+        fi
+        if [ "${{ steps.filter.outputs.rust_loader }}" == "true" ]; then
+          cargo check --manifest-path pytron/pack/secure_loader/Cargo.toml
+        fi
+
+    - name: 🦾 Build Native Engine
+      if: steps.filter.outputs.rust_native == 'true' || github.event_name == 'push' || startsWith(github.ref, 'refs/tags/v')
+      run: python pytron/engines/native/build.py
+
+    - name: 🦾 Build OS Platform Hook
+      if: steps.filter.outputs.rust_native == 'true' || github.event_name == 'push' || startsWith(github.ref, 'refs/tags/v')
+      run: python pytron/platforms/pytron_os/build.py
 
     - name: Install Python Dependencies
       run: |
@@ -90,27 +112,5 @@ jobs:
         pip install .
         pip install pytest
 
-    - name: 🪶 Fast Check (PRs only)
-      if: github.event_name == 'pull_request' && (steps.filter.outputs.rust_native == 'true' || steps.filter.outputs.rust_loader == 'true')
-      run: |
-        if [ "${{ steps.filter.outputs.rust_native }}" == "true" ]; then
-          cd pytron/engines/native && cargo check
-          cd ../../../pytron/platforms/pytron_os && cargo check
-          cd ../../../
-        fi
-        if [ "${{ steps.filter.outputs.rust_loader }}" == "true" ]; then
-          cd pytron/pack/secure_loader && cargo check
-        fi
-      shell: bash
-
-    - name: 🦾 Build Native Engine
-      if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (steps.filter.outputs.rust_native == 'true') || startsWith(github.ref, 'refs/tags/v')
-      run: python pytron/engines/native/build.py
-
-    - name: 🦾 Build OS Platform Hook
-      if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (steps.filter.outputs.rust_native == 'true') || startsWith(github.ref, 'refs/tags/v')
-      run: python pytron/platforms/pytron_os/build.py
-    
     - name: Run Tests
-      run: |
-        pytest
+      run: pytest
