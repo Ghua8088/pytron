@@ -14,8 +14,6 @@ use wry::WebViewBuilder;
 
 #[cfg(target_os = "windows")]
 use wry::WebViewBuilderExtWindows; 
-#[cfg(target_os = "linux")]
-use tao::platform::unix::EventLoopBuilderExtUnix;
 #[cfg(target_os = "windows")]
 use tao::platform::windows::EventLoopBuilderExtWindows;
 
@@ -47,10 +45,6 @@ static TAO_INIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::
 impl NativeWebview {
     #[new]
     pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool, store: NativeState) -> PyResult<Self> {
-
-    // Wait, I need to match existing signature.
-    // The existing signature is:
-    // pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool, store: NativeState) -> PyResult<Self>
     
         setup_panic_hook();
 
@@ -78,9 +72,10 @@ impl NativeWebview {
         #[cfg(target_os = "linux")]
         {
             // Force X11 on VMs for better stability/handle support.
-            // Tao 0.28+ has Backend::X11.
-            use tao::platform::unix::Backend;
-            builder.with_backend(Backend::X11);
+            // Using env var is safer than unstable builder APIs across tao versions.
+            if std::env::var("WINIT_UNIX_BACKEND").is_err() {
+                std::env::set_var("WINIT_UNIX_BACKEND", "x11");
+            }
         }
 
         let event_loop = builder.build();
@@ -478,6 +473,10 @@ impl NativeWebview {
                                             desktop_filename: None,
                                         });
                                     }
+                                    #[cfg(not(target_os = "windows"))]
+                                    {
+                                        let _ = (state_code, val, _max);
+                                    }
                                 }
 
                                 UserEvent::SetDecorations(d) => { state.window.set_decorations(d); }
@@ -524,9 +523,7 @@ impl NativeWebview {
                                 UserEvent::SetPreventClose(p) => {
                                     state.prevent_close = p;
                                 }
-
-                                _ => {} 
-                            }
+                             }
                         }
                         
                         Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
