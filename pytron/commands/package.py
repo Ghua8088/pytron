@@ -138,6 +138,7 @@ def cmd_package(args: argparse.Namespace) -> int:
     ctx.collect_all = getattr(args, "collect_all", False)
     ctx.force_hooks = getattr(args, "force_hooks", False)
     ctx.add_data = args.add_data or []
+    ctx.extra_args = getattr(args, "extra_args", [])
 
     # --- Crystal Integrity Check ---
     if getattr(args, "crystal", False):

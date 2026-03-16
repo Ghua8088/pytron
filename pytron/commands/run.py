@@ -425,17 +425,21 @@ def cmd_run(args: argparse.Namespace) -> int:
                 return 1
 
     if args.dev:
-        engine = "chrome" if getattr(args, "chrome", False) else args.engine
-        return run_dev_mode(path, args.extra_args, engine=engine)
+        engine = (
+            "chrome"
+            if getattr(args, "chrome", False)
+            else getattr(args, "engine", None)
+        )
+        return run_dev_mode(path, getattr(args, "extra_args", []), engine=engine)
 
     python_exe = get_python_executable()
     env = get_sanitized_env()
 
     if getattr(args, "chrome", False):
         env["PYTRON_ENGINE"] = "chrome"
-    elif args.engine:
+    elif getattr(args, "engine", None):
         env["PYTRON_ENGINE"] = args.engine
 
-    cmd = [python_exe, str(path)] + (args.extra_args or [])
+    cmd = [python_exe, str(path)] + getattr(args, "extra_args", [])
     log(f"Running: {' '.join(cmd)}", style="dim")
     return subprocess.call(cmd, env=env)

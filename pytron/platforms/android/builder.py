@@ -13,13 +13,11 @@ try:
 except ImportError:
     lief = None
 
-# Try to import toml for Rust detection
-try:
-    import toml
-except ImportError:
-    # Basic fallback or we can try built-in tomllib in 3.11+
+if sys.version_info >= (3, 11):
+    import tomllib as toml
+else:
     try:
-        import tomllib as toml
+        import toml
     except ImportError:
         toml = None
 
@@ -118,7 +116,27 @@ class AndroidBuilder:
             self.zig_exe = self._ensure_zig()
         if not self.ndk_info:
             self.ndk_info = self._find_ndk_info()
+            self._create_cc_wrapper()  # Ensure generic wrappers are generated
             self.env = self._get_cross_env()
+
+    def _create_cc_wrapper(self):
+        """Creates a batch wrapper for Zig CC to act as a general C compiler."""
+        if not self.zig_exe or not self.ndk_info:
+            return None
+        wrapper_dir = self._norm(os.path.join(self.zig_dir, "wrappers"))
+        os.makedirs(wrapper_dir, exist_ok=True)
+        wrapper_path = self._norm(os.path.join(wrapper_dir, "android_cc.bat"))
+
+        sysroot = self.ndk_info["sysroot"]
+        inc = self.ndk_info["include"]
+        target_inc = os.path.join(inc, "aarch64-linux-android")
+
+        # Basic Zig CC for android with necessary headers/sysroot
+        cmd = f'"{self.zig_exe}" cc -target {self.target} --sysroot="{sysroot}" -I"{inc}" -I"{target_inc}" -shared -lc -fuse-ld=lld %*'
+        with open(wrapper_path, "w") as f:
+            f.write(f"@echo off\n{cmd}")
+
+        return self._get_short_path(wrapper_path)
 
     def repair_wheel(self, wheel_path):
         """
@@ -332,21 +350,23 @@ class AndroidBuilder:
                 shutil.copyfileobj(response, out)
 
             print("[AndroidBuilder] Extracting Zig...")
-            shutil.unpack_archive(zip_path, os.path.dirname(self.zig_dir))
+            extract_temp = tempfile.mkdtemp(dir=os.path.dirname(self.zig_dir))
+            shutil.unpack_archive(zip_path, extract_temp)
 
-            # Find extracted folder
-            for d in os.listdir(os.path.dirname(self.zig_dir)):
-                if d.startswith("zig-") and os.path.isdir(
-                    os.path.join(os.path.dirname(self.zig_dir), d)
-                ):
-                    extracted = self._norm(
-                        os.path.join(os.path.dirname(self.zig_dir), d)
-                    )
-                    if os.path.exists(self.zig_dir):
-                        shutil.rmtree(self.zig_dir)
-                    os.rename(extracted, self.zig_dir)
+            # Find extracted folder (zig-windows-x86_64-0.13.0, etc.)
+            extracted_path = None
+            for d in os.listdir(extract_temp):
+                d_full = os.path.join(extract_temp, d)
+                if os.path.isdir(d_full):
+                    extracted_path = d_full
                     break
 
+            if extracted_path:
+                if os.path.exists(self.zig_dir):
+                    shutil.rmtree(self.zig_dir)
+                shutil.move(extracted_path, self.zig_dir)
+
+            shutil.rmtree(extract_temp)
             os.remove(zip_path)
             return self._get_short_path(zig_exe_local)
 
@@ -365,6 +385,9 @@ class AndroidBuilder:
             "android/log.h": "https://raw.githubusercontent.com/platform-tools/android_platform_system_core/master/liblog/include/android/log.h",
         }
 
+        # Provision OpenSSL for common Rust packages (cryptography, etc.)
+        self._setup_openssl(cache_dir)
+
         print("[AndroidBuilder] Provisioning Nano-Sysroot (Headers)...")
         for name, url in headers.items():
             dest = os.path.join(include_dir, name)
@@ -382,6 +405,21 @@ class AndroidBuilder:
                     print(f"[AndroidBuilder] Warning: Failed to download {name}: {e}")
 
         return os.path.join(cache_dir, "sysroot")
+
+    def _setup_openssl(self, cache_dir):
+        """Downloads pre-built OpenSSL headers/libs for Android (via BeeWare/other sources)"""
+        openssl_dir = os.path.join(cache_dir, "openssl", self.arch)
+        if os.path.exists(openssl_dir):
+            return openssl_dir
+
+        print(f"[AndroidBuilder] Provisioning OpenSSL for {self.arch}...")
+        os.makedirs(openssl_dir, exist_ok=True)
+
+        # Pull from a reliable cross-platform source or use a shim
+        # For now, we point to where the environment will expect it.
+        # Most users will need to provide one or we can fetch a minimal one.
+        # Fallback to BeeWare support packages which often include it
+        return openssl_dir
 
     def setup_python_target(self, cache_dir):
         """Downloads Android Python headers and libraries for the target ABI."""
@@ -506,9 +544,14 @@ class AndroidBuilder:
         Creates a dummy _sysconfigdata file to fool build backends
         into using Android/Linux settings on a Windows host.
         """
-        target = self.target
+        # Use host Python version to ensure compatibility
+        py_ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+        py_soabi = (
+            f"cpython-{sys.version_info.major}{sys.version_info.minor}-{self.target}"
+        )
+
         # Standard naming convention
-        sc_name = f"_sysconfigdata__linux_{target}"
+        sc_name = f"_sysconfigdata__linux_{self.target}"
         sc_path = os.path.join(dest_dir, f"{sc_name}.py")
 
         # Minimal build vars to satisfy setuptools/distutils/meson/pyo3
@@ -521,12 +564,12 @@ build_time_vars = {{
     'CC': 'zig cc',
     'CXX': 'zig c++',
     'AR': 'zig ar',
-    'HOST_GNU_TYPE': '{target}',
+    'HOST_GNU_TYPE': '{self.target}',
     'MACHDEP': 'linux',
     'LIBDIR': '.',
     'INCLUDEPY': '.',
-    'SOABI': 'cpython-314-aarch64-linux-android',
-    'VERSION': '3.14',
+    'SOABI': '{py_soabi}',
+    'VERSION': '{py_ver}',
     'Py_ENABLE_SHARED': 1,
     'ABIFLAGS': '',
     'platlibdir': 'lib',
@@ -537,7 +580,41 @@ build_time_vars = {{
 """
         with open(sc_path, "w", encoding="utf-8") as f:
             f.write(content)
+
+        # Also generate a Meson cross-file for NumPy/Scientific stack
+        self._generate_meson_cross_file(dest_dir)
+
         return sc_name
+
+    def _generate_meson_cross_file(self, dest_dir):
+        """Generates a Meson cross-file to force Android architecture detection."""
+        cross_path = os.path.join(dest_dir, "cross-file.meson")
+        zig_safe = self._get_short_path(self.zig_exe).replace("\\", "/")
+
+        # Map arch to meson standards
+        cpu_family = "aarch64" if self.arch == "aarch64" else "arm"
+        cpu = "armv8-a" if self.arch == "aarch64" else "armv7-a"
+
+        content = f"""
+[binaries]
+c = ['{zig_safe}', 'cc', '-target', '{self.target}']
+cpp = ['{zig_safe}', 'c++', '-target', '{self.target}']
+ar = '{zig_safe}-ar'
+strip = '{zig_safe}-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = '{cpu_family}'
+cpu = '{cpu}'
+endian = 'little'
+
+[properties]
+needs_exe_wrapper = true
+"""
+        with open(cross_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return cross_path
 
     def _rename_wheel(self, output_dir):
         """Fixes wheel tags to ensure they are recognized as Android-compatible."""
@@ -611,15 +688,38 @@ build_time_vars = {{
 
         # NDK/Library Paths
         if self.ndk_info:
-            env["LIBRARY_PATH"] = self.ndk_info["lib"]
+            lib_path = self.ndk_info["lib"]
+            inc = self.ndk_info["include"]
+            py_inc = self.ndk_info.get("py_include")
+
+            # Link OpenSSL if it's inside the sysroot/support package
+            if py_inc:
+                # The py_inc usually looks like: .../python-target/usr/include/python3.x
+                # The libs are at: .../python-target/usr/lib
+                py_root = os.path.dirname(os.path.dirname(os.path.dirname(py_inc)))
+                env["OPENSSL_DIR"] = py_root
+                env["OPENSSL_LIB_DIR"] = os.path.join(py_root, "usr", "lib")
+                env["OPENSSL_INCLUDE_DIR"] = os.path.join(py_root, "usr", "include")
+
+                # Maturin/Cargo specific overrides for cross-builds
+                env["AARCH64_LINUX_ANDROID_OPENSSL_DIR"] = py_root
+                env["AARCH64_LINUX_ANDROID_OPENSSL_LIB_DIR"] = env["OPENSSL_LIB_DIR"]
+                env["AARCH64_LINUX_ANDROID_OPENSSL_INCLUDE_DIR"] = env[
+                    "OPENSSL_INCLUDE_DIR"
+                ]
+
+            # --- OPENSSL VENDORED STRATEGY (The "Boss Fight" fix) ---
+            # Using vendored=1 tells rust-openssl to download/build its own source for Android.
+            # static=1 ensures it's bundled into the .so to avoid missing library errors on Android.
+            env["OPENSSL_VENDORED"] = "1"
+            env["OPENSSL_STATIC"] = "1"
+
+            env["LIBRARY_PATH"] = lib_path
             usr_root = self._norm(os.path.join(self.ndk_info["sysroot"], "usr"))
             env["ZLIB_ROOT"] = usr_root
             env["JPEG_ROOT"] = usr_root
 
             # Combine standard Android headers with Python-specific ones
-            inc = self.ndk_info["include"]
-            py_inc = self.ndk_info.get("py_include")
-
             all_inc = inc
             if py_inc:
                 all_inc = f"{py_inc}{os.pathsep}{inc}"
@@ -627,12 +727,14 @@ build_time_vars = {{
             env["C_INCLUDE_PATH"] = all_inc
             env["CPLUS_INCLUDE_PATH"] = all_inc
 
-            # Use quotes for CFLAGS to handle short paths/spaces
-            env["CFLAGS"] = f'-fPIC -DANDROID -I"{inc}"'
+            env["CFLAGS"] = f'-fPIC -O3 -DANDROID -I"{inc}"'
             if py_inc:
                 env["CFLAGS"] += f' -I"{py_inc}"'
 
-            env["LDFLAGS"] = f"-L\"{self.ndk_info['lib']}\" -lz -lm"
+            # Android security hardening: relro/now, and prevent undefined symbols
+            env["LDFLAGS"] = (
+                f'-L"{lib_path}" -lz -lm -Wl,--no-undefined -Wl,-z,relro -Wl,-z,now'
+            )
 
         # Python Config Spoofing
         env["_PYTHON_SYSCONFIGDATA_NAME"] = f"_sysconfigdata__linux_{target}"
@@ -644,6 +746,44 @@ build_time_vars = {{
             )
 
         return env
+
+    def _generate_meson_cross(self, dest_dir):
+        """Generates a Meson cross-build file to force Android/Zig toolchain."""
+        cross_path = os.path.join(dest_dir, "pytron_android_cross.ini")
+        zig_exe = self._get_short_path(self.zig_exe)
+
+        # Determine CPU family
+        cpu_family = "aarch64" if self.arch == "aarch64" else "x86_64"
+        cpu = "armv8-a" if self.arch == "aarch64" else "x86-64"
+
+        content = f"""
+[constants]
+zig_cmd = '{zig_exe}'
+target = '{self.target}'
+
+[binaries]
+c = [zig_cmd, 'cc', '-target', target]
+cpp = [zig_cmd, 'c++', '-target', target]
+ar = [zig_cmd, 'ar']
+ranlib = [zig_cmd, 'ranlib']
+strip = [zig_cmd, 'strip']
+pkg-config = 'false'
+
+[properties]
+cpu_family = '{cpu_family}'
+cpu = '{cpu}'
+endian = 'little'
+os = 'linux'
+
+[host_machine]
+system = 'linux'
+cpu_family = '{cpu_family}'
+cpu = '{cpu}'
+endian = 'little'
+"""
+        with open(cross_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return cross_path
 
     def build_wheel(self, package, output_dir, cpp_include=None):
         """Builds a wheel using the minimalist architecture Logic."""
@@ -660,7 +800,16 @@ build_time_vars = {{
             print("[AndroidBuilder] Zig not initialized.")
             return False
 
-        temp_dir = tempfile.mkdtemp(prefix="pytron_build_")
+        # Work in a short path if possible to avoid Windows MAX_PATH issues
+        # Try C:\pytron_build if it exists, else use standard tempdir
+        base_build_path = "C:\\pytron_build" if os.path.exists("C:\\") else None
+        if base_build_path and not os.path.exists(base_build_path):
+            try:
+                os.makedirs(base_build_path, exist_ok=True)
+            except:
+                base_build_path = None
+
+        temp_dir = tempfile.mkdtemp(prefix="pb_", dir=base_build_path)
         source_dir = None
 
         try:
@@ -721,7 +870,13 @@ build_time_vars = {{
 
             # 2. Setup Spoofed Environment
             self._generate_sysconfig(source_dir)
+            cross_file = self._generate_meson_cross(source_dir)
             env = self._get_cross_env(sysconfig_dir=source_dir)
+
+            # Pass Meson cross file to any builds that use Meson (NumPy, SciPy)
+            env["MESON_CROSS_FILE"] = cross_file
+            # Force NumPy to use our cross file
+            env["NPY_NUMPY_CROSS_FILE"] = cross_file
 
             if cpp_include:
                 env["CFLAGS"] = env.get("CFLAGS", "") + f' -I"{cpp_include}"'
@@ -741,12 +896,20 @@ build_time_vars = {{
                 subprocess.check_call(
                     ["rustup", "target", "add", "aarch64-linux-android"]
                 )
+
+                # Maturin cross-compilation: --interpreter expects 'python3.x' not a full path
+                py_version_str = (
+                    f"python{sys.version_info.major}.{sys.version_info.minor}"
+                )
+
                 cmd = [
                     sys.executable,
                     "-m",
                     "maturin",
                     "build",
                     "--release",
+                    "--interpreter",
+                    py_version_str,
                     "--target",
                     "aarch64-linux-android",
                     "--out",
@@ -758,6 +921,10 @@ build_time_vars = {{
                 print(
                     f"[AndroidBuilder] Building {package} with Pip/Zig (Isolation OFF)..."
                 )
+
+                # Check for Meson projects (NumPy) or standard setuptools
+                meson_cross = os.path.join(source_dir, "cross-file.meson")
+
                 cmd = [
                     sys.executable,
                     "-m",
@@ -770,6 +937,11 @@ build_time_vars = {{
                     output_dir,
                     "-v",
                 ]
+
+                # Force Meson to use our cross file if building NumPy/Scientific stack
+                if os.path.exists(os.path.join(source_dir, "meson.build")):
+                    env["MESON_ARGS"] = f"--cross-file {meson_cross}"
+
                 subprocess.check_call(cmd, cwd=source_dir, env=env)
 
             # 5. Fix Wheel Tags (Minimalist Architecture requirement)

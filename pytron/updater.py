@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import hashlib
 import urllib.request
 import urllib.error
 import subprocess
@@ -157,7 +158,6 @@ class Updater:
 
         download_path = Path(tempfile.gettempdir()) / filename
         try:
-            import hashlib
 
             def progress(block_num, block_size, total_size):
                 if on_progress and total_size > 0:

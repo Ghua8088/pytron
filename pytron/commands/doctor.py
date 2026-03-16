@@ -1,8 +1,8 @@
 import os
 import sys
+import platform
 import shutil
 import subprocess
-import platform
 import argparse
 from pathlib import Path
 from ..console import console, print_rule
@@ -43,9 +43,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     py_ver, py_arch = get_python_info()
     console.print(f"[bold]Python Environment[/bold]")
     console.print(f"  [success]✓[/success] Python: {py_ver} ({py_arch})")
-    console.print(
-        f"  [success]✓[/success] Platform: {platform.system()} {platform.release()}"
-    )
+    console.print(f"  [success]✓[/success] Platform: {sys.platform}")
 
     # Check if in VENV
     is_venv = sys.prefix != sys.base_prefix
@@ -115,7 +113,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 f"  [error]✗[/error] PyInstaller: Not found (Required for 'pytron package')"
             )
 
-    if platform.system() == "Windows":
+    if sys.platform == "win32":
         # Check NSIS
         from ..pack.installers import find_makensis
 
@@ -233,6 +231,24 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         else:
             console.print(
                 f"  [error]✗[/error] Native Bridge: MISSING ({', '.join(missing)}) from {pkg_root / 'dependencies'}"
+            )
+
+        # Check for pytron_os (Binary & Package)
+        pytron_os_pyd = pkg_root / "dependencies" / "pytron_os.pyd"
+        if pytron_os_pyd.exists():
+            console.print(f"  [success]✓[/success] pytron_os (Binary): Found")
+        else:
+            console.print(
+                f"  [error]✗[/error] pytron_os (Binary): Missing from dependencies/"
+            )
+
+        # Android Bundle Check
+        android_deps = pkg_root / "dependencies" / "android"
+        if android_deps.exists() and any(android_deps.iterdir()):
+            console.print(f"  [success]✓[/success] Android Assets: Found")
+        else:
+            console.print(
+                f"  [error]✗[/error] Android Assets: Missing or empty in dependencies/android"
             )
 
     except Exception as e:

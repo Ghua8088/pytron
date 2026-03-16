@@ -9,7 +9,7 @@ use tao::{
     window::WindowBuilder,
 };
 #[cfg(not(target_os = "android"))]
-use tray_icon::{TrayIconBuilder, menu::{Menu, MenuItemBuilder, PredefinedMenuItem}};
+// tray_icon removed — tray owned by pytron_os
 use wry::WebViewBuilder;
 
 #[cfg(target_os = "windows")]
@@ -19,7 +19,7 @@ use tao::platform::windows::EventLoopBuilderExtWindows;
 
 use crate::events::UserEvent;
 use crate::state::RuntimeState;
-use crate::utils::{setup_panic_hook, SendWrapper, load_icon};
+use crate::utils::{setup_panic_hook, SendWrapper};
 use crate::protocol::handle_pytron_protocol;
 
 use crate::store::NativeState;
@@ -268,15 +268,7 @@ impl NativeWebview {
                     return;
                 }
 
-                // Native handling for parameterized system calls
-                if method == "system_notification" || method == "pytron_system_notification" {
-                    if let Ok(args) = serde_json::from_str::<Vec<String>>(&params) {
-                        if args.len() >= 2 {
-                            let _ = proxy_for_ipc.send_event(UserEvent::Notification(args[0].clone(), args[1].clone()));
-                            return;
-                        }
-                    }
-                }
+                // system_notification and message_box fall through to CallPython → pytron_os.
 
                 if method == "set_taskbar_progress" || method == "pytron_set_taskbar_progress" {
                     if let Ok(args) = serde_json::from_str::<Vec<i32>>(&params) {
@@ -284,16 +276,6 @@ impl NativeWebview {
                              let _ = proxy_for_ipc.send_event(UserEvent::TaskbarProgress(args[0], args[1], args[2]));
                              return;
                          }
-                    }
-                }
-
-                // Native Handling for message boxes (blocking is fine as it runs on native thread, but we use a specialized event for it)
-                if method == "pytron_message_box" || method == "message_box" {
-                    if let Ok(args) = serde_json::from_str::<Vec<String>>(&params) {
-                        if args.len() >= 3 {
-                             let _ = proxy_for_ipc.send_event(UserEvent::MessageBox(args[0].clone(), args[1].clone(), args[2].clone(), seq));
-                             return;
-                        }
                     }
                 }
 
@@ -325,11 +307,10 @@ impl NativeWebview {
         let state = Box::into_raw(Box::new(RuntimeState { 
             webview, 
             window, 
-            callbacks: callbacks.clone(), 
-            tray: None, 
+            callbacks: callbacks.clone(),
             prevent_close: false,
             is_utility: false,
-            store: store.clone()
+            store: store.clone(),
         }));
 
         Ok(NativeWebview {
@@ -354,21 +335,6 @@ impl NativeWebview {
             let cbs_arc = state.callbacks.clone();
             let w_el = SendWrapper::new(el);
             let w_state = SendWrapper::new(state);
-
-            // Spawn Menu Event Listener Thread
-            #[cfg(not(target_os = "android"))]
-            {
-                let proxy_for_menu = self.proxy.clone();
-                std::thread::spawn(move || {
-                    let receiver = tray_icon::menu::MenuEvent::receiver();
-                    loop {
-                        if let Ok(event) = receiver.recv() {
-                            let id = event.id.0;
-                             let _ = proxy_for_menu.send_event(UserEvent::TrayMenuClick(id));
-                        }
-                    }
-                });
-            }
 
             py.allow_threads(move || {
                 let el = w_el.take();
@@ -468,17 +434,6 @@ impl NativeWebview {
                                      }
                                 }
                                 
-                                UserEvent::Notification(title, msg) => {
-                                    #[cfg(target_os = "windows")]
-                                    {
-                                        let _ = notify_rust::Notification::new()
-                                            .summary(&title)
-                                            .body(&msg)
-                                            .appname("Pytron")
-                                            .show();
-                                    }
-                                }
-                                
                                 UserEvent::TaskbarProgress(state_code, val, _max) => {
                                     #[cfg(target_os = "windows")]
                                     {
@@ -498,85 +453,7 @@ impl NativeWebview {
                                     }
                                 }
 
-                                UserEvent::CreateTray(tooltip, icon_path) => {
-                                    #[cfg(not(target_os = "android"))]
-                                    {
-                                        let mut final_icon = None;
-
-                                        if let Some(path) = icon_path {
-                                            if let Ok(ic) = load_icon(std::path::Path::new(&path)) {
-                                                final_icon = Some(ic);
-                                            } else {
-                                                println!("[PYTRON NATIVE] Warning: Failed to load tray icon at '{}'. Using default.", path);
-                                            }
-                                        }
-
-                                        // Fallback Generation (Blue Square) if no icon provided or load failed
-                                        if final_icon.is_none() {
-                                            let w = 32u32;
-                                            let h = 32u32;
-                                            let mut buffer = Vec::with_capacity((w * h * 4) as usize);
-                                            for _ in 0..(w * h) {
-                                                buffer.extend_from_slice(&[0, 122, 204, 255]); // #007ACC (VS Code Blue-ish)
-                                            }
-                                            if let Ok(ic) = tray_icon::Icon::from_rgba(buffer, w, h) {
-                                                final_icon = Some(ic);
-                                            }
-                                        }
-
-                                        if let Some(ic) = final_icon {
-                                            let menu = Menu::new();
-                                            let show_item = MenuItemBuilder::new().text("Show App").id("1000".into()).enabled(true).build();
-                                            let quit_item = MenuItemBuilder::new().text("Quit").id("1001".into()).enabled(true).build();
-                                            let _ = menu.append(&show_item);
-                                            let _ = menu.append(&PredefinedMenuItem::separator());
-                                            let _ = menu.append(&quit_item);
-
-                                            let tray_res = TrayIconBuilder::new().with_menu(Box::new(menu)).with_tooltip(&tooltip).with_icon(ic).build();
-                                            
-                                            match tray_res {
-                                                Ok(t) => { state.tray = Some(t); }
-                                                Err(e) => { println!("[PYTRON NATIVE] Failed to create tray: {}", e); }
-                                            }
-                                        }
-                                    }
-                                }
-                                UserEvent::TrayMenuClick(id) => {
-                                    let mut found: Option<PyObject> = None;
-                                    if let Ok(cbs) = cbs_arc.lock() {
-                                        if let Some(f) = cbs.get("pytron_tray_click") {
-                                             Python::with_gil(|py| { found = Some(f.clone_ref(py)); });
-                                        }
-                                    }
-                                    if let Some(f) = found {
-                                        Python::with_gil(|py| { let _ = f.call1(py, (id,)); }); 
-                                    }
-                                }
-
                                 UserEvent::SetDecorations(d) => { state.window.set_decorations(d); }
-
-                                UserEvent::MessageBox(title, msg, level, seq) => {
-                                    let l = match level.as_str() {
-                                        "error" => rfd::MessageLevel::Error,
-                                        "warning" => rfd::MessageLevel::Warning,
-                                        _ => rfd::MessageLevel::Info,
-                                    };
-                                    let res = rfd::MessageDialog::new()
-                                        .set_title(&title)
-                                        .set_description(&msg)
-                                        .set_level(l)
-                                        .show();
-                                    
-                                    let ret = match res {
-                                        rfd::MessageDialogResult::Ok | rfd::MessageDialogResult::Yes => "true",
-                                        _ => "false"
-                                    };
-                                    
-                                    if !seq.is_empty() {
-                                        let js = format!(r#"if (window._rpc && window._rpc['{seq}']) {{ window._rpc['{seq}'].resolve({ret}); delete window._rpc['{seq}']; }}"#, seq=seq, ret=ret);
-                                        let _ = state.webview.evaluate_script(&js);
-                                    }
-                                }
 
                                 UserEvent::OpenExternal(url) => {
                                     #[cfg(target_os = "windows")]
@@ -674,7 +551,6 @@ impl NativeWebview {
     pub fn maximize(&self) { let _ = self.proxy.send_event(UserEvent::SetMaximized(true)); }
     pub fn unmaximize(&self) { let _ = self.proxy.send_event(UserEvent::SetMaximized(false)); }
     pub fn start_drag(&self) { let _ = self.proxy.send_event(UserEvent::DragWindow); }
-    pub fn system_notification(&self, t: String, m: String) { let _ = self.proxy.send_event(UserEvent::Notification(t, m)); }
     pub fn set_taskbar_progress(&self, s: i32, v: i32, m: i32) { let _ = self.proxy.send_event(UserEvent::TaskbarProgress(s, v, m)); }
     pub fn get_hwnd(&self) -> usize { self.hwnd }
     
@@ -684,92 +560,10 @@ impl NativeWebview {
     pub fn set_decorations(&self, e: bool) { let _ = self.proxy.send_event(UserEvent::SetDecorations(e)); }
     pub fn center(&self) { let _ = self.proxy.send_event(UserEvent::CenterWindow); }
 
-    #[pyo3(signature = (title, dir=None, filters=None))]
-    pub fn dialog_open_file(&self, title: String, dir: Option<String>, filters: Option<String>) -> PyResult<Option<String>> {
-        #[cfg(target_os = "windows")]
-        {
-            let mut d = rfd::FileDialog::new().set_title(&title);
-            if let Some(p) = dir { d = d.set_directory(PathBuf::from(p)); }
-            if let Some(f) = filters {
-                 for group in f.split(';') {
-                     let parts: Vec<&str> = group.split(':').collect();
-                     if parts.len() == 2 {
-                         let exts: Vec<&str> = parts[1].split(',').collect();
-                         d = d.add_filter(parts[0], &exts);
-                     }
-                 }
-            }
-            let res = d.pick_file();
-            Ok(res.map(|p| p.to_string_lossy().to_string()))
-        }
-        #[cfg(not(target_os = "windows"))]
-        { Ok(None) }
-    }
-
-    #[pyo3(signature = (title, dir=None, name=None, filters=None))]
-    pub fn dialog_save_file(&self, title: String, dir: Option<String>, name: Option<String>, filters: Option<String>) -> PyResult<Option<String>> {
-         #[cfg(target_os = "windows")]
-        {
-            let mut d = rfd::FileDialog::new().set_title(&title);
-            if let Some(p) = dir { d = d.set_directory(PathBuf::from(p)); }
-            if let Some(n) = name { d = d.set_file_name(&n); }
-             if let Some(f) = filters {
-                 for group in f.split(';') {
-                     let parts: Vec<&str> = group.split(':').collect();
-                     if parts.len() == 2 {
-                         let exts: Vec<&str> = parts[1].split(',').collect();
-                         d = d.add_filter(parts[0], &exts);
-                     }
-                 }
-            }
-            let res = d.save_file();
-            Ok(res.map(|p| p.to_string_lossy().to_string()))
-        }
-        #[cfg(not(target_os = "windows"))]
-        { Ok(None) }
-    }
-    
-    #[pyo3(signature = (title, dir=None))]
-    pub fn dialog_open_folder(&self, title: String, dir: Option<String>) -> PyResult<Option<String>> {
-         #[cfg(target_os = "windows")]
-        {
-            let mut d = rfd::FileDialog::new().set_title(&title);
-            if let Some(p) = dir { d = d.set_directory(PathBuf::from(p)); }
-            let res = d.pick_folder();
-            Ok(res.map(|p| p.to_string_lossy().to_string()))
-        }
-        #[cfg(not(target_os = "windows"))]
-        { Ok(None) }
-    }
-
-    pub fn message_box(&self, title: String, msg: String, level: String) -> PyResult<bool> {
-        #[cfg(target_os = "windows")]
-        {
-             let l = match level.as_str() {
-                 "error" => rfd::MessageLevel::Error,
-                 "warning" => rfd::MessageLevel::Warning,
-                 _ => rfd::MessageLevel::Info,
-             };
-             let res = rfd::MessageDialog::new().set_title(&title).set_description(&msg).set_level(l).show();
-             let ret = match res {
-                 rfd::MessageDialogResult::Ok | rfd::MessageDialogResult::Yes => true,
-                 _ => false
-             };
-             Ok(ret)
-        }
-         #[cfg(not(target_os = "windows"))]
-        { Ok(false) }
-    }
-
     pub fn set_prevent_close(&self, p: bool) {
         let _ = self.proxy.send_event(UserEvent::SetPreventClose(p));
     }
     
-    #[pyo3(signature = (tooltip, icon_path=None))]
-    pub fn create_tray(&self, tooltip: String, icon_path: Option<String>) {
-        let _ = self.proxy.send_event(UserEvent::CreateTray(tooltip, icon_path));
-    }
-
     pub fn set_is_utility(&self, u: bool) {
         *self.is_utility.lock().unwrap() = u;
     }

@@ -1,6 +1,5 @@
 import os
 import subprocess
-import platform
 
 import shutil
 
@@ -19,9 +18,11 @@ class Shell:
         """
         Opens a URL or file path in the default system browser/handler.
         """
-        if platform.system() == "Windows":
+        import sys
+
+        if sys.platform == "win32":
             os.startfile(url)
-        elif platform.system() == "Darwin":
+        elif sys.platform == "darwin":
             bin_path = Shell._resolve_bin("open")
             subprocess.run([bin_path, url])
         else:
@@ -33,11 +34,13 @@ class Shell:
         """
         Opens the folder containing the file and selects it.
         """
+        import sys
+
         path = os.path.abspath(path)
-        if platform.system() == "Windows":
+        if sys.platform == "win32":
             bin_path = Shell._resolve_bin("explorer")
             subprocess.run([bin_path, "/select,", path])
-        elif platform.system() == "Darwin":
+        elif sys.platform == "darwin":
             bin_path = Shell._resolve_bin("open")
             subprocess.run([bin_path, "-R", path])
         else:

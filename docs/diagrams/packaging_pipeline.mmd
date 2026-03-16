@@ -1,0 +1,25 @@
+flowchart TD
+  A[Start: pytron package CLI] --> B[Create BuildContext]
+  B --> C{Prepare modules}
+  C --> C1[AssetCollector]
+  C --> C2[ModuleScanner]
+  C --> C3[NativeCollector]
+  C --> C4[PluginHookCollector]
+  C1 --> D[Populate add_data, hidden_imports, pathex]
+  C2 --> D
+  C3 --> D
+  C4 --> D
+  D --> E{Build wrappers chain}
+  E --> F[Wrapper: secure_loader (optional)]
+  E --> G[Wrapper: strip/debug/strip symbols]
+  E --> H[Core build executor]
+  H --> H1[PyInstaller or Nuitka]
+  H1 --> I[Produce dist / single-binary]
+  I --> J{Post-build modules}
+  J --> K[Patch binary (embed resources)]
+  J --> L[Sign installers]
+  J --> M[Create installers (NSIS/DMG/deb)]
+  M --> Z[Artifacts: installers, dist, patches]
+  K --> Z
+  L --> Z
+  Z --> END[Done]

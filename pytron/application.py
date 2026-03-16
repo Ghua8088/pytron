@@ -18,9 +18,11 @@ from .inspector import Inspector
 
 class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shell):
     def __init__(self, config_file="settings.json"):
+        from .utils import com_thread_initializer
+
         # PERFORMANCE: Shared thread pool for all internal window operations
         self.thread_pool = __import__("concurrent.futures").futures.ThreadPoolExecutor(
-            max_workers=10
+            max_workers=10, initializer=com_thread_initializer
         )
 
         # Init State

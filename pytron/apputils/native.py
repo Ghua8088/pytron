@@ -2,6 +2,11 @@ import sys
 import os
 from typing import Optional
 
+try:
+    from pytron.dependencies import pytron_os
+except Exception:
+    pytron_os = None
+
 
 class NativeMixin:
     """
@@ -22,31 +27,28 @@ class NativeMixin:
 
         # Attempt native Rust implementation first for performance
         try:
-            from pytron.dependencies import pytron_os
-
-            exe_path = sys.executable
-            if pytron_os.set_launch_on_boot(safe_name, exe_path, enable):
-                return True
+            if pytron_os is not None:
+                exe_path = sys.executable
+                if pytron_os.set_launch_on_boot(safe_name, exe_path, enable):
+                    return True
         except Exception:
             pass
 
         # Fallback to platform-specific Python implementations
         try:
-            import platform
-
-            sys_plat = platform.system()
+            sys_plat = sys.platform
             exe_path = f'"{sys.executable}"'
 
             impl = None
-            if sys_plat == "Windows":
+            if sys_plat == "win32":
                 from ..platforms.windows import WindowsImplementation
 
                 impl = WindowsImplementation()
-            elif sys_plat == "Linux":
+            elif sys_plat == "linux":
                 from ..platforms.linux import LinuxImplementation
 
                 impl = LinuxImplementation()
-            elif sys_plat == "Darwin":
+            elif sys_plat == "darwin":
                 from ..platforms.darwin import DarwinImplementation
 
                 impl = DarwinImplementation()
@@ -145,9 +147,18 @@ class NativeMixin:
             return self.windows[0]._platform.get_system_info()
 
         # Fallback if no window
-        import platform
+        import os
 
-        return {"os": platform.system(), "arch": platform.machine()}
+        arch = "unknown"
+        if sys.platform == "win32":
+            arch = os.environ.get("PROCESSOR_ARCHITECTURE", "unknown")
+        else:
+            try:
+                arch = os.uname().machine
+            except:
+                pass
+
+        return {"os": sys.platform, "arch": arch}
 
     def store_set(self, key: str, value):
         """Persists a value to the app's local storage."""

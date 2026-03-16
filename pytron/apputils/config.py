@@ -18,6 +18,53 @@ class ConfigMixin:
                 datefmt="%H:%M:%S",
             )
         self.logger = logging.getLogger("Pytron")
+        self._check_diagnostic_mode()
+
+    def _check_diagnostic_mode(self):
+        """Checks for a 'DEBUG' file next to the executable to force debugging."""
+        trigger_files = ["DEBUG", ".debug", "pytron_debug.txt"]
+        is_diagnostic = False
+
+        # Check app_root or current directory
+        roots = [os.getcwd()]
+        if getattr(sys, "frozen", False):
+            roots.append(os.path.dirname(sys.executable))
+
+        for root in roots:
+            for trigger in trigger_files:
+                if os.path.exists(os.path.join(root, trigger)):
+                    is_diagnostic = True
+                    break
+
+        if is_diagnostic or os.environ.get("PYTRON_DIAGNOSTIC") == "1":
+            # 1. Force Logging to File
+            log_file = os.path.join(roots[-1], "debug.log")
+            try:
+                # Redirect stdout/stderr to the log file so we catch EVERYTHING
+                f = open(log_file, "a", encoding="utf-8")
+                f.write(
+                    f"\n--- DIAGNOSTIC SESSION START: {os.path.basename(sys.executable)} ---\n"
+                )
+                sys.stdout = f
+                sys.stderr = f
+
+                # Update Logging
+                handler = logging.StreamHandler(f)
+                handler.setFormatter(
+                    logging.Formatter(
+                        "[DIAGNOSTIC] %(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                    )
+                )
+                logging.root.addHandler(handler)
+                logging.root.setLevel(logging.DEBUG)
+
+                self.logger.info(
+                    f"DIAGNOSTIC MODE ENABLED. Logs redirected to {log_file}"
+                )
+                self.config["debug"] = True
+                self.config["inspector_auto_open"] = True
+            except Exception as e:
+                print(f"Failed to initialize diagnostic logs: {e}")
 
     def _check_deep_link(self):
         self.state.launch_url = None
@@ -37,6 +84,10 @@ class ConfigMixin:
                 # So we should probably dispatch in app.run().
 
     def _load_config(self, config_file):
+        if isinstance(config_file, dict):
+            self.config = config_file
+            return
+
         self.config = {}
         path = get_resource_path(config_file)
         self.logger.debug(f"Resolved settings path: {path}")

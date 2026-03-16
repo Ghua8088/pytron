@@ -28,7 +28,6 @@ dependencies = [
   "pyinstaller",
   "Pillow",
   "rich",
-  "lief",
   "nuitka",
   "zstandard",
   "comtypes; sys_platform == 'win32'",
@@ -49,9 +48,10 @@ classifiers = [
 [project.urls]
 Homepage = "https://pytron-kit.github.io/"
 Repository = "https://github.com/Ghua8088/pytron-kit"
-
+asyncio_mode = "auto"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-v -ra --tb=short"
 norecursedirs = [
     "template_vite",
     "android",
@@ -62,7 +62,6 @@ norecursedirs = [
     "node_modules",
     "*/main/assets/python"
 ]
-asyncio_mode = "auto"
 
 [project.scripts]
 pytron = "pytron.cli:main"

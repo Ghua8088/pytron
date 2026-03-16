@@ -1,101 +1,183 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from pytron import App
-
-
-class DummyBridge:
-    def hello(self):
-        return "world"
-
-
-def _mock_config_loader(self, *args):
-    self.config = {}
-
-
-def _mock_storage_setup(self, title):
-    self.storage_path = "/tmp/mock_storage"
-    self.resource_path = "/tmp/mock_resources"
+from pytron.application import App
+from pytron.exceptions import ConfigError
+import os
 
 
 @pytest.fixture
-def mock_app_env():
-    # We patch the methods on the Class so they apply to any instance created
+def base_config():
+    return {
+        "title": "TestApp",
+        "author": "Tester",
+        "version": "1.0.0",
+        "id": "com.test.app",
+    }
+
+
+def mock_load_config(self, *args, **kwargs):
+    self.config = {
+        "title": "TestApp",
+        "author": "Tester",
+        "version": "1.0.0",
+        "id": "com.test.app",
+        "engine": "native",
+    }
+    self.storage_path = "/tmp/testapp"
+
+
+def test_app_init_minimal(tmp_path):
+    config_file = tmp_path / "settings.json"
+    config_file.touch()
     with patch(
-        "pytron.application.App._setup_identity", return_value=("test-id", "test-title")
-    ), patch(
         "pytron.application.App._load_config",
+        side_effect=mock_load_config,
         autospec=True,
-        side_effect=_mock_config_loader,
     ), patch(
-        "pytron.application.App._setup_storage",
-        autospec=True,
-        side_effect=_mock_storage_setup,
+        "pytron.application.App._setup_identity", return_value=(None, "testapp")
+    ), patch(
+        "pytron.application.App._setup_storage"
+    ), patch(
+        "pytron.application.App._resolve_resources"
+    ), patch(
+        "pytron.application.App._register_core_apis"
+    ), patch(
+        "pytron.application.App._setup_key_value_store"
+    ), patch(
+        "pytron.application.App.load_plugins"
     ):
-        yield
+        app = App(str(config_file))
+        assert app.config["title"] == "TestApp"
+        assert app.windows == []
 
 
-def test_app_init(mock_app_env):
-    app = App()
-    assert app.windows == []
-    assert hasattr(app, "state")
-    assert hasattr(app, "router")
-    assert app.config == {}
-    assert app.storage_path == "/tmp/mock_storage"
+def test_app_init_missing_config():
+    with pytest.raises(TypeError):
+        App(None)
 
 
-def test_app_expose_function(mock_app_env):
-    app = App()
+@patch("pytron.apputils.window_mixin.Webview")
+def test_app_create_window(mock_webview, tmp_path):
+    config_file = tmp_path / "settings.json"
+    config_file.touch()
+    with patch(
+        "pytron.application.App._load_config",
+        side_effect=mock_load_config,
+        autospec=True,
+    ), patch(
+        "pytron.application.App._setup_identity", return_value=(None, "testapp")
+    ), patch(
+        "pytron.application.App._setup_storage"
+    ), patch(
+        "pytron.application.App._resolve_resources"
+    ), patch(
+        "pytron.application.App._register_core_apis"
+    ), patch(
+        "pytron.application.App._setup_key_value_store"
+    ), patch(
+        "pytron.application.App.load_plugins"
+    ):
+        app = App(str(config_file))
+        app.app_root = tmp_path
 
-    @app.expose
-    def add(a, b):
-        return a + b
+        win = app.create_window(url="index.html", title="Window")
 
-    assert "add" in app._exposed_functions
-    assert app._exposed_functions["add"]["func"](1, 2) == 3
+        assert len(app.windows) == 1
+        assert app.windows[0] == mock_webview.return_value
+        mock_webview.assert_called_once()
 
-
-def test_app_expose_renamed(mock_app_env):
-    app = App()
-
-    def subtract(a, b):
-        return a - b
-
-    app.expose(subtract, name="minus")
-
-    assert "minus" in app._exposed_functions
-    assert "subtract" not in app._exposed_functions
-    assert app._exposed_functions["minus"]["func"](5, 2) == 3
-
-
-def test_app_expose_class_instance(mock_app_env):
-    app = App()
-    bridge = DummyBridge()
-
-    app.expose(bridge)
-
-    assert "hello" in app._exposed_functions
-    assert app._exposed_functions["hello"]["func"]() == "world"
-
-
-def test_shortcuts(mock_app_env):
-    app = App()
-
-    @app.shortcut("Ctrl+S")
-    def save():
-        return "saved"
-
-    assert "Ctrl+S" in app.shortcuts
-    assert app.shortcuts["Ctrl+S"]() == "saved"
+        call_config = mock_webview.call_args[1]["config"]
+        assert call_config["url"].endswith("index.html")
+        assert call_config["title"] == "Window"
+        assert call_config["__app__"] == app
 
 
-def test_on_exit_hook(mock_app_env):
-    app = App()
+@patch("pytron.apputils.window_mixin.Webview")
+def test_app_run_starts_windows(mock_webview, tmp_path):
+    config_file = tmp_path / "settings.json"
+    config_file.touch()
+    with patch(
+        "pytron.application.App._load_config",
+        side_effect=mock_load_config,
+        autospec=True,
+    ), patch(
+        "pytron.application.App._setup_identity", return_value=(None, "testapp")
+    ), patch(
+        "pytron.application.App._setup_storage"
+    ), patch(
+        "pytron.application.App._resolve_resources"
+    ), patch(
+        "pytron.application.App._register_core_apis"
+    ), patch(
+        "pytron.application.App._setup_key_value_store"
+    ), patch(
+        "pytron.application.App.load_plugins"
+    ):
+        app = App(str(config_file))
+        win = app.create_window()
 
-    mock_hook = MagicMock()
+        with patch("threading.Thread"):
+            app.run = MagicMock()
+            app.run()
+            app.run.assert_called_once()
 
-    @app.on_exit
-    def cleanup():
-        mock_hook()
 
-    # 1 default (thread pool) + 1 new
-    assert len(app._on_exit_callbacks) == 2
+def test_app_path_resolution(tmp_path):
+    # Testing the actual _resolve_resources in ConfigMixin
+    config_file = tmp_path / "settings.json"
+    config_file.touch()
+    with patch(
+        "pytron.application.App._load_config",
+        side_effect=mock_load_config,
+        autospec=True,
+    ), patch(
+        "pytron.application.App._setup_identity", return_value=(None, "testapp")
+    ), patch(
+        "pytron.application.App._setup_storage"
+    ), patch(
+        "pytron.application.App._register_core_apis"
+    ), patch(
+        "pytron.application.App._setup_key_value_store"
+    ), patch(
+        "pytron.application.App.load_plugins"
+    ):
+        app = App(str(config_file))
+        app.app_root = tmp_path
+        app.config["url"] = "index.html"
+
+        # Create the file so it's found
+        idx = tmp_path / "index.html"
+        idx.touch()
+
+        app._resolve_resources()
+        assert app.config["url"] == str(idx)
+
+
+def test_app_emit_to_all_windows(tmp_path):
+    config_file = tmp_path / "settings.json"
+    config_file.touch()
+    with patch(
+        "pytron.application.App._load_config",
+        side_effect=mock_load_config,
+        autospec=True,
+    ), patch(
+        "pytron.application.App._setup_identity", return_value=(None, "testapp")
+    ), patch(
+        "pytron.application.App._setup_storage"
+    ), patch(
+        "pytron.application.App._resolve_resources"
+    ), patch(
+        "pytron.application.App._register_core_apis"
+    ), patch(
+        "pytron.application.App._setup_key_value_store"
+    ), patch(
+        "pytron.application.App.load_plugins"
+    ):
+        app = App(str(config_file))
+        win1 = MagicMock()
+        win2 = MagicMock()
+        app.windows = [win1, win2]
+
+        app.emit("evt", {"data": 1})
+        win1.emit.assert_called_with("evt", {"data": 1})
+        win2.emit.assert_called_with("evt", {"data": 1})

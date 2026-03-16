@@ -30,6 +30,10 @@ class WindowMixin:
             from ..engines.chrome.engine import ChromeWebView
 
             window = ChromeWebView(config=window_config)
+        elif getattr(self, "engine", "native") == "servo":
+            from ..engines.servo.engine import ServoWebView
+
+            window = ServoWebView(config=window_config)
         else:
             window = Webview(config=window_config)
 
@@ -209,18 +213,15 @@ class WindowMixin:
 
             if not impl:
                 # Fallback detection for App level calls before windows are created
-                import platform
-
-                sys_plat = platform.system()
-                if sys_plat == "Windows":
+                if sys.platform == "win32":
                     from ..platforms.windows import WindowsImplementation
 
                     impl = WindowsImplementation()
-                elif sys_plat == "Linux":
+                elif sys.platform == "linux":
                     from ..platforms.linux import LinuxImplementation
 
                     impl = LinuxImplementation()
-                elif sys_plat == "Darwin":
+                elif sys.platform == "darwin":
                     from ..platforms.darwin import DarwinImplementation
 
                     impl = DarwinImplementation()

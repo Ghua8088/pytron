@@ -100,6 +100,8 @@ def run_nuitka_build(context: BuildContext):
     for imp in context.hidden_imports:
         cmd.append(f"--include-module={imp}")
 
+    cmd.extend(context.extra_args)
+
     cmd.append(str(context.script))
 
     log(f"Running Nuitka: {' '.join(cmd)}", style="dim")

@@ -1,362 +1,20 @@
+#![allow(unexpected_cfgs)]
+
 use pyo3::prelude::*;
-
 #[cfg(target_os = "windows")]
-mod win {
-    use pyo3::prelude::*;
-    use windows::Win32::Foundation::{HWND, RECT, WPARAM, LPARAM, LRESULT};
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongW, SetWindowLongW, SetWindowPos, GWL_EXSTYLE, GWL_STYLE, 
-        WS_EX_TOOLWINDOW, WS_EX_APPWINDOW, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_FRAMECHANGED,
-        WS_CAPTION, SWP_NOACTIVATE, SW_MINIMIZE, SW_MAXIMIZE, SW_RESTORE, SW_HIDE, SW_SHOW,
-        ShowWindow, IsZoomed, PostMessageW, SendMessageW, IsWindowVisible, SetForegroundWindow,
-        GetWindowRect, GetSystemMetrics, WM_CLOSE, WM_NCLBUTTONDOWN, HTCAPTION,
-        SM_CXSCREEN, SM_CYSCREEN, HWND_TOPMOST, HWND_NOTOPMOST
-    };
-    use windows::Win32::System::Com::{CoCreateInstance, CoInitialize, CLSCTX_INPROC_SERVER};
-    use windows::Win32::UI::Shell::{ITaskbarList, TaskbarList};
-    use windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
-
-    #[pyfunction]
-    pub fn set_utility_window(hwnd_val: usize, enable: bool) -> PyResult<()> {
-        let hwnd = HWND(hwnd_val as isize);
-        unsafe {
-            // Modify EXSTYLE (still needed for Alt-Tab hiding and border modes)
-            let mut ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
-            if enable {
-                ex_style = (ex_style | WS_EX_TOOLWINDOW.0 as i32) & !(WS_EX_APPWINDOW.0 as i32);
-            } else {
-                ex_style = (ex_style | WS_EX_APPWINDOW.0 as i32) & !(WS_EX_TOOLWINDOW.0 as i32);
-            }
-            SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style);
-            let _ = SetWindowPos(hwnd, HWND::default(), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
-
-            // Dynamically strip it from the taskbar using COM (Works completely seamlessly)
-            let _ = CoInitialize(None); // Ok if it fails
-            if let Ok(taskbar) = CoCreateInstance::<_, ITaskbarList>(&TaskbarList, None, CLSCTX_INPROC_SERVER) {
-                if taskbar.HrInit().is_ok() {
-                    if enable {
-                        let _ = taskbar.DeleteTab(hwnd);
-                    } else {
-                        let _ = taskbar.AddTab(hwnd);
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn make_frameless(hwnd_val: usize) -> PyResult<()> {
-        let hwnd = HWND(hwnd_val as isize);
-        unsafe {
-            let style = GetWindowLongW(hwnd, GWL_STYLE);
-            let new_style = style & !(WS_CAPTION.0 as i32);
-            SetWindowLongW(hwnd, GWL_STYLE, new_style);
-            let _ = SetWindowPos(hwnd, HWND::default(), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-        }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn minimize(hwnd_val: usize) -> PyResult<()> {
-        let hwnd = HWND(hwnd_val as isize);
-        unsafe { let _ = ShowWindow(hwnd, SW_MINIMIZE); }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn set_bounds(hwnd_val: usize, x: i32, y: i32, width: i32, height: i32) -> PyResult<()> {
-        let hwnd = HWND(hwnd_val as isize);
-        unsafe { let _ = SetWindowPos(hwnd, HWND::default(), x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE); }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn close(hwnd_val: usize) -> PyResult<()> {
-        let hwnd = HWND(hwnd_val as isize);
-        unsafe { let _ = PostMessageW(hwnd, WM_CLOSE, WPARAM(0), LPARAM(0)); }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn toggle_maximize(hwnd_val: usize) -> PyResult<bool> {
-        let hwnd = HWND(hwnd_val as isize);
-        unsafe {
-            let is_zoomed = IsZoomed(hwnd).as_bool();
-            if is_zoomed {
-                let _ = ShowWindow(hwnd, SW_RESTORE);
-                Ok(false)
-            } else {
-                let _ = ShowWindow(hwnd, SW_MAXIMIZE);
-                Ok(true)
-            }
-        }
-    }
-
-    #[pyfunction]
-    pub fn set_always_on_top(hwnd_val: usize, enable: bool) -> PyResult<()> {
-        let hwnd = HWND(hwnd_val as isize);
-        let insert_after = if enable { HWND_TOPMOST } else { HWND_NOTOPMOST };
-        unsafe { let _ = SetWindowPos(hwnd, insert_after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE); }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn start_drag(hwnd_val: usize) -> PyResult<()> {
-        let hwnd = HWND(hwnd_val as isize);
-        unsafe {
-            let _ = ReleaseCapture();
-            let _ = SendMessageW(hwnd, WM_NCLBUTTONDOWN, WPARAM(HTCAPTION as usize), LPARAM(0));
-        }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn hide(hwnd_val: usize) -> PyResult<()> {
-        let hwnd = HWND(hwnd_val as isize);
-        unsafe { let _ = ShowWindow(hwnd, SW_HIDE); }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn is_visible(hwnd_val: usize) -> PyResult<bool> {
-        let hwnd = HWND(hwnd_val as isize);
-        unsafe { Ok(IsWindowVisible(hwnd).as_bool()) }
-    }
-
-    #[pyfunction]
-    pub fn show(hwnd_val: usize) -> PyResult<()> {
-        let hwnd = HWND(hwnd_val as isize);
-        unsafe {
-            let _ = ShowWindow(hwnd, SW_SHOW);
-            let _ = SetForegroundWindow(hwnd);
-        }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn center(hwnd_val: usize) -> PyResult<()> {
-        let hwnd = HWND(hwnd_val as isize);
-        unsafe {
-            let mut rect = RECT::default();
-            if GetWindowRect(hwnd, &mut rect).is_ok() {
-                let width = rect.right - rect.left;
-                let height = rect.bottom - rect.top;
-                let screen_w = GetSystemMetrics(SM_CXSCREEN);
-                let screen_h = GetSystemMetrics(SM_CYSCREEN);
-                let x = (screen_w - width) / 2;
-                let y = (screen_h - height) / 2;
-                let _ = SetWindowPos(hwnd, HWND::default(), x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-            }
-        }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn set_launch_on_boot(app_name: String, exe_path: String, enable: bool) -> PyResult<bool> {
-        use windows::Win32::System::Registry::{
-            RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegSetValueExW, HKEY_CURRENT_USER,
-            KEY_SET_VALUE, REG_SZ,
-        };
-        use windows::core::PCWSTR;
-
-        let sub_key = "Software\\Microsoft\\Windows\\CurrentVersion\\Run\0";
-        let sub_key_u16: Vec<u16> = sub_key.encode_utf16().collect();
-        let app_name_u16: Vec<u16> = format!("{}\0", app_name).encode_utf16().collect();
-
-        unsafe {
-            let mut hkey = windows::Win32::System::Registry::HKEY::default();
-            if RegCreateKeyExW(
-                HKEY_CURRENT_USER,
-                PCWSTR(sub_key_u16.as_ptr()),
-                0,
-                PCWSTR::null(),
-                windows::Win32::System::Registry::REG_OPTION_NON_VOLATILE,
-                KEY_SET_VALUE,
-                None,
-                &mut hkey,
-                None,
-            )
-            .is_ok()
-            {
-                if enable {
-                    let exe_path_u16: Vec<u16> = format!("{}\0", exe_path).encode_utf16().collect();
-                    let _ = RegSetValueExW(
-                        hkey,
-                        PCWSTR(app_name_u16.as_ptr()),
-                        0,
-                        REG_SZ,
-                        Some(std::slice::from_raw_parts(
-                            exe_path_u16.as_ptr() as *const u8,
-                            exe_path_u16.len() * 2,
-                        )),
-                    );
-                } else {
-                    let _ = RegDeleteValueW(hkey, PCWSTR(app_name_u16.as_ptr()));
-                }
-                let _ = RegCloseKey(hkey);
-                Ok(true)
-            } else {
-                Ok(false)
-            }
-        }
-    }
-}
+mod win;
 
 #[cfg(target_os = "macos")]
-mod mac {
-    use pyo3::prelude::*;
-    use objc::{class, msg_send, sel, sel_impl};
-    use cocoa::base::id;
-
-    #[pyfunction]
-    pub fn set_utility_window(hwnd_val: usize, enable: bool) -> PyResult<()> {
-        let ns_window = hwnd_val as id;
-        unsafe {
-            let style_mask: usize = msg_send![ns_window, styleMask];
-            let utility_mask = 1 << 4; // NSWindowStyleMaskUtilityWindow
-            
-            let new_style = if enable {
-                style_mask | utility_mask
-            } else {
-                style_mask & !utility_mask
-            };
-            let _: () = msg_send![ns_window, setStyleMask: new_style];
-            
-            // Hide the application dock icon via Activation Policy
-            // NSApplicationActivationPolicyAccessory = 1
-            // NSApplicationActivationPolicyRegular = 0
-            let ns_app: id = msg_send![class!(NSApplication), sharedApplication];
-            let policy = if enable { 1_isize } else { 0_isize };
-            let _: () = msg_send![ns_app, setActivationPolicy: policy];
-        }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn make_frameless(hwnd_val: usize) -> PyResult<()> {
-        let ns_window = hwnd_val as id;
-        unsafe {
-            let _: () = msg_send![ns_window, setStyleMask: 32783_usize];
-            let _: () = msg_send![ns_window, setTitlebarAppearsTransparent: 1_i8]; // BOOL as i8
-            let _: () = msg_send![ns_window, setTitleVisibility: 1_isize];
-        }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn set_launch_on_boot(app_name: String, exe_path: String, enable: bool) -> PyResult<bool> {
-        use std::fs;
-        use std::path::PathBuf;
-
-        let home = std::env::var("HOME").map(PathBuf::from).map_err(|_| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("Could not find HOME directory"))?;
-        let launch_agents = home.join("Library/LaunchAgents");
-        let plist_file = launch_agents.join(format!("com.{}.startup.plist", app_name.to_lowercase()));
-
-        if enable {
-            let _ = fs::create_dir_all(&launch_agents);
-            // Split exe_path simple way (since it's usually quoted or plain)
-            let args: Vec<&str> = if exe_path.starts_with('"') && exe_path.ends_with('"') {
-                vec![&exe_path[1..exe_path.len()-1]]
-            } else {
-                exe_path.split_whitespace().collect()
-            };
-
-            let array_items: String = args.iter()
-                .map(|arg| format!("        <string>{}</string>", arg))
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            let content = format!(
-                r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.{}.startup</string>
-    <key>ProgramArguments</key>
-    <array>
-{}
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-</dict>
-</plist>"#,
-                app_name.to_lowercase(),
-                array_items
-            );
-
-            fs::write(plist_file, content).map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
-        } else if plist_file.exists() {
-            let _ = fs::remove_file(plist_file);
-        }
-        Ok(true)
-    }
-}
+mod mac;
 
 #[cfg(target_os = "linux")]
-mod linux {
-    use pyo3::prelude::*;
-    use std::os::raw::{c_int, c_void};
-    
-    // We dynamically link these at runtime since Linux guarantees Gtk3 inside `tao`
-    extern "C" {
-        fn gtk_window_set_skip_taskbar_hint(window: *mut c_void, setting: c_int);
-        fn gtk_window_set_decorated(window: *mut c_void, setting: c_int);
-    }
-
-    #[pyfunction]
-    pub fn set_utility_window(hwnd_val: usize, enable: bool) -> PyResult<()> {
-        let gtk_window = hwnd_val as *mut c_void;
-        unsafe {
-            gtk_window_set_skip_taskbar_hint(gtk_window, if enable { 1 } else { 0 });
-        }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn make_frameless(hwnd_val: usize) -> PyResult<()> {
-        let gtk_window = hwnd_val as *mut c_void;
-        unsafe {
-            gtk_window_set_decorated(gtk_window, 0);
-        }
-        Ok(())
-    }
-
-    #[pyfunction]
-    pub fn set_launch_on_boot(app_name: String, exe_path: String, enable: bool) -> PyResult<bool> {
-        use std::fs;
-        use std::path::PathBuf;
-
-        let home = std::env::var("HOME").map(PathBuf::from).map_err(|_| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("Could not find HOME directory"))?;
-        let autostart_dir = home.join(".config/autostart");
-        let desktop_file = autostart_dir.join(format!("{}.desktop", app_name));
-
-        if enable {
-            let _ = fs::create_dir_all(&autostart_dir);
-            let content = format!(
-                r#"[Desktop Entry]
-Type=Application
-Name={}
-Exec={}
-Hidden=false
-NoDisplay=false
-X-GNOME-Autostart-enabled=true
-"#,
-                app_name, exe_path
-            );
-            fs::write(desktop_file, content).map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
-        } else if desktop_file.exists() {
-            let _ = fs::remove_file(desktop_file);
-        }
-        Ok(true)
-    }
-}
+mod linux;
 
 #[pymodule]
 fn pytron_os(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(target_os = "windows")]
     {
+        // --- window ---
         m.add_function(wrap_pyfunction!(win::set_utility_window, m)?)?;
         m.add_function(wrap_pyfunction!(win::make_frameless, m)?)?;
         m.add_function(wrap_pyfunction!(win::minimize, m)?)?;
@@ -369,22 +27,173 @@ fn pytron_os(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(win::is_visible, m)?)?;
         m.add_function(wrap_pyfunction!(win::show, m)?)?;
         m.add_function(wrap_pyfunction!(win::center, m)?)?;
+        m.add_function(wrap_pyfunction!(win::set_border_color, m)?)?;
+        m.add_function(wrap_pyfunction!(win::set_window_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(win::set_fullscreen, m)?)?;
+        m.add_function(wrap_pyfunction!(win::show_notification, m)?)?;
+        m.add_function(wrap_pyfunction!(win::set_app_id, m)?)?;
         m.add_function(wrap_pyfunction!(win::set_launch_on_boot, m)?)?;
+        // --- taskbar ---
+        m.add_function(wrap_pyfunction!(win::set_taskbar_progress, m)?)?;
+        // --- clipboard ---
+        m.add_function(wrap_pyfunction!(win::set_clipboard_text, m)?)?;
+        m.add_function(wrap_pyfunction!(win::get_clipboard_text, m)?)?;
+        // --- dialogs ---
+        m.add_function(wrap_pyfunction!(win::message_box, m)?)?;
+        m.add_function(wrap_pyfunction!(win::open_file_dialog, m)?)?;
+        m.add_function(wrap_pyfunction!(win::open_folder_dialog, m)?)?;
+        m.add_function(wrap_pyfunction!(win::save_file_dialog, m)?)?;
+        // --- hotkeys ---
+        m.add_function(wrap_pyfunction!(win::register_hotkey, m)?)?;
+        m.add_function(wrap_pyfunction!(win::unregister_hotkey, m)?)?;
+        // --- message loop ---
+        m.add_function(wrap_pyfunction!(win::get_current_thread_id, m)?)?;
+        m.add_function(wrap_pyfunction!(win::post_thread_message, m)?)?;
+        m.add_function(wrap_pyfunction!(win::get_message, m)?)?;
+        m.add_function(wrap_pyfunction!(win::init_message_queue, m)?)?;
+        m.add_function(wrap_pyfunction!(win::translate_dispatch, m)?)?;
+        // --- tray ---
+        m.add_function(wrap_pyfunction!(win::tray_create_window, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_get_message_ex, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_translate_dispatch, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_add_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_remove_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_destroy_window, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_post_message, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_load_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_load_default_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_destroy_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_create_popup_menu, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_append_menu_item, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_append_separator, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_track_popup_menu, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_get_cursor_pos, m)?)?;
+        // --- tray v2 (tray-icon crate) ---
+        m.add_function(wrap_pyfunction!(win::tray_v2_create, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_v2_poll_event, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_v2_interrupt, m)?)?;
+        m.add_function(wrap_pyfunction!(win::tray_v2_destroy, m)?)?;
+        // --- console ---
+        m.add_function(wrap_pyfunction!(win::set_console_utf8, m)?)?;
     }
-    
+
     #[cfg(target_os = "macos")]
     {
+        // --- window ---
         m.add_function(wrap_pyfunction!(mac::set_utility_window, m)?)?;
         m.add_function(wrap_pyfunction!(mac::make_frameless, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::minimize, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::set_bounds, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::close, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::toggle_maximize, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::set_always_on_top, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::start_drag, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::hide, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::is_visible, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::show, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::center, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::set_border_color, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::set_window_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::set_fullscreen, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::show_notification, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::set_taskbar_progress, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::set_app_id, m)?)?;
         m.add_function(wrap_pyfunction!(mac::set_launch_on_boot, m)?)?;
+        // --- clipboard ---
+        m.add_function(wrap_pyfunction!(mac::set_clipboard_text, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::get_clipboard_text, m)?)?;
+        // --- dialogs ---
+        m.add_function(wrap_pyfunction!(mac::message_box, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::open_file_dialog, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::open_folder_dialog, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::save_file_dialog, m)?)?;
+        // --- hotkeys ---
+        m.add_function(wrap_pyfunction!(mac::register_hotkey, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::unregister_hotkey, m)?)?;
+        // --- message loop ---
+        m.add_function(wrap_pyfunction!(mac::get_current_thread_id, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::post_thread_message, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::get_message, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::init_message_queue, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::translate_dispatch, m)?)?;
+        // --- tray ---
+        m.add_function(wrap_pyfunction!(mac::tray_create_window, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_get_message_ex, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_translate_dispatch, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_add_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_remove_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_destroy_window, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_post_message, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_load_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_load_default_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_destroy_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_create_popup_menu, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_append_menu_item, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_append_separator, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_track_popup_menu, m)?)?;
+        m.add_function(wrap_pyfunction!(mac::tray_get_cursor_pos, m)?)?;
+        // --- console ---
+        m.add_function(wrap_pyfunction!(mac::set_console_utf8, m)?)?;
     }
 
     #[cfg(target_os = "linux")]
     {
+        // --- window ---
         m.add_function(wrap_pyfunction!(linux::set_utility_window, m)?)?;
         m.add_function(wrap_pyfunction!(linux::make_frameless, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::minimize, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::set_bounds, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::close, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::toggle_maximize, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::set_always_on_top, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::start_drag, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::hide, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::is_visible, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::show, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::center, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::set_border_color, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::set_window_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::set_fullscreen, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::show_notification, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::set_taskbar_progress, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::set_app_id, m)?)?;
         m.add_function(wrap_pyfunction!(linux::set_launch_on_boot, m)?)?;
+        // --- clipboard ---
+        m.add_function(wrap_pyfunction!(linux::set_clipboard_text, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::get_clipboard_text, m)?)?;
+        // --- dialogs ---
+        m.add_function(wrap_pyfunction!(linux::message_box, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::open_file_dialog, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::open_folder_dialog, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::save_file_dialog, m)?)?;
+        // --- hotkeys ---
+        m.add_function(wrap_pyfunction!(linux::register_hotkey, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::unregister_hotkey, m)?)?;
+        // --- message loop ---
+        m.add_function(wrap_pyfunction!(linux::get_current_thread_id, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::post_thread_message, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::get_message, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::init_message_queue, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::translate_dispatch, m)?)?;
+        // --- tray ---
+        m.add_function(wrap_pyfunction!(linux::tray_create_window, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_get_message_ex, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_translate_dispatch, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_add_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_remove_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_destroy_window, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_post_message, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_load_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_load_default_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_destroy_icon, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_create_popup_menu, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_append_menu_item, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_append_separator, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_track_popup_menu, m)?)?;
+        m.add_function(wrap_pyfunction!(linux::tray_get_cursor_pos, m)?)?;
+        // --- console ---
+        m.add_function(wrap_pyfunction!(linux::set_console_utf8, m)?)?;
     }
-    
+
     Ok(())
 }

@@ -5,6 +5,11 @@ import logging
 from typing import Callable, Dict, Any
 
 try:
+    from .dependencies import pytron_os
+except ImportError:
+    pytron_os = None
+
+try:
     import ctypes.wintypes
 except (ImportError, AttributeError):
     # Fallback for non-Windows platforms
@@ -223,23 +228,31 @@ class ShortcutManager:
         self.shortcuts[sid] = data
 
         # 3. Wake up the loop!
-        # Post a specific message to the thread to tell it "Check the queue"
         if self._thread_id:
-            # Retry mechanism for the "Queue not yet ready" edge case
-            # although event.wait() should have covered it.
-            for attempt in range(3):
-                success = ctypes.windll.user32.PostThreadMessageW(
-                    self._thread_id, WM_APP_REGISTER, 0, 0
-                )
-                if success:
-                    break
-                import time
+            sent = False
+            if pytron_os:
+                try:
+                    sent = pytron_os.post_thread_message(
+                        self._thread_id, WM_APP_REGISTER, 0, 0
+                    )
+                except Exception:
+                    pass
 
-                time.sleep(0.05)
-            else:
-                self.logger.error(
-                    f"Failed to post registration message for shortcut {combo}"
-                )
+            if not sent:
+                # ctypes fallback
+                for attempt in range(3):
+                    success = ctypes.windll.user32.PostThreadMessageW(
+                        self._thread_id, WM_APP_REGISTER, 0, 0
+                    )
+                    if success:
+                        break
+                    import time
+
+                    time.sleep(0.05)
+                else:
+                    self.logger.error(
+                        f"Failed to post registration message for shortcut {combo}"
+                    )
 
     def _start_message_loop(self):
         self._running = True
@@ -248,28 +261,79 @@ class ShortcutManager:
         self._thread.start()
 
     def _msg_loop(self):
+        if pytron_os:
+            # ── RUST PATH ──────────────────────────────────────────────────
+            try:
+                self._thread_id = pytron_os.get_current_thread_id()
+            except Exception:
+                self._thread_id = None
+
+            # Force Windows to allocate a message queue for this thread so
+            # that PostThreadMessageW from other threads can target it.
+            try:
+                pytron_os.init_message_queue()
+            except Exception:
+                pass
+
+            self._queue_ready.set()
+            self.logger.info("Shortcut loop started (rust path).")
+
+            while self._running:
+                try:
+                    res = pytron_os.get_message()  # blocks
+                    if res is None:  # WM_QUIT
+                        break
+                    message, wparam, lparam = res
+                except Exception as e:
+                    self.logger.error(f"get_message failed: {e}")
+                    break
+
+                if message == WM_HOTKEY:
+                    sid = wparam
+                    if sid in self.shortcuts:
+                        cb = self.shortcuts[sid]["callback"]
+                        threading.Thread(target=cb, daemon=True).start()
+
+                elif message == WM_APP_REGISTER:
+                    for sid, data in list(self.shortcuts.items()):
+                        if not data.get("registered", False):
+                            try:
+                                success = pytron_os.register_hotkey(
+                                    0, sid, data["fsModifiers"], data["vk"]
+                                )
+                            except Exception:
+                                success = False
+
+                            if success:
+                                data["registered"] = True
+                                self.logger.info(
+                                    f"Registered global shortcut ID {sid} ({data.get('combo')})"
+                                )
+                            else:
+                                self.logger.warning(
+                                    f"Failed to register ID {sid} ({data.get('combo')})"
+                                )
+                                data["registered"] = True  # avoid infinite spam
+
+                try:
+                    pytron_os.translate_dispatch(0, message, wparam, lparam)
+                except Exception:
+                    pass
+            return  # done with rust path
+
+        # ── CTYPES FALLBACK PATH ────────────────────────────────────────────
+        self._thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
+
         user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-
-        # 1. Store Thread ID so main thread can send messages to us
-        self._thread_id = kernel32.GetCurrentThreadId()
-
-        # 2. Force create message queue by peeking once
-        # MSDN: PostThreadMessage fails if the thread doesn't have a message queue.
         msg = ctypes.wintypes.MSG()
-        user32.PeekMessageW(ctypes.byref(msg), 0, 0, 0, 0)
-
-        # 3. Signal that we are ready
+        user32.PeekMessageW(ctypes.byref(msg), 0, 0, 0, 0)  # init queue
         self._queue_ready.set()
 
-        self.logger.info("Shortcut loop started (Blocking Mode).")
+        self.logger.info("Shortcut loop started (ctypes fallback).")
 
         while self._running:
-            # 1. BLOCK here until a message comes (0% CPU)
-            # GetMessage returns 0 on WM_QUIT
             res = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
-
-            if res <= 0:  # Error or WM_QUIT
+            if res <= 0:
                 break
 
             if msg.message == WM_HOTKEY:
@@ -279,8 +343,6 @@ class ShortcutManager:
                     threading.Thread(target=cb, daemon=True).start()
 
             elif msg.message == WM_APP_REGISTER:
-                # 2. We were woken up! Check the register queue
-                # Iterate over a COPY to avoid "dictionary changed size during iteration"
                 for sid, data in list(self.shortcuts.items()):
                     if not data.get("registered", False):
                         success = user32.RegisterHotKey(
@@ -293,18 +355,14 @@ class ShortcutManager:
                             )
                         else:
                             err_code = ctypes.GetLastError()
-                            # 1409 = Hotkey already registered
                             if err_code == 1409:
                                 self.logger.warning(
-                                    f"Shortcut ID {sid} failed: Hotkey already reserved by another app ({data.get('combo')})."
+                                    f"Shortcut ID {sid} failed: Hotkey already reserved ({data.get('combo')})."
                                 )
-                                # Don't mark as registered True here - let it attempt again if triggered later
-                                # This helps if a previous instance was still cleaning up.
                             else:
                                 self.logger.error(
                                     f"Failed to register ID {sid} ({data.get('combo')}). Error: {err_code}"
                                 )
-                                # Mark as registered for other errors to avoid infinite log spam
                                 data["registered"] = True
 
             user32.TranslateMessage(ctypes.byref(msg))
@@ -313,10 +371,22 @@ class ShortcutManager:
     def stop(self):
         self._running = False
         if sys.platform == "win32":
-            # Post QUIT message to break the GetMessage loop
+            # Post WM_QUIT to break the GetMessage loop
             if self._thread_id:
-                ctypes.windll.user32.PostThreadMessageW(
-                    self._thread_id, 0x0012, 0, 0
-                )  # WM_QUIT
+                sent = False
+                if pytron_os:
+                    try:
+                        sent = pytron_os.post_thread_message(
+                            self._thread_id, 0x0012, 0, 0
+                        )
+                    except Exception:
+                        pass
+                if not sent:
+                    try:
+                        ctypes.windll.user32.PostThreadMessageW(
+                            self._thread_id, 0x0012, 0, 0
+                        )  # WM_QUIT
+                    except Exception:
+                        pass
 
         # Cleanup Hotkeys (best effort, OS usually cleans up on thread exit)

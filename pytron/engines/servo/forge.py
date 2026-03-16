@@ -1,7 +1,6 @@
 import os
 import sys
 import subprocess
-import platform
 import logging
 import shutil
 
@@ -21,8 +20,8 @@ class ServoForge:
         self.target_dir = target_dir or os.path.expanduser("~/.pytron/engines/servo")
 
     def provision(self):
-        """Ensures the Servo engine (miniservo rust binary) is compiled and ready."""
-        exe_name = "miniservo.exe" if platform.system() == "Windows" else "miniservo"
+        """Ensures the Servo engine (servo-shell rust binary) is compiled and ready."""
+        exe_name = "servo-shell.exe" if sys.platform == "win32" else "servo-shell"
         exe_path = os.path.join(self.target_dir, exe_name)
 
         if not os.path.exists(exe_path):
@@ -52,12 +51,7 @@ class ServoForge:
                 )
 
             # Copy the binary to target_dir
-            target_debug_exe = (
-                "servo-shell.exe" if platform.system() == "Windows" else "servo-shell"
-            )
-            compiled_bin = os.path.join(
-                shell_dir, "target", "release", target_debug_exe
-            )
+            compiled_bin = os.path.join(shell_dir, "target", "release", exe_name)
 
             if os.path.exists(compiled_bin):
                 shutil.copy(compiled_bin, exe_path)

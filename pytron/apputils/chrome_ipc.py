@@ -25,7 +25,7 @@ class ChromeIPCServer:
         self._lock = threading.Lock()
 
     def listen(self):
-        if platform.system() == "Windows":
+        if sys.platform == "win32":
             import ctypes
             from ctypes import windll
 
@@ -104,7 +104,7 @@ class ChromeIPCServer:
     def _raw_read(self, n):
         from ctypes import windll, byref, c_ulong, create_string_buffer
 
-        if platform.system() == "Windows":
+        if sys.platform == "win32":
             buf = create_string_buffer(n)
             bytes_read = c_ulong(0)
             success = windll.kernel32.ReadFile(
@@ -123,7 +123,7 @@ class ChromeIPCServer:
             header = struct.pack("<I", len(body))
             full_msg = header + body
 
-            if platform.system() == "Windows":
+            if sys.platform == "win32":
                 from ctypes import windll, byref, c_ulong
 
                 bytes_written = c_ulong(0)
@@ -157,7 +157,7 @@ class ChromeAdapter:
         # Launch Shell
         full_pipe_path = (
             f"\\\\.\\pipe\\{self.pipe_name}"
-            if platform.system() == "Windows"
+            if sys.platform == "win32"
             else os.path.join(tempfile.gettempdir(), self.pipe_name)
         )
 

@@ -3,7 +3,6 @@ import sys
 import json
 import logging
 import ctypes
-import platform
 import subprocess
 import urllib.parse
 from ...webview import Webview
@@ -112,7 +111,7 @@ class ChromeBridge:
 
     def webview_get_window(self, w):
         # On Windows, returning the real HWND allows native features (Taskbar, Menus) to work.
-        if platform.system() == "Windows":
+        if sys.platform == "win32":
             return self.real_hwnd
         return 0
 
@@ -160,9 +159,13 @@ class ChromeWebView(Webview):
         if self.app:
             self.thread_pool = self.app.thread_pool
         else:
+            from pytron.utils import com_thread_initializer
+
             self.thread_pool = __import__(
                 "concurrent.futures"
-            ).futures.ThreadPoolExecutor(max_workers=5)
+            ).futures.ThreadPoolExecutor(
+                max_workers=5, initializer=com_thread_initializer
+            )
 
         # Determine Scheme (Always pytron:// for Chrome engine)
         self._scheme = "pytron://localhost"
@@ -319,22 +322,22 @@ class ChromeWebView(Webview):
 
         # --- Platform Helpers (All Platforms) ---
         self._platform = None
-        current_sys = platform.system()
+        current_sys = sys.platform
         try:
-            if current_sys == "Windows":
+            if current_sys == "win32":
                 from ...platforms.windows import WindowsImplementation
 
                 self._platform = WindowsImplementation()
-            elif current_sys == "Darwin":
+            elif current_sys == "darwin":
                 from ...platforms.darwin import DarwinImplementation
 
                 self._platform = DarwinImplementation()
-            elif current_sys == "Linux":
+            elif current_sys == "linux":
                 from ...platforms.linux import LinuxImplementation
 
                 self._platform = LinuxImplementation()
         except Exception as e:
-            self.logger.warning(f"Failed to load {current_sys} Platform helpers: {e}")
+            self.logger.warning(f"Failed to load platform helpers: {e}")
 
         # 7. JS Init Shim (With Proxy for Dynamic Methods)
         init_js = f"""
@@ -577,10 +580,63 @@ class ChromeWebView(Webview):
         self.bridge.adapter.send({"action": "set_frameless", "frameless": True})
 
     def start_drag(self):
-        pass
+        try:
+            self.adapter.send({"action": "start_drag"})
+        except Exception as e:
+            self.logger.debug(f"start_drag not supported by shell: {e}")
 
     def set_menu(self, menu_bar):
-        pass
+        # Forward a simple menu structure to the shell process. The shell may ignore unknown fields.
+        try:
+            self.adapter.send({"action": "set_menu", "menu": menu_bar})
+        except Exception as e:
+            self.logger.debug(f"Failed to set menu: {e}")
+
+    def set_bounds(self, x, y, width, height):
+        try:
+            self.adapter.send(
+                {
+                    "action": "set_bounds",
+                    "x": int(x),
+                    "y": int(y),
+                    "width": int(width),
+                    "height": int(height),
+                }
+            )
+        except Exception as e:
+            self.logger.debug(f"set_bounds not supported by shell: {e}")
+
+    def set_taskbar_progress(self, value, mode="normal"):
+        try:
+            self.adapter.send(
+                {"action": "set_progress", "value": float(value), "mode": mode}
+            )
+        except Exception as e:
+            self.logger.debug(f"set_taskbar_progress not supported by shell: {e}")
+
+    def toast(self, title, message=""):
+        try:
+            self.adapter.send(
+                {
+                    "action": "toast",
+                    "title": _to_str(title),
+                    "message": _to_str(message),
+                }
+            )
+        except Exception as e:
+            self.logger.debug(f"toast not supported by shell: {e}")
+
+    def set_prevent_close(self, prevent=True):
+        try:
+            self.adapter.send({"action": "prevent_close", "prevent": bool(prevent)})
+        except Exception as e:
+            self.logger.debug(f"prevent_close not supported by shell: {e}")
+
+    def set_resizable(self, enable):
+        try:
+            self.adapter.send({"action": "set_resizable", "resizable": bool(enable)})
+        except Exception as e:
+            self.logger.debug(f"set_resizable not supported by shell: {e}")
 
     def start(self):
         try:
