@@ -23,3 +23,9 @@ url = "2.5"
 # Windows-specific dependencies for native message box if needed
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.52", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_UI_Shell", "Win32_System_Com", "Win32_UI_Controls", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_IO"] }
+
+# Linux: glib to pump the GTK event loop so the GdkWindow handle is fully
+# realized before wry calls gtk_widget_get_window() during WebView construction.
+# tao + wry already pull in glib 0.18 transitively, so no extra version bloat.
+[target.'cfg(target_os = "linux")'.dependencies]
+glib = "0.18"

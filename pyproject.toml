@@ -34,7 +34,8 @@ dependencies = [
   "cryptography",
   "keyring",
   "requests",
-  "Cython"
+  "Cython",
+  "python-xlib; sys_platform == 'linux'"
 ]
 classifiers = [
   "Programming Language :: Python :: 3",

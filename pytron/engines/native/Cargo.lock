@@ -1575,6 +1575,7 @@ dependencies = [
 name = "pytron_native"
 version = "0.1.0"
 dependencies = [
+ "glib",
  "mime_guess",
  "pyo3",
  "serde",
