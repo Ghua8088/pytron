@@ -85,19 +85,17 @@ impl NativeWebview {
             .build(&event_loop)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to create window: {}", e)))?;
 
-        // Linux: force GTK to fully realize the window before wry embeds WebKit.
-        // With no GPU (VMware/VMs), also disable WebKit hardware compositing.
+        // Linux: workarounds for VMs and realization timing.
         #[cfg(target_os = "linux")]
         {
+            // Disable hardware acceleration: critical for VMware/VirtualBox.
             if std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").is_err() {
                 std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
             }
-            // Pump the GTK event loop until the GdkWindow handle is allocated.
-            // 5 iterations is enough on real hardware; more drains VMware's queue.
-            let ctx = glib::MainContext::default();
-            for _ in 0..10 {
-                ctx.iteration(false);
-            }
+            
+            // Give the window a moment to get realized on the X server.
+            // Pumping the loop directly via glib crate causes symbol collisions with gi.
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
         
         #[cfg(target_os = "windows")]
