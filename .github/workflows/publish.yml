@@ -13,7 +13,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # ubuntu-22.04 = glibc 2.35, which matches our manylinux_2_35 target tag.
+        # ubuntu-latest is now 24.04 (glibc 2.39) and auditwheel will refuse to retag
+        # a 2.39-compiled wheel as manylinux_2_35.
+        os: [ubuntu-22.04, macos-latest, windows-latest]
 
     steps:
       - name: 🔍 Checkout code
@@ -45,11 +48,10 @@ jobs:
           pip install build wheel setuptools
 
       # ─── Linux: install the GTK/WebKit/GLib system deps that wry+tao need ───
-      # We run on ubuntu-latest (a real runner, NOT a manylinux container) so
-      # apt-get works fine here. auditwheel repair then re-tags the wheel as
-      # manylinux_2_35 after verifying all symbols are satisfied.
+      # We pin to ubuntu-22.04 (glibc 2.35) so the compiled .so files match the
+      # manylinux_2_35_x86_64 platform tag that auditwheel will apply.
       - name: 🐧 Install Linux System Dependencies
-        if: matrix.os == 'ubuntu-latest'
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -103,7 +105,7 @@ jobs:
       # wry/webkitgtk ARE system libs (installed above) they won't be bundled — ───
       # the repaired wheel just gets the right manylinux platform tag.           ───
       - name: 🩹 Repair Linux Wheel (auditwheel)
-        if: matrix.os == 'ubuntu-latest'
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
           pip install auditwheel
           auditwheel repair dist/*.whl \
