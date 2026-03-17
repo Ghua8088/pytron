@@ -253,10 +253,16 @@ def _resolve_os_module_internal():
         # If we are running 'pytron run' or 'pytron package', we assume native context
         # unless explicitly told otherwise.
         engine = os.environ.get("PYTRON_ENGINE", "native")
+        if engine == "native":
+            if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
+                print(
+                    f"[Pytron Debug] resolve_os_module: SKIPPING load on Linux (Engine: {engine}) to prevent Schism/Hang."
+                )
+            return None
+
         if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
-            mode_desc = "Native Engine convergence" if engine == "native" else "Normal"
             print(
-                f"[Pytron Debug] resolve_os_module: PROCEEDING on Linux ({mode_desc}) (Engine: {engine})."
+                f"[Pytron Debug] resolve_os_module: PROCEEDING on Linux (Engine: {engine})."
             )
 
     # 2. Search for existing module
