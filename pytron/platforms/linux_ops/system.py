@@ -355,13 +355,17 @@ def enable_drag_drop(w, callback):
 
 
 # --- Clipboard Support ---
+_INTERNAL_CLIPBOARD = None
 
 
 def set_clipboard_text(text):
     """
     Sets the system clipboard text.
-    Priority: 1. pytron_os (Rust), 2. xclip (CLI), 3. xsel (CLI)
+    Priority: 1. pytron_os (Rust), 2. xclip (CLI), 3. xsel (CLI), 4. Internal Cache
     """
+    global _INTERNAL_CLIPBOARD
+    _INTERNAL_CLIPBOARD = text
+
     # 1. Try Native Rust
     try:
         from pytron.utils import resolve_os_module
@@ -373,29 +377,43 @@ def set_clipboard_text(text):
     except Exception:
         pass
 
-    # 2. Fallback to xclip
+    # 2. Check for Display
+    if not os.environ.get("DISPLAY"):
+        return True  # Fallback to internal cache succeeds
+
+    # 3. Fallback to xclip
     try:
         subprocess.run(
-            ["xclip", "-selection", "clipboard"], input=text, text=True, check=True
+            ["xclip", "-selection", "clipboard"],
+            input=text,
+            text=True,
+            check=True,
+            capture_output=True,
         )
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
 
-    # 3. Fallback to xsel
+    # 4. Fallback to xsel
     try:
-        subprocess.run(["xsel", "-i", "-b"], input=text, text=True, check=True)
+        subprocess.run(
+            ["xsel", "-i", "-b"],
+            input=text,
+            text=True,
+            check=True,
+            capture_output=True,
+        )
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
 
-    return False
+    return True  # Always return True as internal cache is set
 
 
 def get_clipboard_text():
     """
     Gets the system clipboard text.
-    Priority: 1. pytron_os (Rust), 2. xclip (CLI), 3. xsel (CLI)
+    Priority: 1. pytron_os (Rust), 2. xclip (CLI), 3. xsel (CLI), 4. Internal Cache
     """
     # 1. Try Native Rust
     try:
@@ -409,18 +427,21 @@ def get_clipboard_text():
     except Exception:
         pass
 
-    # 2. Fallback to xclip
-    try:
-        return subprocess.check_output(
-            ["xclip", "-selection", "clipboard", "-o"], text=True
-        ).strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
+    # 2. Check for Display
+    if os.environ.get("DISPLAY"):
+        # 3. Fallback to xclip
+        try:
+            return subprocess.check_output(
+                ["xclip", "-selection", "clipboard", "-o"], text=True
+            ).strip()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
 
-    # 3. Fallback to xsel
-    try:
-        return subprocess.check_output(["xsel", "-o", "-b"], text=True).strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
+        # 4. Fallback to xsel
+        try:
+            return subprocess.check_output(["xsel", "-o", "-b"], text=True).strip()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
 
-    return None
+    # 5. Final Fallback: Internal Cache
+    return _INTERNAL_CLIPBOARD
