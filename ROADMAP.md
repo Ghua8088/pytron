@@ -2,32 +2,30 @@
 
 This document outlines the planned features and improvements for Pytron.
 
-## Q4 2025: Foundation & UI Stability
-- [x] Global OS-level Shortcuts
-- [x] Native System Tray & Menu Support
-- [x] Native File Dialogs (Open/Save/Folder)
-- [x] System Notifications (Toasts)
-- [x] Lifecycle Hooks (`on_exit`)
-- [x] Start on Boot support
-- [x] Deep Linking (URI Schemes)
-- [x] Binary IPC Bridge (`serve_data`)
+## Current Phase: The "Hydraulic" Transition (Q1 2026)
+We are currently bridging the gap between legacy Python wrappers and a hardened Rust-native core.
 
-## Q1 2026: Native UX & Professional Polish
-- [ ] **Acrylic & Mica Support**: Native window transparency and blur effects.
-- [ ] **Native File Drag-and-Drop**: Python-level events for dragging files onto the window.
-- [ ] **File Associations**: Register `.pytron` or custom extensions to open with your app.
-- [ ] **Native TitleBar V2**: Even tighter integration with Snap Layouts and OS themes.
+- [x] **Linux GLib Schism Fix**: Stabilized symbol collisions through environment sanitization and guarded native loading.
+- [x] **X11 Stability**: Forced X11 backends for virtualized environments (VMware/Pop!_OS).
+- [ ] **Native OS Core (pytron_os) Lockdown**: Strip all GTK/GObject dependencies from `pytron_os` on Linux. Switch to pure **X11 Atoms** for window management and **DBus/ZBus** for Tray/Notifications.
+- [ ] **Engine Isolation**: Ensure the replaceable engines (Native/Chrome/Servo) can be swapped without touching the global process state owned by `pytron_os`.
 
-## Q2 2026: Developer Experience (DX)
-- [ ] **Multi-Window Support**: Inter-window communication and management.
-- [ ] **Smart State Persistence**: Built-in SQLite sync for `app.state`.
-- [ ] **Pytron Doctor UI**: In-app component for system health diagnostics.
-- [ ] **Hot-Reloading V2**: Faster state-preserving reloads for complex apps.
+## Q2 2026: The "Monolithic Core" strategy
+To solve distribution and stability issues across Linux distros, we will move toward a unified native runtime.
 
-## Future Vision
-- [ ] **Mobile Support (Android/iOS)**: Move experimental Android build to stable.
-- [ ] **WebAssembly (Wasm) Backend**: Run Python logic in the browser for web distribution.
-- [ ] **Cloud Sync**: Secure, end-to-end encrypted state sync between devices.
+- [ ] **Unified Native Core**: Consolidate `pytron_native` and `pytron_os` into a single monolithic Rust extension to eliminate symbol collisions once and for all.
+- [ ] **Acrylic & Mica (Windows)**: Full native DWM support for Windows 11 transparency effects.
+- [ ] **Native File Drag-and-Drop**: Python-level events piped through the Rust event loop.
+
+## Q3 2026: Developer Experience & Ecosystem
+- [ ] **Multi-Window V2**: Shared Context management for multi-window applications.
+- [ ] **Pytron Doctor**: Advanced system diagnostic CLI to fix missing native headers/libraries.
+- [ ] **Hot-Reloading V2**: State-preserving reloads for complex ReactiveState apps.
+
+## Future Vision: "Universal Pytron"
+- [ ] **Mobile Stability (Android/iOS)**: Move experimental Android build to a first-class citizen.
+- [ ] **Wasm Extension Layer**: Allow Python logic to call into Wasm modules for high-speed processing.
+- [ ] **Cloud-Encrypted State**: End-to-end encrypted sync for `ReactiveState` across multiple Pytron instances.
 
 ---
-*Note: This roadmap is subject to change based on community feedback and core maintainer focus and may be updated at any time.*
+*Note: This roadmap reflects our focus on OS-level deep integration and architectural stability.*

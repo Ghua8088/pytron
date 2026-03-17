@@ -9,15 +9,9 @@ gio = None
 def load_libs():
     global gtk, webkit, glib, gio
 
-    # --- GLIB SCHISM GUARD ---
-    # In Native Engine mode, the Rust extension handles its own GTK/GObject linking.
-    # We must skip ctypes loading of these libraries to avoid symbol collisions.
-    import os
-    import sys
-
-    engine = os.environ.get("PYTRON_ENGINE", "native")  # Default to native if unknown
-    if engine == "native" and sys.platform.startswith("linux"):
-        return
+    # --- NATIVE SYMBOL SHIELD ---
+    # Now that we build native modules with hidden visibility,
+    # we can safely load system libraries via ctypes.
 
     # Load GTK
     if not gtk:

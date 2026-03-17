@@ -50,14 +50,18 @@ def build():
 
     cargo_cmd = ["cargo", "build", "--release", "--manifest-path", "Cargo.toml"]
 
-    # macOS requires special linker flags for PyO3 extensions
-    if sys.platform == "darwin":
+    # Apply safe linker flags for symbol collision prevention
+    try:
+        # Append sys.path to find build_utils in the root's pytron dir
+        sys.path.append(os.path.join(ROOT))
+        from pytron.build_utils import get_safe_linker_flags
+        
+        safe_flags = get_safe_linker_flags("pytron_os", os.path.join(MODULE_DIR, "build"))
         rustflags = env.get("RUSTFLAGS", "")
-        # Add dynamic lookup for Python symbols
-        env["RUSTFLAGS"] = (
-            f"{rustflags} -C link-arg=-undefined -C link-arg=dynamic_lookup".strip()
-        )
-        print("[INFO] Applying macOS Linker Flags (dynamic_lookup)")
+        env["RUSTFLAGS"] = f"{rustflags} {safe_flags}".strip()
+        print(f"[INFO] Applying Shield Linker Flags: {safe_flags}")
+    except Exception as e:
+        print(f"[WARNING] Could not apply symbol shield: {e}")
 
     try:
         subprocess.check_call(cargo_cmd, cwd=MODULE_DIR, env=env)

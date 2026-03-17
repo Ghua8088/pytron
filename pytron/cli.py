@@ -1,12 +1,22 @@
-"""Simple CLI for Pytron: run, init, package, and frontend build helpers.
-
-This implementation uses only the standard library so there are no extra
-dependencies. It provides convenience commands to scaffold a minimal app,
-run a Python entrypoint, run `pyinstaller` to package, and run frontend builds
-for frontend folders.
-"""
-
 from __future__ import annotations
+
+import os
+import sys
+
+# --- Linux Stability Guards (CLI Entrypoint) ---
+# We must apply these BEFORE the first import of any Pytron modules
+# because some system modules (like GI or DBus) auto-init GLib on import.
+if sys.platform.startswith("linux"):
+    # Force GSettings to memory to avoid type collisions with Native Engine
+    os.environ.setdefault("GSETTINGS_BACKEND", "memory")
+    # Prevent accessibility bus from auto-initializing GLib
+    os.environ.setdefault("NO_AT_BRIDGE", "1")
+    # Prevent GIO from loading remote VFS modules
+    os.environ.setdefault("GIO_USE_VFS", "local")
+    # Essential for VMs (VMware/VirtualBox)
+    os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
+    # Preferred backend for VMs
+    os.environ.setdefault("WINIT_UNIX_BACKEND", "x11")
 
 import argparse
 from .commands.init import cmd_init

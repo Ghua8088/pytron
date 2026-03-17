@@ -4,10 +4,9 @@ import threading
 import logging
 from typing import Callable, Dict, Any
 
-try:
-    from .dependencies import pytron_os
-except ImportError:
-    pytron_os = None
+from .utils import resolve_os_module
+
+pytron_os = resolve_os_module()
 
 try:
     import ctypes.wintypes

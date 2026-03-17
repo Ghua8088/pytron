@@ -2,10 +2,9 @@ import sys
 import os
 from typing import Optional
 
-try:
-    from pytron.dependencies import pytron_os
-except Exception:
-    pytron_os = None
+from pytron.utils import resolve_os_module
+
+pytron_os = resolve_os_module()
 
 
 class NativeMixin:

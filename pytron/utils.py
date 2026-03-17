@@ -228,6 +228,60 @@ def _log_shield(msg):
         pass
 
 
+def resolve_os_module():
+    """
+    Safe resolver for pytron_os.so/.pyd.
+    On Linux, we MUST skip loading this if using Native Engine to avoid GLib Schism.
+    """
+    # Symbols are now shielded at build time, allowing co-existence.
+
+    # 2. Search for existing module
+    if "pytron.dependencies.pytron_os" in sys.modules:
+        return sys.modules["pytron.dependencies.pytron_os"]
+
+    # 3. Discovery
+    img_ext = ".pyd" if sys.platform == "win32" else ".so"
+    search_paths = []
+
+    if getattr(sys, "frozen", False):
+        if hasattr(sys, "_MEIPASS"):
+            search_paths.append(os.path.join(sys._MEIPASS, "pytron", "dependencies"))
+        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+        search_paths.append(os.path.join(exe_dir, "_internal", "pytron", "dependencies"))
+        search_paths.append(os.path.join(exe_dir, "dependencies"))
+    else:
+        # Dev path
+        base_utils = os.path.dirname(os.path.abspath(__file__))
+        search_paths.append(os.path.join(base_utils, "dependencies"))
+
+    for path in search_paths:
+        bin_path = os.path.join(path, "pytron_os" + img_ext)
+        if os.path.exists(bin_path):
+            try:
+                # Add DLL directory for Windows dependencies
+                if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
+                    os.add_dll_directory(path)
+
+                spec = importlib.util.spec_from_file_location(
+                    "pytron.dependencies.pytron_os", bin_path
+                )
+                if spec and spec.loader:
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    sys.modules["pytron.dependencies.pytron_os"] = mod
+                    return mod
+            except Exception as e:
+                _log_shield(f"Failed to load pytron_os from {bin_path}: {e}")
+
+    # Fallback to direct import if possible
+    try:
+        from .dependencies import pytron_os
+
+        return pytron_os
+    except:
+        return None
+
+
 def get_native_error_details():
     """Returns the last trapped error from native resolution if any."""
     return _NATIVE_CACHE.get("last_error", "No error captured.")
