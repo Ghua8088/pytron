@@ -352,6 +352,8 @@ def enable_drag_drop(w, callback):
     # gtk_drag_dest_set (widget, GTK_DEST_DEFAULT_ALL, NULL, 0, GDK_ACTION_COPY)
     # Actually, we should probably add URI targets. This is verbose in ctypes.
     # Assuming WebKit view already sets some drop targets.
+
+
 # --- Clipboard Support ---
 
 
