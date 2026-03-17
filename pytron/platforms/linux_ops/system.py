@@ -352,3 +352,73 @@ def enable_drag_drop(w, callback):
     # gtk_drag_dest_set (widget, GTK_DEST_DEFAULT_ALL, NULL, 0, GDK_ACTION_COPY)
     # Actually, we should probably add URI targets. This is verbose in ctypes.
     # Assuming WebKit view already sets some drop targets.
+# --- Clipboard Support ---
+
+
+def set_clipboard_text(text):
+    """
+    Sets the system clipboard text.
+    Priority: 1. pytron_os (Rust), 2. xclip (CLI), 3. xsel (CLI)
+    """
+    # 1. Try Native Rust
+    try:
+        from pytron.utils import resolve_os_module
+
+        pytron_os = resolve_os_module()
+        if pytron_os:
+            if pytron_os.set_clipboard_text(text):
+                return True
+    except Exception:
+        pass
+
+    # 2. Fallback to xclip
+    try:
+        subprocess.run(
+            ["xclip", "-selection", "clipboard"], input=text, text=True, check=True
+        )
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    # 3. Fallback to xsel
+    try:
+        subprocess.run(["xsel", "-i", "-b"], input=text, text=True, check=True)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    return False
+
+
+def get_clipboard_text():
+    """
+    Gets the system clipboard text.
+    Priority: 1. pytron_os (Rust), 2. xclip (CLI), 3. xsel (CLI)
+    """
+    # 1. Try Native Rust
+    try:
+        from pytron.utils import resolve_os_module
+
+        pytron_os = resolve_os_module()
+        if pytron_os:
+            res = pytron_os.get_clipboard_text()
+            if res is not None:
+                return res
+    except Exception:
+        pass
+
+    # 2. Fallback to xclip
+    try:
+        return subprocess.check_output(
+            ["xclip", "-selection", "clipboard", "-o"], text=True
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    # 3. Fallback to xsel
+    try:
+        return subprocess.check_output(["xsel", "-o", "-b"], text=True).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    return None

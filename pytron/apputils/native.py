@@ -132,12 +132,20 @@ class NativeMixin:
         """Copies text to the system clipboard."""
         if self.windows:
             return self.windows[0]._platform.set_clipboard_text(text)
+        elif sys.platform == "linux":
+            from ..platforms.linux import LinuxImplementation
+
+            return LinuxImplementation().set_clipboard_text(text)
         return False
 
     def get_clipboard_text(self):
         """Returns text from the system clipboard."""
         if self.windows:
             return self.windows[0]._platform.get_clipboard_text()
+        elif sys.platform == "linux":
+            from ..platforms.linux import LinuxImplementation
+
+            return LinuxImplementation().get_clipboard_text()
         return None
 
     def get_system_info(self):

@@ -174,3 +174,13 @@ class LinuxImplementation(PlatformInterface):
         from .linux_ops import system
 
         return system.register_protocol(scheme)
+
+    def get_clipboard_text(self):
+        from .linux_ops import system
+
+        return system.get_clipboard_text()
+
+    def set_clipboard_text(self, text):
+        from .linux_ops import system
+
+        return system.set_clipboard_text(text)
