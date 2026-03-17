@@ -30,15 +30,15 @@ def get_safe_linker_flags(module_name, build_dir):
         with open(version_script, "w") as f:
             f.write(content)
 
-        flags.append(f"-C link-arg=-Wl,--version-script={version_script}")
+        flags.append(f"-Clink-arg=-Wl,--version-script={version_script}")
         # Also exclude-libs ALL helps prevent symbols from static libs leaking out
-        flags.append("-C link-arg=-Wl,--exclude-libs,ALL")
+        flags.append("-Clink-arg=-Wl,--exclude-libs,ALL")
 
     elif sys.platform == "darwin":
         # macOS Export List
         # Note: macOS symbols in the linker often have a leading underscore
-        flags.append("-C link-arg=-undefined")
-        flags.append("-C link-arg=dynamic_lookup")
-        flags.append(f"-C link-arg=-Wl,-exported_symbol,_PyInit_{module_name}")
+        flags.append("-Clink-arg=-undefined")
+        flags.append("-Clink-arg=dynamic_lookup")
+        flags.append(f"-Clink-arg=-Wl,-exported_symbol,_PyInit_{module_name}")
 
     return flags
