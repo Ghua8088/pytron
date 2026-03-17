@@ -263,6 +263,15 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
         python_exe = get_python_executable()
 
         env = get_sanitized_env()
+        if sys.platform.startswith("linux"):
+            # Secondary Shield: Ensure the child process inherits these critical isolation variables.
+            env["GSETTINGS_BACKEND"] = "memory"
+            env["GIO_EXTRA_MODULES"] = ""
+            env["NO_AT_BRIDGE"] = "1"
+            env["GIO_USE_VFS"] = "local"
+            env["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
+            env["WINIT_UNIX_BACKEND"] = "x11"
+
         if dev_server_url:
             env["PYTRON_DEV_URL"] = dev_server_url
         if engine:
@@ -434,6 +443,14 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     python_exe = get_python_executable()
     env = get_sanitized_env()
+    if sys.platform.startswith("linux"):
+        # Secondary Shield: Ensure the child process inherits these critical isolation variables.
+        env["GSETTINGS_BACKEND"] = "memory"
+        env["GIO_EXTRA_MODULES"] = ""
+        env["NO_AT_BRIDGE"] = "1"
+        env["GIO_USE_VFS"] = "local"
+        env["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
+        env["WINIT_UNIX_BACKEND"] = "x11"
 
     if getattr(args, "chrome", False):
         env["PYTRON_ENGINE"] = "chrome"

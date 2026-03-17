@@ -77,6 +77,8 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         self.engine = os.environ.get(
             "PYTRON_ENGINE", self.config.get("engine", "native")
         )
+        # Ensure it's in the environment for sub-modules (like linux_ops/libs.py) to see
+        os.environ["PYTRON_ENGINE"] = self.engine
 
         # Override via CLI flags if present
         if "--web" in sys.argv:

@@ -12,6 +12,7 @@ class LinuxImplementation(PlatformInterface):
             # Libraries are only needed for legacy engines
             from .linux_ops import libs
 
+            libs.load_libs()
             if not libs.gtk:
                 print("Pytron Warning: GTK3 not found. Window controls may fail.")
 

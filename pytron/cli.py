@@ -3,20 +3,22 @@ from __future__ import annotations
 import os
 import sys
 
-# --- Linux Stability Guards (CLI Entrypoint) ---
-# We must apply these BEFORE the first import of any Pytron modules
-# because some system modules (like GI or DBus) auto-init GLib on import.
 if sys.platform.startswith("linux"):
     # Force GSettings to memory to avoid type collisions with Native Engine
-    os.environ.setdefault("GSETTINGS_BACKEND", "memory")
+    # NUCLEAR ASSIGNMENT: We MUST use direct assignment, not setdefault,
+    # because if the system already has a backend set (like dconf),
+    # setdefault does nothing and the crash persists.
+    os.environ["GSETTINGS_BACKEND"] = "memory"
+    # Prevent GIO from loading extra modules (like gvfs/dconf) that collision with Rust
+    os.environ["GIO_EXTRA_MODULES"] = ""
     # Prevent accessibility bus from auto-initializing GLib
-    os.environ.setdefault("NO_AT_BRIDGE", "1")
+    os.environ["NO_AT_BRIDGE"] = "1"
     # Prevent GIO from loading remote VFS modules
-    os.environ.setdefault("GIO_USE_VFS", "local")
-    # Essential for VMs (VMware/VirtualBox)
-    os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
-    # Preferred backend for VMs
-    os.environ.setdefault("WINIT_UNIX_BACKEND", "x11")
+    os.environ["GIO_USE_VFS"] = "local"
+    # Essential for VMs (VMware/VirtualBox) to avoid black screens or WebKit crashes.
+    os.environ["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
+    # Ensure we use X11 backend for better stability in virtualized browsers.
+    os.environ["WINIT_UNIX_BACKEND"] = "x11"
 
 import argparse
 from .commands.init import cmd_init

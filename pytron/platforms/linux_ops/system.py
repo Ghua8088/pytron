@@ -115,6 +115,10 @@ def set_app_id(app_id):
     import os
 
     if os.environ.get("PYTRON_ENGINE") == "native":
+        if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
+            print(
+                "[Pytron Debug] system.set_app_id: SKIPPING GLib calls to prevent Schism."
+            )
         return
 
     try:
@@ -240,6 +244,10 @@ def enable_drag_drop(w, callback):
     import os
 
     if os.environ.get("PYTRON_ENGINE") == "native":
+        if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
+            print(
+                "[Pytron Debug] system.enable_drag_drop: SKIPPING GTK calls to prevent Schism."
+            )
         return
 
     try:

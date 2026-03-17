@@ -241,7 +241,16 @@ def resolve_os_module():
         # unless explicitly told otherwise.
         engine = os.environ.get("PYTRON_ENGINE", "native")
         if engine == "native":
+            if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
+                print(
+                    f"[Pytron Debug] resolve_os_module: SKIPPING load on Linux (Engine: {engine}) to prevent Schism."
+                )
             return None
+
+        if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
+            print(
+                f"[Pytron Debug] resolve_os_module: PROCEEDING on Linux (Engine: {engine})."
+            )
 
     # 2. Search for existing module
     if "pytron.dependencies.pytron_os" in sys.modules:

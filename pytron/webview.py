@@ -199,6 +199,11 @@ class Webview:
                 self.logger.warning(f"Failed to load Windows Platform helpers: {e}")
         elif sys.platform.startswith("linux"):
             try:
+                if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
+                    print(
+                        f"[Pytron Debug] Webview: Initializing LinuxImplementation (Engine: {getattr(self.app, 'engine', 'unknown')})"
+                    )
+
                 from .platforms.linux import LinuxImplementation
 
                 self._platform = LinuxImplementation()

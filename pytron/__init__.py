@@ -5,17 +5,32 @@ import io
 # --- Linux Stability Guards (Nuclear Edition) ---
 if sys.platform.startswith("linux"):
     # Force GSettings to memory to avoid the 'cannot register existing type GSettingsBackend' crash.
-    os.environ.setdefault("GSETTINGS_BACKEND", "memory")
+    # We use direct assignment here to OVERRIDE any system-wide settings that might cause collisions.
+    os.environ["GSETTINGS_BACKEND"] = "memory"
     # PREVENT GIO from loading extra modules (like gvfs/dconf) that collision with Rust
-    os.environ.setdefault("GIO_EXTRA_MODULES", "")
+    os.environ["GIO_EXTRA_MODULES"] = ""
     # PREVENT accessibility bus from auto-initializing GLib
-    os.environ.setdefault("NO_AT_BRIDGE", "1")
+    os.environ["NO_AT_BRIDGE"] = "1"
     # PREVENT GIO from loading remote VFS modules
-    os.environ.setdefault("GIO_USE_VFS", "local")
+    os.environ["GIO_USE_VFS"] = "local"
     # Essential for VMs (VMware/VirtualBox) to avoid black screens or WebKit crashes.
-    os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
+    os.environ["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
     # Ensure we use X11 backend for better stability in virtualized browsers.
-    os.environ.setdefault("WINIT_UNIX_BACKEND", "x11")
+    os.environ["WINIT_UNIX_BACKEND"] = "x11"
+
+    # --- Debugging: Schism Audit ---
+    if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
+        print("[Pytron Debug] --- Linux Isolation Audit ---")
+        for var in [
+            "GSETTINGS_BACKEND",
+            "GIO_EXTRA_MODULES",
+            "NO_AT_BRIDGE",
+            "GIO_USE_VFS",
+            "WEBKIT_DISABLE_COMPOSITING_MODE",
+            "WINIT_UNIX_BACKEND",
+        ]:
+            print(f"[Pytron Debug] {var} = {os.environ.get(var)}")
+        print("[Pytron Debug] ---------------------------")
 
 # Best-effort: configure stdio to UTF-8 early when pytron is imported. This
 # helps packaged apps avoid UnicodeEncodeError during prints/logging.
