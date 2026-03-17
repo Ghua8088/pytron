@@ -89,7 +89,7 @@ def build():
         safe_flags = get_safe_linker_flags(
             "pytron_native", os.path.join(ENGINE_DIR, "build")
         )
-        
+
         if safe_flags:
             cargo_cmd.append("--")
             cargo_cmd.extend(safe_flags)
