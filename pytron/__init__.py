@@ -18,6 +18,49 @@ if sys.platform.startswith("linux"):
     # Ensure we use X11 backend for better stability in virtualized browsers.
     os.environ["WINIT_UNIX_BACKEND"] = "x11"
 
+    # --- Global Convergence Layer ---
+    # On some modern Linux distros (like Pop!_OS), loading GLib/GTK symbols in isolation 
+    # leads to double registration of GTypes. We force these libraries into the 
+    # global symbol scope to unify the registration tables between Python and Native Engine.
+    import ctypes
+    import ctypes.util
+
+    # Crucial Libraries to converge
+    convergence_targets = [
+        "glib-2.0",
+        "gobject-2.0",
+        "gio-2.0",
+        "gtk-3",
+        "webkit2gtk-4.1"
+    ]
+
+    for lib_id in convergence_targets:
+        try:
+            # Dynamically resolve the best system path (e.g., /lib/x86_64-linux-gnu/libglib-2.0.so.0)
+            lib_path = ctypes.util.find_library(lib_id)
+            if not lib_path:
+                # If find_library fails, try common sonames directly as fallback
+                fallbacks = {
+                    "glib-2.0": "libglib-2.0.so.0",
+                    "gobject-2.0": "libgobject-2.0.so.0",
+                    "gio-2.0": "libgio-2.0.so.0",
+                    "gtk-3": "libgtk-3.so.0",
+                    "webkit2gtk-4.1": "libwebkit2gtk-4.1.so.0"
+                }
+                lib_path = fallbacks.get(lib_id)
+
+            if lib_path:
+                # RTLD_GLOBAL (0x00100) + RTLD_LAZY (0x00001)
+                mode = ctypes.RTLD_GLOBAL
+                if hasattr(ctypes, "RTLD_LAZY"):
+                    mode |= ctypes.RTLD_LAZY
+                
+                ctypes.CDLL(lib_path, mode=mode)
+                if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
+                    print(f"[Pytron Debug] Convergence: Promoted {lib_id} ({lib_path}) to RTLD_GLOBAL")
+        except:
+            pass
+
     # --- Debugging: Schism Audit ---
     if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
         print("[Pytron Debug] --- Linux Isolation Audit ---")

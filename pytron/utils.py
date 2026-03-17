@@ -42,6 +42,8 @@ def get_resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
+
+
 def resolve_native_module():
     """
     STRICT SINGLETON RESOLVER for pytron_native.pyd.
@@ -228,11 +230,24 @@ def _log_shield(msg):
         pass
 
 
+_OS_CACHE = {"module": None, "checked": False}
+
+
 def resolve_os_module():
     """
     Safe resolver for pytron_os.so/.pyd.
     On Linux, we MUST skip loading this if using Native Engine to avoid GLib Schism.
     """
+    if _OS_CACHE["checked"]:
+        return _OS_CACHE["module"]
+
+    res = _resolve_os_module_internal()
+    _OS_CACHE["module"] = res
+    _OS_CACHE["checked"] = True
+    return res
+
+
+def _resolve_os_module_internal():
     # 1. Linux Schism Guard (CRITICAL)
     # We MUST NOT load the OS module on Linux if using the Native Engine.
     # It initializes a competing GLib context that causes a process-wide crash.
