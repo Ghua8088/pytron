@@ -112,6 +112,8 @@ def open_folder_dialog(w, title, default_path=None):
 
 
 def set_app_id(app_id):
+    import os
+
     if os.environ.get("PYTRON_ENGINE") == "native":
         return
 
@@ -129,6 +131,8 @@ def set_app_id(app_id):
 
 
 def set_launch_on_boot(app_name, exe_path, enable=True):
+    import os
+
     try:
         from pytron.utils import resolve_os_module
 
@@ -175,6 +179,7 @@ def set_taskbar_progress(w, state="normal", value=0, max_value=100):
 
 def register_protocol(scheme):
     try:
+        import os
         import sys
 
         # Get absolute path to this executable or script
@@ -232,6 +237,8 @@ def enable_drag_drop(w, callback):
     """
     Connects to the 'drag-data-received' signal on the GtkWindow/GtkWidget.
     """
+    import os
+
     if os.environ.get("PYTRON_ENGINE") == "native":
         return
 

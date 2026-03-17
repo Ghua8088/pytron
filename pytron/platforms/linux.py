@@ -5,6 +5,8 @@ from .interface import PlatformInterface
 
 class LinuxImplementation(PlatformInterface):
     def __init__(self):
+        import os
+
         self.is_native = os.environ.get("PYTRON_ENGINE") == "native"
         if not self.is_native:
             # Libraries are only needed for legacy engines
