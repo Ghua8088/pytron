@@ -19,8 +19,8 @@ if sys.platform.startswith("linux"):
     os.environ["WINIT_UNIX_BACKEND"] = "x11"
 
     # --- Global Convergence Layer ---
-    # On some modern Linux distros (like Pop!_OS), loading GLib/GTK symbols in isolation 
-    # leads to double registration of GTypes. We force these libraries into the 
+    # On some modern Linux distros (like Pop!_OS), loading GLib/GTK symbols in isolation
+    # leads to double registration of GTypes. We force these libraries into the
     # global symbol scope to unify the registration tables between Python and Native Engine.
     import ctypes
     import ctypes.util
@@ -31,7 +31,7 @@ if sys.platform.startswith("linux"):
         "gobject-2.0",
         "gio-2.0",
         "gtk-3",
-        "webkit2gtk-4.1"
+        "webkit2gtk-4.1",
     ]
 
     for lib_id in convergence_targets:
@@ -45,7 +45,7 @@ if sys.platform.startswith("linux"):
                     "gobject-2.0": "libgobject-2.0.so.0",
                     "gio-2.0": "libgio-2.0.so.0",
                     "gtk-3": "libgtk-3.so.0",
-                    "webkit2gtk-4.1": "libwebkit2gtk-4.1.so.0"
+                    "webkit2gtk-4.1": "libwebkit2gtk-4.1.so.0",
                 }
                 lib_path = fallbacks.get(lib_id)
 
@@ -54,10 +54,12 @@ if sys.platform.startswith("linux"):
                 mode = ctypes.RTLD_GLOBAL
                 if hasattr(ctypes, "RTLD_LAZY"):
                     mode |= ctypes.RTLD_LAZY
-                
+
                 ctypes.CDLL(lib_path, mode=mode)
                 if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
-                    print(f"[Pytron Debug] Convergence: Promoted {lib_id} ({lib_path}) to RTLD_GLOBAL")
+                    print(
+                        f"[Pytron Debug] Convergence: Promoted {lib_id} ({lib_path}) to RTLD_GLOBAL"
+                    )
         except:
             pass
 

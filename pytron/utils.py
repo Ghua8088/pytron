@@ -42,8 +42,6 @@ def get_resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-
-
 def resolve_native_module():
     """
     STRICT SINGLETON RESOLVER for pytron_native.pyd.
