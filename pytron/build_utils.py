@@ -41,4 +41,4 @@ def get_safe_linker_flags(module_name, build_dir):
         flags.append("-C link-arg=dynamic_lookup")
         flags.append(f"-C link-arg=-Wl,-exported_symbol,_PyInit_{module_name}")
 
-    return " ".join(flags)
+    return flags

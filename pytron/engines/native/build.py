@@ -56,7 +56,7 @@ def build():
     env = os.environ.copy()
     env["PYO3_USE_ABI3_FORWARD_COMPATIBILITY"] = "1"
 
-    cargo_cmd = ["cargo", "build", "--release"]
+    cargo_cmd = ["cargo", "rustc", "--release"]
 
     if is_android:
         # Cross-compilation for Android
@@ -89,9 +89,11 @@ def build():
         safe_flags = get_safe_linker_flags(
             "pytron_native", os.path.join(ENGINE_DIR, "build")
         )
-        rustflags = env.get("RUSTFLAGS", "")
-        env["RUSTFLAGS"] = f"{rustflags} {safe_flags}".strip()
-        print(f"[INFO] Applying Shield Linker Flags: {safe_flags}")
+        
+        if safe_flags:
+            cargo_cmd.append("--")
+            cargo_cmd.extend(safe_flags)
+            print(f"[INFO] Applying Shield Linker Flags: {' '.join(safe_flags)}")
     except Exception as e:
         print(f"[WARNING] Could not apply symbol shield: {e}")
 
