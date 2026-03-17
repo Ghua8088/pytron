@@ -26,7 +26,6 @@ def load_libs():
         # For now, let's satisfy the Schism by NOT loading unless strictly necessary.
         return
 
-
     # Load GTK
     if not gtk:
         for name in ["libgtk-3.so.0", "libgtk-3.so"]:

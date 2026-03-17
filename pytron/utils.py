@@ -234,13 +234,13 @@ def resolve_os_module():
     On Linux, we MUST skip loading this if using Native Engine to avoid GLib Schism.
     """
     # 1. Linux Schism Guard
-    # Even with symbol shielding, multiple Rust modules independently initializing 
+    # Even with symbol shielding, multiple Rust modules independently initializing
     # GTK/GObject in the same process often causes "cannot register existing type" crashes.
     if sys.platform.startswith("linux"):
         # Match either env var or fallback to assumption if in native context
         engine = os.environ.get("PYTRON_ENGINE", "native")
         if engine == "native":
-            # For modular architecture to work on Linux, we must consolidate 
+            # For modular architecture to work on Linux, we must consolidate
             # OS features into the main engine or use a different backend.
             return None
 
