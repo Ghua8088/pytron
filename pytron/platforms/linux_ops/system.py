@@ -112,8 +112,6 @@ def open_folder_dialog(w, title, default_path=None):
 
 
 def set_app_id(app_id):
-    import os
-
     if os.environ.get("PYTRON_ENGINE") == "native":
         return
 
@@ -234,8 +232,6 @@ def enable_drag_drop(w, callback):
     """
     Connects to the 'drag-data-received' signal on the GtkWindow/GtkWidget.
     """
-    import os
-
     if os.environ.get("PYTRON_ENGINE") == "native":
         return
 
