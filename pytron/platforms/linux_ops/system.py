@@ -2,7 +2,8 @@ import subprocess
 import os
 import shutil
 import ctypes
-from . import libs
+
+# from . import libs # Lazy import inside functions to avoid Schism
 
 
 def message_box(w, title, message, style=0):
@@ -111,9 +112,16 @@ def open_folder_dialog(w, title, default_path=None):
 
 
 def set_app_id(app_id):
-    if not libs.glib:
+    import os
+
+    if os.environ.get("PYTRON_ENGINE") == "native":
         return
+
     try:
+        from . import libs
+
+        if not libs.glib:
+            return
         libs.glib.g_set_prgname.argtypes = [ctypes.c_char_p]
         libs.glib.g_set_prgname(app_id.encode("utf-8"))
         libs.glib.g_set_application_name.argtypes = [ctypes.c_char_p]
@@ -226,8 +234,18 @@ def enable_drag_drop(w, callback):
     """
     Connects to the 'drag-data-received' signal on the GtkWindow/GtkWidget.
     """
-    if not libs.gtk or not libs.glib:
-        print("[Pytron] GTK/GLib not found, cannot enable drag & drop.")
+    import os
+
+    if os.environ.get("PYTRON_ENGINE") == "native":
+        return
+
+    try:
+        from . import libs
+
+        if not libs.gtk or not libs.glib:
+            print("[Pytron] GTK/GLib not found, cannot enable drag & drop.")
+            return
+    except ImportError:
         return
 
     # We need dragging constants

@@ -25,7 +25,7 @@ Required software
 - C compiler / build tools
   - Windows: Visual Studio Build Tools (MSVC) with C/C++ toolchain and SDK.
   - macOS: Xcode command line tools.
-  - Linux: `build-essential` (gcc/clang, make), development headers.
+  - Linux: `build-essential` (gcc/clang, make), development headers, `libwebkit2gtk-4.1-dev`.
 
 - Android SDK / NDK (for Android builds)
   - Required for cross-compiling Android wheels and installers. The project may use Zig + NDK helpers; follow `pytron/platforms/android/builder.py` for exact setup.

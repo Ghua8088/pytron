@@ -24,18 +24,17 @@ Pytron is a modern framework for building desktop applications using Python for 
 
 ## Prerequisites
 
-- **Python 3.7+**
+- **Python 3.11+** (3.7+ minimum supported)
 - **Node.js & npm** (for frontend development)
 
 ### Linux (Ubuntu/Debian) Requirements
-Pytron relies on standard system libraries for the webview. You must install them using your package manager:
+Pytron uses a high-performance native engine on Linux that requires GTK3 and WebKit2GTK. Install them with:
 ```bash
-sudo apt install libwebkit2gtk-4.1-0 
+# Ubuntu 22.04 / 24.04
+sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0
 ```
-If you encounter `ImportError` or `OSError` related to `gobject` or `glib` (especially on Ubuntu 24.04+), you may also need:
-```bash
-sudo apt install libcairo2-dev pkg-config python3-dev libgirepository1.0-dev libgirepository-2.0-dev
-```
+> [!NOTE]
+> Pytron-Kit now includes a **Linux Schism Guard**. You no longer need to install `python3-gi` or `PyGObject` for most apps, as the Native Engine handles GLib/GTK isolation automatically to prevent crashes.
 
 ## Quick Start
 

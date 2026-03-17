@@ -17,6 +17,7 @@ Primary components
   - Key file: [pytron/plugin.py](pytron/plugin.py)
 - Platforms: OS-specific helpers and ops (windows, darwin, linux, android)
   - Folder: [pytron/platforms](pytron/platforms)
+  - **Linux Security Note**: On Linux, Pytron implements a "Single-Owner" model. Only the Native Engine is permitted to initialize GLib/GTK. This prevents the "Schism" (duplicate type registration crashes) seen in other cross-platform frameworks.
 - Pack/build pipeline: modular build pipeline and packers (PyInstaller, Nuitka, Rust helpers)
   - Key file: [pytron/pack/pipeline.py](pytron/pack/pipeline.py)
 - Engines: browser/webview engines and adapters (native, chrome, servo)

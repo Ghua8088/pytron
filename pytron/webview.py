@@ -197,13 +197,24 @@ class Webview:
                 self._platform = WindowsImplementation()
             except Exception as e:
                 self.logger.warning(f"Failed to load Windows Platform helpers: {e}")
+        elif sys.platform.startswith("linux"):
+            try:
+                from .platforms.linux import LinuxImplementation
 
-            # Apply hide_from_taskbar settings for Windows
-            if config.get("hide_from_taskbar", False) and self._platform and self.hwnd:
-                try:
-                    self._platform.set_utility_window(self.hwnd, True)
-                except Exception as e:
-                    self.logger.warning(f"Failed to apply hide_from_taskbar: {e}")
+                self._platform = LinuxImplementation()
+            except Exception as e:
+                self.logger.warning(f"Failed to load Linux Platform helpers: {e}")
+
+        if (
+            sys.platform == "win32"
+            and config.get("hide_from_taskbar", False)
+            and self._platform
+            and self.hwnd
+        ):
+            try:
+                self._platform.set_utility_window(self.hwnd, True)
+            except Exception as e:
+                self.logger.warning(f"Failed to apply hide_from_taskbar: {e}")
 
         if not config.get("start_hidden", False):
             self.show()

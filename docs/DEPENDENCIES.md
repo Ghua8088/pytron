@@ -39,7 +39,6 @@ Platform helpers (pytron_os)
 Secure loader & packaging
 - libloading — dynamic library loading/fallbacks
 - bsdiff — apply BSDIFF patches to payloads
-- aes-gcm — AES-GCM crypto (for secure payloads)
 - obfstr — string obfuscation for Windows messages
 - zip — manipulate zip archives (for repacking)
 - rfd — native file dialogs (used by loader for fallbacks)

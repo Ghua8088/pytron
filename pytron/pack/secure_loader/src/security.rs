@@ -1,9 +1,3 @@
-// use std::fs;
-// use std::io::{Read, Seek, SeekFrom};
-// use aes_gcm::{
-//     aead::{Aead, KeyInit},
-//     Aes256Gcm, Nonce
-// };
 
 #[cfg(windows)]
 use obfstr::obfstr;
