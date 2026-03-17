@@ -247,7 +247,9 @@ def resolve_os_module():
         if hasattr(sys, "_MEIPASS"):
             search_paths.append(os.path.join(sys._MEIPASS, "pytron", "dependencies"))
         exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-        search_paths.append(os.path.join(exe_dir, "_internal", "pytron", "dependencies"))
+        search_paths.append(
+            os.path.join(exe_dir, "_internal", "pytron", "dependencies")
+        )
         search_paths.append(os.path.join(exe_dir, "dependencies"))
     else:
         # Dev path

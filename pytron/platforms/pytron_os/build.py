@@ -55,8 +55,10 @@ def build():
         # Append sys.path to find build_utils in the root's pytron dir
         sys.path.append(os.path.join(ROOT))
         from pytron.build_utils import get_safe_linker_flags
-        
-        safe_flags = get_safe_linker_flags("pytron_os", os.path.join(MODULE_DIR, "build"))
+
+        safe_flags = get_safe_linker_flags(
+            "pytron_os", os.path.join(MODULE_DIR, "build")
+        )
         rustflags = env.get("RUSTFLAGS", "")
         env["RUSTFLAGS"] = f"{rustflags} {safe_flags}".strip()
         print(f"[INFO] Applying Shield Linker Flags: {safe_flags}")
