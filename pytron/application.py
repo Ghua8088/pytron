@@ -19,6 +19,13 @@ from .inspector import Inspector
 class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shell):
     def __init__(self, config_file="settings.json"):
         from .utils import com_thread_initializer
+        import os
+
+        # Engine Selection (PRO FEATURES) - MUST HAPPEN FIRST for Schism protection
+        self.engine = os.environ.get(
+            "PYTRON_ENGINE", "native"  # Default to native if not set
+        )
+        os.environ["PYTRON_ENGINE"] = self.engine
 
         # PERFORMANCE: Shared thread pool for all internal window operations
         self.thread_pool = __import__("concurrent.futures").futures.ThreadPoolExecutor(
@@ -73,21 +80,22 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         self._resolve_resources()
         self._register_core_apis()
 
-        # Engine Selection (PRO FEATURES)
-        self.engine = os.environ.get(
-            "PYTRON_ENGINE", self.config.get("engine", "native")
-        )
-        # Ensure it's in the environment for sub-modules (like linux_ops/libs.py) to see
-        os.environ["PYTRON_ENGINE"] = self.engine
+        # Update engine based on config or CLI flags if they override the initial detection
+        config_engine = self.config.get("engine")
+        if config_engine and os.environ.get("PYTRON_ENGINE") == "native":
+            # Only override if we weren't explicitly told by CLI to use something else
+            self.engine = config_engine
+            os.environ["PYTRON_ENGINE"] = self.engine
 
         # Override via CLI flags if present
         if "--web" in sys.argv:
             self.engine = "chrome"
+            os.environ["PYTRON_ENGINE"] = "chrome"
 
-        # Check if --engine X was passed directly to the script
         for i, arg in enumerate(sys.argv):
             if arg == "--engine" and i + 1 < len(sys.argv):
                 self.engine = sys.argv[i + 1]
+                os.environ["PYTRON_ENGINE"] = self.engine
 
         if self.engine == "chrome":
             self.logger.info("Using Chrome Shell Engine (Mojo IPC)")

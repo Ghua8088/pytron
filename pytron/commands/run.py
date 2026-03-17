@@ -274,8 +274,9 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
 
         if dev_server_url:
             env["PYTRON_DEV_URL"] = dev_server_url
-        if engine:
-            env["PYTRON_ENGINE"] = engine
+
+        # Always set the engine explicitly for the child process
+        env["PYTRON_ENGINE"] = engine or os.environ.get("PYTRON_ENGINE", "native")
 
         app_proc = subprocess.Popen([python_exe, str(script)] + extra_args, env=env)
 
@@ -452,10 +453,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         env["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
         env["WINIT_UNIX_BACKEND"] = "x11"
 
+    engine = getattr(args, "engine", None) or os.environ.get("PYTRON_ENGINE", "native")
     if getattr(args, "chrome", False):
-        env["PYTRON_ENGINE"] = "chrome"
-    elif getattr(args, "engine", None):
-        env["PYTRON_ENGINE"] = args.engine
+        engine = "chrome"
+
+    env["PYTRON_ENGINE"] = engine
 
     cmd = [python_exe, str(path)] + getattr(args, "extra_args", [])
     log(f"Running: {' '.join(cmd)}", style="dim")

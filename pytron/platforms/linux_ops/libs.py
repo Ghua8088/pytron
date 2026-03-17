@@ -20,7 +20,7 @@ def load_libs():
 
     # Only allow ctypes loading on Linux if we are NOT in a native engine context.
     # This preserves functionality for the legacy 'chrome' or 'servo' engines.
-    engine = os.environ.get("PYTRON_ENGINE", "not-set")
+    engine = os.environ.get("PYTRON_ENGINE", "native")
     if sys.platform.startswith("linux") and engine == "native":
         if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
             print(
