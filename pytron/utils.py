@@ -233,15 +233,14 @@ def resolve_os_module():
     Safe resolver for pytron_os.so/.pyd.
     On Linux, we MUST skip loading this if using Native Engine to avoid GLib Schism.
     """
-    # 1. Linux Schism Guard
-    # Even with symbol shielding, multiple Rust modules independently initializing
-    # GTK/GObject in the same process often causes "cannot register existing type" crashes.
+    # 1. Linux Schism Guard (CRITICAL)
+    # We MUST NOT load the OS module on Linux if using the Native Engine.
+    # It initializes a competing GLib context that causes a process-wide crash.
     if sys.platform.startswith("linux"):
-        # Match either env var or fallback to assumption if in native context
+        # If we are running 'pytron run' or 'pytron package', we assume native context
+        # unless explicitly told otherwise.
         engine = os.environ.get("PYTRON_ENGINE", "native")
         if engine == "native":
-            # For modular architecture to work on Linux, we must consolidate
-            # OS features into the main engine or use a different backend.
             return None
 
     # 2. Search for existing module

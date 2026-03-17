@@ -6,14 +6,16 @@ import io
 if sys.platform.startswith("linux"):
     # Force GSettings to memory to avoid the 'cannot register existing type GSettingsBackend' crash.
     os.environ.setdefault("GSETTINGS_BACKEND", "memory")
+    # PREVENT GIO from loading extra modules (like gvfs/dconf) that collision with Rust
+    os.environ.setdefault("GIO_EXTRA_MODULES", "")
+    # PREVENT accessibility bus from auto-initializing GLib
+    os.environ.setdefault("NO_AT_BRIDGE", "1")
+    # PREVENT GIO from loading remote VFS modules
+    os.environ.setdefault("GIO_USE_VFS", "local")
     # Essential for VMs (VMware/VirtualBox) to avoid black screens or WebKit crashes.
     os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
     # Ensure we use X11 backend for better stability in virtualized browsers.
     os.environ.setdefault("WINIT_UNIX_BACKEND", "x11")
-    # PREVENT accessibility bus from auto-initializing GLib
-    os.environ.setdefault("NO_AT_BRIDGE", "1")
-    # PREVENT GIO from loading remote VFS modules that might collision
-    os.environ.setdefault("GIO_USE_VFS", "local")
 
 # Best-effort: configure stdio to UTF-8 early when pytron is imported. This
 # helps packaged apps avoid UnicodeEncodeError during prints/logging.
