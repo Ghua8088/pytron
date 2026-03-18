@@ -50,6 +50,15 @@ class Webview:
         self.logger = logging.getLogger("Pytron.Webview")
         self.id = config.get("id") or str(int(time.time() * 1000))
 
+        if (
+            sys.platform.startswith("linux")
+            and config.get("engine", "native") != "chrome"
+        ):
+            self.logger.warning(
+                "Linux Native Engine is still experimental. "
+                "GTK/WebKit runtime ownership remains sensitive in-process."
+            )
+
         # 1. Resolve Root
         if getattr(sys, "frozen", False):
             self._app_root = pathlib.Path(sys.executable).parent

@@ -14,8 +14,6 @@ use wry::WebViewBuilder;
 
 #[cfg(target_os = "windows")]
 use wry::WebViewBuilderExtWindows; 
-#[cfg(target_os = "linux")]
-use tao::platform::unix::EventLoopBuilderExtUnix;
 #[cfg(target_os = "windows")]
 use tao::platform::windows::EventLoopBuilderExtWindows;
 
@@ -66,7 +64,7 @@ impl NativeWebview {
 
         let mut builder = EventLoopBuilder::<UserEvent>::with_user_event();
         
-        #[cfg(any(target_os = "windows", target_os = "linux"))]
+        #[cfg(target_os = "windows")]
         {
             builder.with_any_thread(true);
         }
