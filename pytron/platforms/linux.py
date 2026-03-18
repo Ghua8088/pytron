@@ -8,6 +8,8 @@ class LinuxImplementation(PlatformInterface):
         import os
 
         self.is_native = os.environ.get("PYTRON_ENGINE") == "native"
+        self.runtime_owner = "engine" if self.is_native else "platform"
+        self.legacy_backend = "subprocess+ctypes"
         if not self.is_native:
             # Libraries are only needed for legacy engines
             from .linux_ops import libs

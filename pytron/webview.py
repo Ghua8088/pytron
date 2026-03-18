@@ -209,6 +209,13 @@ class Webview:
                 self._platform = LinuxImplementation()
             except Exception as e:
                 self.logger.warning(f"Failed to load Linux Platform helpers: {e}")
+        elif sys.platform == "darwin":
+            try:
+                from .platforms.darwin import DarwinImplementation
+
+                self._platform = DarwinImplementation()
+            except Exception as e:
+                self.logger.warning(f"Failed to load Darwin Platform helpers: {e}")
 
         if (
             sys.platform == "win32"

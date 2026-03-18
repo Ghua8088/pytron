@@ -14,6 +14,12 @@ class PlatformInterface(ABC):
     Extended capabilities (Notifications, Taskbar, etc.) are virtual and optional.
     """
 
+    # Runtime ownership strategy:
+    # - "platform" -> this platform layer owns native toolkit interaction.
+    # - "engine"   -> the active in-process engine owns the overlapping toolkit.
+    runtime_owner = "platform"
+    legacy_backend = None
+
     # --- Core Window Operations (Pinned) ---
 
     @abstractmethod
@@ -162,3 +168,10 @@ class PlatformInterface(ABC):
     def set_border_color(self, w: WindowHandle, color_hex: str) -> None:
         """Sets the native window border color (Windows 11+)."""
         pass
+
+    def runtime_strategy(self) -> Dict[str, str]:
+        """Exposes how this implementation interacts with native runtime ownership."""
+        return {
+            "runtime_owner": self.runtime_owner,
+            "legacy_backend": self.legacy_backend or "none",
+        }

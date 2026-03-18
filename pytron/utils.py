@@ -265,6 +265,18 @@ def _resolve_os_module_internal():
                 f"[Pytron Debug] resolve_os_module: PROCEEDING on Linux (Engine: {engine})."
             )
 
+    # 1b. macOS in-process ownership guard.
+    # AppKit/Objective-C calls are process-global and must have a single owner for
+    # in-process engines. Out-of-process engines can still safely use pytron_os.
+    if sys.platform == "darwin":
+        engine = os.environ.get("PYTRON_ENGINE", "native")
+        if engine == "native":
+            if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
+                print(
+                    f"[Pytron Debug] resolve_os_module: SKIPPING load on macOS (Engine: {engine}) to preserve single AppKit owner."
+                )
+            return None
+
     # 2. Search for existing module
     if "pytron.dependencies.pytron_os" in sys.modules:
         return sys.modules["pytron.dependencies.pytron_os"]

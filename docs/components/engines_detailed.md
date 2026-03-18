@@ -42,3 +42,9 @@ Common patterns
 - Use of `forge.py` to auto-provision local engine binaries when not found.
 - Engine selection via `PYTRON_ENGINE` or `--engine` CLI flag.
 - All engines expose a `bind`/`native.bind` mechanism to register callable endpoints consumed by Rust/native layer or shell process.
+
+Runtime ownership rule
+- Engine abstraction and runtime ownership are different concerns.
+- Out-of-process engines (`chrome`, subprocess `servo`) can safely rely on a shared platform OS layer because the renderer/runtime lives in another process.
+- In-process engines (`native`, and any future in-process engine variants) must be the single owner of overlapping GUI runtimes such as GTK/WebKit/AppKit inside the Python process.
+- Platform helpers should therefore avoid loading duplicate GUI toolkit bindings in native mode and prefer engine-owned window APIs or subprocess-based fallbacks for non-overlapping features.
