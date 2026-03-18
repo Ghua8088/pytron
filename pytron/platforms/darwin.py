@@ -253,7 +253,9 @@ class DarwinImplementation(PlatformInterface):
                     app_path = exec_path.split(".app/Contents/MacOS/")[0] + ".app"
                     lsregister_path = "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
                     if os.path.exists(lsregister_path):
-                        subprocess.run([lsregister_path, "-f", app_path], capture_output=True)
+                        subprocess.run(
+                            [lsregister_path, "-f", app_path], capture_output=True
+                        )
                         return True
             return False
         except Exception:
