@@ -5,12 +5,16 @@ import threading
 import logging
 from typing import Callable, List, Optional
 from .exceptions import TrayError
-from .utils import get_resource_path
+from .utils import get_resource_path, resolve_os_module
 
-try:
-    from .dependencies import pytron_os
-except ImportError:
-    pytron_os = None
+
+def _get_pytron_os():
+    """Resolve the optional OS bridge without bypassing runtime ownership guards."""
+    try:
+        return resolve_os_module()
+    except Exception:
+        return None
+
 
 # Platform-specific imports
 if sys.platform == "win32":
@@ -108,6 +112,7 @@ class SystemTray:
             self._stop_windows()
             # Cleanup icon handle to prevent leaks
             if self._hicon:
+                pytron_os = _get_pytron_os()
                 if pytron_os:
                     try:
                         pytron_os.tray_destroy_icon(self._hicon)
@@ -223,6 +228,7 @@ class SystemTray:
         ready_event = threading.Event()
 
         def run_tray_thread():
+            pytron_os = _get_pytron_os()
             if pytron_os and hasattr(pytron_os, "tray_v2_create"):
                 # ── RUST PATH v2 (tray-icon crate by Tauri team) ──────────
                 # Build items list and an id→MenuItem lookup table.
@@ -426,6 +432,10 @@ class SystemTray:
 
     def _show_menu_rs(self, hwnd):
         """Show context menu using pytron_os (Rust path)."""
+        pytron_os = _get_pytron_os()
+        if not pytron_os:
+            self.logger.error("[Tray] pytron_os unavailable for Rust tray menu path")
+            return
         self.logger.warning(
             f"[Tray] _show_menu_rs called, {len(self.menu_items)} items, hwnd=0x{hwnd:X}"
         )
@@ -487,6 +497,7 @@ class SystemTray:
         ctypes.windll.user32.PostMessageW(hwnd, 0, 0, 0)
 
     def _stop_windows(self):
+        pytron_os = _get_pytron_os()
         self._running = False
         # Unblock the v2 tray poll thread which is blocking in GetMessageW.
         if pytron_os and hasattr(pytron_os, "tray_v2_interrupt"):
