@@ -9,6 +9,10 @@ if sys.platform.startswith("linux"):
     os.environ["GSETTINGS_BACKEND"] = "memory"
     # PREVENT GIO from loading extra modules (like gvfs/dconf) that collision with Rust
     os.environ["GIO_EXTRA_MODULES"] = ""
+    # Prevent GIO from scanning and loading backend modules (gvfs, dconf, etc.)
+    # in native mode. Clearing GIO_EXTRA_MODULES is not enough because the
+    # default module directory is still scanned.
+    os.environ.setdefault("GIO_MODULE_DIR", "/nonexistent")
     # PREVENT accessibility bus from auto-initializing GLib
     os.environ["NO_AT_BRIDGE"] = "1"
     # PREVENT GIO from loading remote VFS modules
@@ -32,6 +36,7 @@ if sys.platform.startswith("linux"):
         for var in [
             "GSETTINGS_BACKEND",
             "GIO_EXTRA_MODULES",
+            "GIO_MODULE_DIR",
             "NO_AT_BRIDGE",
             "GIO_USE_VFS",
             "WEBKIT_DISABLE_COMPOSITING_MODE",

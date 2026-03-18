@@ -267,6 +267,7 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
             # Secondary Shield: Ensure the child process inherits these critical isolation variables.
             env["GSETTINGS_BACKEND"] = "memory"
             env["GIO_EXTRA_MODULES"] = ""
+            env["GIO_MODULE_DIR"] = "/nonexistent"
             env["NO_AT_BRIDGE"] = "1"
             env["GIO_USE_VFS"] = "local"
             env["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
@@ -448,6 +449,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         # Secondary Shield: Ensure the child process inherits these critical isolation variables.
         env["GSETTINGS_BACKEND"] = "memory"
         env["GIO_EXTRA_MODULES"] = ""
+        env["GIO_MODULE_DIR"] = "/nonexistent"
         env["NO_AT_BRIDGE"] = "1"
         env["GIO_USE_VFS"] = "local"
         env["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"

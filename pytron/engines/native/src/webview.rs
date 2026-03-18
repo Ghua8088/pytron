@@ -77,6 +77,7 @@ impl NativeWebview {
             // We MUST set these before the EventLoop or Window is created.
             std::env::set_var("GSETTINGS_BACKEND", "memory");
             std::env::set_var("GIO_USE_VFS", "local");
+            std::env::set_var("GIO_MODULE_DIR", "/nonexistent");
             std::env::set_var("NO_AT_BRIDGE", "1");
             
             // Force X11 on VMs for better stability/handle support.
