@@ -51,22 +51,16 @@ if sys.platform.startswith("linux"):
 
             if lib_path:
                 # RTLD_GLOBAL (0x00100)
-                # We use DEEPBIND (0x00008) on some Linux distros to prevent
-                # symbol collisions between Python's extensions and the Native Engine.
-                mode = ctypes.RTLD_GLOBAL
-                if hasattr(os, "RTLD_DEEPBIND"):
-                    mode |= os.RTLD_DEEPBIND
-                elif hasattr(ctypes, "RTLD_DEEPBIND"):
-                    mode |= ctypes.RTLD_DEEPBIND
-
-                if hasattr(ctypes, "RTLD_LAZY"):
-                    mode |= ctypes.RTLD_LAZY
-
-                ctypes.CDLL(lib_path, mode=mode)
-                if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
-                    print(
-                        f"[Pytron Debug] Convergence: Promoted {lib_id} ({lib_path}) to RTLD_GLOBAL"
-                    )
+                # On some Linux distros, loading these libraries via ctypes BEFORE
+                # the Rust engine causes GType registration collisions.
+                # If we are using the Native Engine, we skip ctypes convergence
+                # and let the Rust Engine (which is linked against these) be the source of truth.
+                if os.environ.get("PYTRON_ENGINE", "native") == "native":
+                    if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
+                        print(
+                            f"[Pytron Debug] Convergence: SKIPPING {lib_id} (Native Engine will own symbols)"
+                        )
+                    continue
         except:
             pass
 
