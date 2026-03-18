@@ -256,7 +256,7 @@ def _resolve_os_module_internal():
         if engine == "native":
             if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
                 print(
-                    f"[Pytron Debug] resolve_os_module: SKIPPING load on Linux (Engine: {engine}) to prevent Schism/Hang."
+                    f"[Pytron Debug] resolve_os_module: SKIPPING load on Linux (Engine: {engine}) to prevent Schism."
                 )
             return None
 

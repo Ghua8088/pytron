@@ -50,8 +50,15 @@ if sys.platform.startswith("linux"):
                 lib_path = fallbacks.get(lib_id)
 
             if lib_path:
-                # RTLD_GLOBAL (0x00100) + RTLD_LAZY (0x00001)
+                # RTLD_GLOBAL (0x00100)
+                # We use DEEPBIND (0x00008) on some Linux distros to prevent
+                # symbol collisions between Python's extensions and the Native Engine.
                 mode = ctypes.RTLD_GLOBAL
+                if hasattr(os, "RTLD_DEEPBIND"):
+                    mode |= os.RTLD_DEEPBIND
+                elif hasattr(ctypes, "RTLD_DEEPBIND"):
+                    mode |= ctypes.RTLD_DEEPBIND
+
                 if hasattr(ctypes, "RTLD_LAZY"):
                     mode |= ctypes.RTLD_LAZY
 
