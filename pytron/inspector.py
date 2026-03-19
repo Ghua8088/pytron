@@ -250,6 +250,12 @@ class Inspector:
             self.inspector_window = None
             self._opening = False
 
+    def _must_launch_on_main_thread(self):
+        return (
+            sys.platform.startswith("linux")
+            and getattr(self.app, "engine", "native") == "native"
+        )
+
     def toggle(self):
         # 1. Opening Guard: Prevent spamming while thread is spinning up
         if hasattr(self, "_opening") and self._opening:
@@ -281,6 +287,18 @@ class Inspector:
         logging.info("Inspector: Launching new thread...")
         self._opening = True
         import threading
+
+        if self._must_launch_on_main_thread():
+            if threading.current_thread() is threading.main_thread():
+                logging.info("Inspector: Launching on main thread for Linux native.")
+                self._launch_inspector()
+            else:
+                logging.warning(
+                    "Inspector: Linux native inspector must be opened from the main thread. "
+                    "Use app_toggle_inspector()/inspector_toggle from the app UI for now."
+                )
+                self._opening = False
+            return
 
         t = threading.Thread(target=self._launch_inspector, daemon=True)
         t.start()

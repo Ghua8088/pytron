@@ -118,15 +118,17 @@ class Webview:
                     # Map the URL relative to the Application Root for consistent routing
                     rel = path_obj.relative_to(pathlib.Path(root_path))
                     final_url = (
-                        f"{self._scheme}app/{urllib.parse.quote(rel.as_posix())}"
+                        f"{self._scheme}/app/{urllib.parse.quote(rel.as_posix())}"
                     )
                 except ValueError:
                     # Fallback if the file is outside app_root (e.g. system file)
                     root_path = str(path_obj.parent)
-                    final_url = f"{self._scheme}app/{urllib.parse.quote(path_obj.name)}"
+                    final_url = (
+                        f"{self._scheme}/app/{urllib.parse.quote(path_obj.name)}"
+                    )
             else:
                 # Fallback for missing files or legacy paths
-                final_url = f"{self._scheme}app/{urllib.parse.quote(path_obj.name)}"
+                final_url = f"{self._scheme}/app/{urllib.parse.quote(path_obj.name)}"
 
         self.root_path = root_path  # Store for later navigations
         self.logger.info(

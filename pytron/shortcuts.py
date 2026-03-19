@@ -159,6 +159,18 @@ class ShortcutManager:
         self._xlib_root = None
         self._xlib_lock = threading.Lock()
 
+    def _normalize_combo(self, combo: str) -> str:
+        parts = [part.strip() for part in combo.split("+") if part.strip()]
+        normalized = []
+        for part in parts:
+            upper = part.upper()
+            if upper == "CONTROL":
+                upper = "CTRL"
+            elif upper == "COMMAND":
+                upper = "CMD"
+            normalized.append(upper)
+        return "+".join(normalized)
+
     def register(self, combo: str, callback: Callable):
         """Registers a global shortcut (e.g., 'Ctrl+Alt+S')."""
         platform = sys.platform
@@ -248,6 +260,8 @@ class ShortcutManager:
         """X11 global hotkey via python-xlib. Silently skips on Wayland."""
         import os
 
+        combo = self._normalize_combo(combo)
+
         if not os.environ.get("DISPLAY"):
             self.logger.warning(
                 "Global shortcuts: no DISPLAY found (Wayland/headless). Skipping."
@@ -265,7 +279,7 @@ class ShortcutManager:
         modifiers, _ = self._parse_combo(combo)
         xmods = self._x11_mod_mask(modifiers)
 
-        key_part = combo.upper().split("+")[-1]
+        key_part = combo.split("+")[-1]
         keysym = XK_MAP.get(key_part) or (
             ord(key_part.lower()) if len(key_part) == 1 else None
         )
@@ -369,6 +383,8 @@ class ShortcutManager:
                 X.GrabModeAsync,
                 X.GrabModeAsync,
             )
+        if self._xlib_display is not None:
+            self._xlib_display.sync()
         data["registered"] = True
         self.logger.info(
             f"Registered X11 shortcut: {data['combo']} "
@@ -376,7 +392,8 @@ class ShortcutManager:
         )
 
     def _parse_combo(self, combo: str):
-        parts = combo.upper().split("+")
+        combo = self._normalize_combo(combo)
+        parts = combo.split("+")
         modifiers = 0
         vk = 0
 
