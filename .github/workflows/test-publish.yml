@@ -93,14 +93,11 @@ jobs:
       - name: 📦 Build Wheel
         run: python -m build --wheel
 
-      - name: 🩹 Repair Linux Wheel (auditwheel)
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          pip install auditwheel
-          auditwheel repair dist/*.whl \
-            --plat manylinux_2_35_x86_64 \
-            -w dist/
-          rm -f dist/*-linux_x86_64.whl
+      # Linux note:
+      # Do not run auditwheel here. Repairing the wheel vendors GTK/WebKit and
+      # related GLib stack libraries into pytron_kit.libs, which then mix with
+      # host loader/modules (pixbuf loaders, gio modules, etc.) and crash native
+      # startup with duplicate GType registration.
 
       - name: 📤 Upload Wheels
         uses: actions/upload-artifact@v4

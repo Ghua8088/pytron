@@ -93,20 +93,15 @@ jobs:
       - name: 📦 Build Wheel
         run: python -m build --wheel
 
-      # ─── Linux only: use auditwheel repair to properly re-tag the wheel      ───
-      # --plat manylinux_2_35_x86_64 matches ubuntu-22.04+ (glibc 2.35).        ───
-      # auditwheel copies in any non-system .so files it finds, but because      ───
-      # wry/webkitgtk ARE system libs (installed above) they won't be bundled — ───
-      # the repaired wheel just gets the right manylinux platform tag.           ───
-      - name: 🩹 Repair Linux Wheel (auditwheel)
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          pip install auditwheel
-          auditwheel repair dist/*.whl \
-            --plat manylinux_2_35_x86_64 \
-            -w dist/
-          # Remove the original linux_x86_64 tagged wheel
-          rm -f dist/*-linux_x86_64.whl
+      # Linux note:
+      # auditwheel is NOT safe for this project right now. It vendors GTK/WebKit/
+      # gdk-pixbuf/gstreamer into pytron_kit.libs, but runtime loader modules
+      # still come from the host system, producing a mixed GLib/GIO stack and
+      # duplicate GType registration crashes at startup.
+      #
+      # Until Linux packaging is redesigned to rely on system GTK/WebKit runtime
+      # deps explicitly, publish the raw linux_x86_64 wheel instead of repairing
+      # it into a manylinux wheel.
 
       - name: 📤 Upload Wheels
         uses: actions/upload-artifact@v4
