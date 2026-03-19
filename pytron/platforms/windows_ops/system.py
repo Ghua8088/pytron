@@ -6,7 +6,6 @@ from .utils import get_hwnd
 from . import toasts
 from ...utils import resolve_native_bridge
 
-
 _AUTO_NATIVE_BRIDGE = object()
 pytron_native = _AUTO_NATIVE_BRIDGE
 
@@ -15,6 +14,7 @@ def _get_native_bridge():
     if pytron_native is _AUTO_NATIVE_BRIDGE:
         return resolve_native_bridge()
     return pytron_native
+
 
 try:
     import winreg
@@ -448,9 +448,7 @@ def set_taskbar_progress(w, state="normal", value=0, max_value=100):
     if native_bridge:
         try:
             hwnd = get_hwnd(w)
-            native_bridge.set_taskbar_progress(
-                hwnd, state, int(value), int(max_value)
-            )
+            native_bridge.set_taskbar_progress(hwnd, state, int(value), int(max_value))
             return
         except Exception as e:
             print(f"[Pytron] Taskbar progress error (pytron_native): {e}")

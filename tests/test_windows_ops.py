@@ -693,9 +693,9 @@ def test_set_launch_on_boot_enable_via_winreg():
     mock_winreg.KEY_QUERY_VALUE = 0x0001
     mock_winreg.REG_SZ = 1
 
-    with patch(SYS_OS, None), patch.dict(_sys.modules, {"pytron.dependencies": mock_dep}), patch(
-        "pytron.platforms.windows_ops.system.winreg", mock_winreg
-    ):
+    with patch(SYS_OS, None), patch.dict(
+        _sys.modules, {"pytron.dependencies": mock_dep}
+    ), patch("pytron.platforms.windows_ops.system.winreg", mock_winreg):
         result = system.set_launch_on_boot("MyApp", "C:\\app.exe", enable=True)
     assert result is True
     mock_winreg.OpenKey.assert_called_once()
@@ -716,9 +716,9 @@ def test_set_launch_on_boot_disable_via_winreg():
     mock_winreg.KEY_SET_VALUE = 0x0002
     mock_winreg.KEY_QUERY_VALUE = 0x0001
 
-    with patch(SYS_OS, None), patch.dict(_sys.modules, {"pytron.dependencies": mock_dep}), patch(
-        "pytron.platforms.windows_ops.system.winreg", mock_winreg
-    ):
+    with patch(SYS_OS, None), patch.dict(
+        _sys.modules, {"pytron.dependencies": mock_dep}
+    ), patch("pytron.platforms.windows_ops.system.winreg", mock_winreg):
         result = system.set_launch_on_boot("MyApp", "C:\\app.exe", enable=False)
     assert result is True
 
@@ -738,9 +738,9 @@ def test_set_launch_on_boot_disable_tolerates_file_not_found():
     mock_winreg.KEY_SET_VALUE = 0x0002
     mock_winreg.KEY_QUERY_VALUE = 0x0001
 
-    with patch(SYS_OS, None), patch.dict(_sys.modules, {"pytron.dependencies": mock_dep}), patch(
-        "pytron.platforms.windows_ops.system.winreg", mock_winreg
-    ):
+    with patch(SYS_OS, None), patch.dict(
+        _sys.modules, {"pytron.dependencies": mock_dep}
+    ), patch("pytron.platforms.windows_ops.system.winreg", mock_winreg):
         # FileNotFoundError on delete should not propagate
         result = system.set_launch_on_boot("MyApp", "C:\\app.exe", enable=False)
     assert result is True
@@ -752,9 +752,9 @@ def test_set_launch_on_boot_returns_false_when_no_winreg():
     mock_dep = MagicMock()
     mock_dep.pytron_native = None
 
-    with patch(SYS_OS, None), patch.dict(_sys.modules, {"pytron.dependencies": mock_dep}), patch(
-        "pytron.platforms.windows_ops.system.winreg", None
-    ):
+    with patch(SYS_OS, None), patch.dict(
+        _sys.modules, {"pytron.dependencies": mock_dep}
+    ), patch("pytron.platforms.windows_ops.system.winreg", None):
         result = system.set_launch_on_boot("MyApp", "C:\\app.exe")
     assert result is False
 
