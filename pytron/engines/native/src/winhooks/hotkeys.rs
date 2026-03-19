@@ -1,6 +1,8 @@
 use pyo3::prelude::*;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS};
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    HOT_KEY_MODIFIERS, RegisterHotKey, UnregisterHotKey,
+};
 
 #[pyfunction]
 pub fn register_hotkey(hwnd_val: usize, id: i32, modifiers: u32, vk: u32) -> PyResult<bool> {

@@ -8,7 +8,8 @@ include SUPPORT.md
 include pyproject.toml
 
 # 1. Include the core package
-recursive-include pytron *.py *.png *.ico *.exe *.md *.dll *.so *.pyd *.dylib *.lib *.a
+# Keep source-ish assets broad, but only ship native binaries from explicit runtime folders.
+recursive-include pytron *.py *.png *.ico *.exe *.md
 recursive-include pytron/dependencies *
 recursive-include pytron/pack/secure_loader/bin *
 
@@ -35,11 +36,22 @@ recursive-include pytron/platforms/android/shell/gradle/wrapper *
 prune pytron/pack/secure_loader/src
 exclude pytron/pack/secure_loader/Cargo.toml
 exclude pytron/pack/secure_loader/build_loader.py
+prune pytron/engines/servo
 prune pytron/engines/native
+prune pytron/engines/native/target
+prune pytron/engines/servo/shell/target
+recursive-exclude pytron/engines/servo *
+recursive-exclude pytron/engines/native/target *
+recursive-exclude pytron/engines/servo/shell/target *
 prune pytron/pack/secure_loader/target
+prune pytron/platforms/android/shell/build
 prune pytron/platforms/android/shell/app/build
 prune pytron/platforms/android/shell/.gradle
 prune pytron/platforms/android/shell/app/.cxx
+recursive-exclude pytron/platforms/android/shell/build *
+recursive-exclude pytron/platforms/android/shell/app/build *
+recursive-exclude pytron/platforms/android/shell/.gradle *
+recursive-exclude pytron/platforms/android/shell/app/.cxx *
 prune */node_modules
 prune */__pycache__
 prune */.git
@@ -50,9 +62,15 @@ prune pytron/pack/secure_loader/env
 prune build
 prune dist
 prune *.egg-info
+exclude pytron/dependencies/pytron_servo.*
 
 # Global exclude for stray files
 global-exclude *.py[cod]
+global-exclude *.pdb
+global-exclude *.rlib
+global-exclude *.rmeta
+global-exclude *.d
+global-exclude *.obj
 # global-exclude *.so (Removed to allow Pytron bridge binaries)
 global-exclude *.apk
 global-exclude *.aab

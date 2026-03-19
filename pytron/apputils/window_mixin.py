@@ -31,9 +31,12 @@ class WindowMixin:
 
             window = ChromeWebView(config=window_config)
         elif getattr(self, "engine", "native") == "servo":
-            from ..engines.servo.engine import ServoWebView
+            self.logger.warning(
+                "Servo engine is not part of the supported runtime surface right now. Falling back to Chrome."
+            )
+            from ..engines.chrome.engine import ChromeWebView
 
-            window = ServoWebView(config=window_config)
+            window = ChromeWebView(config=window_config)
         else:
             window = Webview(config=window_config)
 

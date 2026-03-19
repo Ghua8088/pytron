@@ -5,13 +5,13 @@ import threading
 import logging
 from typing import Callable, List, Optional
 from .exceptions import TrayError
-from .utils import get_resource_path, resolve_os_module
+from .utils import get_resource_path, resolve_native_bridge
 
 
-def _get_pytron_os():
-    """Resolve the optional OS bridge without bypassing runtime ownership guards."""
+def _get_native_bridge():
+    """Resolve the optional native bridge without bypassing runtime ownership guards."""
     try:
-        return resolve_os_module()
+        return resolve_native_bridge()
     except Exception:
         return None
 
@@ -112,10 +112,10 @@ class SystemTray:
             self._stop_windows()
             # Cleanup icon handle to prevent leaks
             if self._hicon:
-                pytron_os = _get_pytron_os()
-                if pytron_os:
+                native_bridge = _get_native_bridge()
+                if native_bridge:
                     try:
-                        pytron_os.tray_destroy_icon(self._hicon)
+                        native_bridge.tray_destroy_icon(self._hicon)
                     except Exception:
                         pass
                 else:
@@ -228,8 +228,8 @@ class SystemTray:
         ready_event = threading.Event()
 
         def run_tray_thread():
-            pytron_os = _get_pytron_os()
-            if pytron_os and hasattr(pytron_os, "tray_v2_create"):
+            native_bridge = _get_native_bridge()
+            if native_bridge and hasattr(native_bridge, "tray_v2_create"):
                 # ── RUST PATH v2 (tray-icon crate by Tauri team) ──────────
                 # Build items list and an id→MenuItem lookup table.
                 items = []
@@ -244,12 +244,12 @@ class SystemTray:
                     icon_path = str(get_resource_path(self.icon_path))
 
                 try:
-                    pytron_os.tray_v2_create(self.title[:127], items, icon_path)
+                    native_bridge.tray_v2_create(self.title[:127], items, icon_path)
                     self.logger.debug(f"[Tray] tray_v2_create OK — {len(items)} items")
                     ready_event.set()
 
                     while self._running:
-                        result = pytron_os.tray_v2_poll_event()
+                        result = native_bridge.tray_v2_poll_event()
                         if result is None:
                             break  # WM_QUIT received — shutdown signal
                         event_type, data = result
@@ -267,7 +267,7 @@ class SystemTray:
                     ready_event.set()
                 finally:
                     try:
-                        pytron_os.tray_v2_destroy()
+                        native_bridge.tray_v2_destroy()
                     except Exception:
                         pass
                 return  # done with rust v2 path
@@ -431,10 +431,12 @@ class SystemTray:
         ready_event.wait(timeout=2.0)
 
     def _show_menu_rs(self, hwnd):
-        """Show context menu using pytron_os (Rust path)."""
-        pytron_os = _get_pytron_os()
-        if not pytron_os:
-            self.logger.error("[Tray] pytron_os unavailable for Rust tray menu path")
+        """Show context menu using pytron_native (Rust path)."""
+        native_bridge = _get_native_bridge()
+        if not native_bridge:
+            self.logger.error(
+                "[Tray] pytron_native unavailable for Rust tray menu path"
+            )
             return
         self.logger.warning(
             f"[Tray] _show_menu_rs called, {len(self.menu_items)} items, hwnd=0x{hwnd:X}"
@@ -443,7 +445,7 @@ class SystemTray:
             self.logger.warning("[Tray] menu_items is empty — no menu to show")
             return
 
-        hmenu = pytron_os.tray_create_popup_menu()
+        hmenu = native_bridge.tray_create_popup_menu()
         self.logger.warning(f"[Tray] CreatePopupMenu -> hmenu=0x{hmenu:X}")
         if not hmenu:
             self.logger.error("[Tray] CreatePopupMenu returned NULL")
@@ -451,19 +453,21 @@ class SystemTray:
 
         for item in self.menu_items:
             if item.is_separator:
-                pytron_os.tray_append_separator(hmenu)
+                native_bridge.tray_append_separator(hmenu)
             else:
-                pytron_os.tray_append_menu_item(hmenu, MFT_STRING, item.id, item.label)
+                native_bridge.tray_append_menu_item(
+                    hmenu, MFT_STRING, item.id, item.label
+                )
                 self.logger.warning(
                     f"[Tray]   appended id={item.id} label={item.label!r}"
                 )
 
-        x, y = pytron_os.tray_get_cursor_pos()
+        x, y = native_bridge.tray_get_cursor_pos()
         self.logger.warning(f"[Tray] TrackPopupMenu at ({x}, {y})")
 
         # TPM_RETURNCMD is OR'd in Rust; returns selected item ID directly (0 = dismissed).
         # DestroyMenu is also called inside tray_track_popup_menu.
-        selected_id = pytron_os.tray_track_popup_menu(
+        selected_id = native_bridge.tray_track_popup_menu(
             hmenu, TPM_LEFTALIGN | TPM_RIGHTBUTTON, x, y, hwnd
         )
         self.logger.warning(f"[Tray] TrackPopupMenu returned selected_id={selected_id}")
@@ -497,22 +501,24 @@ class SystemTray:
         ctypes.windll.user32.PostMessageW(hwnd, 0, 0, 0)
 
     def _stop_windows(self):
-        pytron_os = _get_pytron_os()
+        native_bridge = _get_native_bridge()
         self._running = False
         # Unblock the v2 tray poll thread which is blocking in GetMessageW.
-        if pytron_os and hasattr(pytron_os, "tray_v2_interrupt"):
+        if native_bridge and hasattr(native_bridge, "tray_v2_interrupt"):
             try:
-                pytron_os.tray_v2_interrupt()
+                native_bridge.tray_v2_interrupt()
             except Exception:
                 pass
         if self._hwnd:
-            if pytron_os:
+            if native_bridge:
                 try:
-                    pytron_os.tray_remove_icon(self._hwnd, 1)
+                    native_bridge.tray_remove_icon(self._hwnd, 1)
                 except Exception:
                     pass
                 try:
-                    pytron_os.tray_post_message(self._hwnd, 0x0010, 0, 0)  # WM_CLOSE
+                    native_bridge.tray_post_message(
+                        self._hwnd, 0x0010, 0, 0
+                    )  # WM_CLOSE
                 except Exception:
                     pass
             else:

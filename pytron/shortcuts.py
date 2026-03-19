@@ -4,9 +4,27 @@ import threading
 import logging
 from typing import Callable, Dict, Any
 
-from .utils import resolve_os_module
+from .utils import resolve_native_bridge
 
-pytron_os = resolve_os_module()
+native_bridge = resolve_native_bridge()
+
+
+def _bridge_has(*names):
+    if not native_bridge:
+        return False
+    return all(hasattr(native_bridge, name) for name in names)
+
+
+def _has_rust_hotkey_bridge():
+    return _bridge_has(
+        "get_current_thread_id",
+        "init_message_queue",
+        "get_message",
+        "register_hotkey",
+        "translate_dispatch",
+        "post_thread_message",
+    )
+
 
 try:
     import ctypes.wintypes
@@ -414,9 +432,9 @@ class ShortcutManager:
         # 3. Wake up the loop!
         if self._thread_id:
             sent = False
-            if pytron_os:
+            if _has_rust_hotkey_bridge():
                 try:
-                    sent = pytron_os.post_thread_message(
+                    sent = native_bridge.post_thread_message(
                         self._thread_id, WM_APP_REGISTER, 0, 0
                     )
                 except Exception:
@@ -445,17 +463,17 @@ class ShortcutManager:
         self._thread.start()
 
     def _msg_loop(self):
-        if pytron_os:
+        if _has_rust_hotkey_bridge():
             # ── RUST PATH ──────────────────────────────────────────────────
             try:
-                self._thread_id = pytron_os.get_current_thread_id()
+                self._thread_id = native_bridge.get_current_thread_id()
             except Exception:
                 self._thread_id = None
 
             # Force Windows to allocate a message queue for this thread so
             # that PostThreadMessageW from other threads can target it.
             try:
-                pytron_os.init_message_queue()
+                native_bridge.init_message_queue()
             except Exception:
                 pass
 
@@ -464,7 +482,7 @@ class ShortcutManager:
 
             while self._running:
                 try:
-                    res = pytron_os.get_message()  # blocks
+                    res = native_bridge.get_message()  # blocks
                     if res is None:  # WM_QUIT
                         break
                     message, wparam, lparam = res
@@ -482,7 +500,7 @@ class ShortcutManager:
                     for sid, data in list(self.shortcuts.items()):
                         if not data.get("registered", False):
                             try:
-                                success = pytron_os.register_hotkey(
+                                success = native_bridge.register_hotkey(
                                     0, sid, data["fsModifiers"], data["vk"]
                                 )
                             except Exception:
@@ -500,7 +518,7 @@ class ShortcutManager:
                                 data["registered"] = True  # avoid infinite spam
 
                 try:
-                    pytron_os.translate_dispatch(0, message, wparam, lparam)
+                    native_bridge.translate_dispatch(0, message, wparam, lparam)
                 except Exception:
                     pass
             return  # done with rust path
@@ -558,9 +576,9 @@ class ShortcutManager:
             # Post WM_QUIT to break the GetMessage loop
             if self._thread_id:
                 sent = False
-                if pytron_os:
+                if _has_rust_hotkey_bridge():
                     try:
-                        sent = pytron_os.post_thread_message(
+                        sent = native_bridge.post_thread_message(
                             self._thread_id, 0x0012, 0, 0
                         )
                     except Exception:

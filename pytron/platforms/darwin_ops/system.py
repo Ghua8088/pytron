@@ -87,11 +87,11 @@ def set_app_id(app_id):
 
 def set_launch_on_boot(app_name, exe_path, enable=True):
     try:
-        from pytron.utils import resolve_os_module
+        from pytron.utils import resolve_native_bridge
 
-        pytron_os = resolve_os_module()
-        if pytron_os:
-            return pytron_os.set_launch_on_boot(app_name, exe_path, enable)
+        native_bridge = resolve_native_bridge()
+        if native_bridge:
+            return native_bridge.set_launch_on_boot(app_name, exe_path, enable)
     except Exception:
         pass
 

@@ -276,8 +276,13 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
         if dev_server_url:
             env["PYTRON_DEV_URL"] = dev_server_url
 
-        # Always set the engine explicitly for the child process
-        env["PYTRON_ENGINE"] = engine or os.environ.get("PYTRON_ENGINE", "native")
+        # Engine policy:
+        # - honor explicit CLI/env choice
+        # - default Linux away from the experimental in-process native engine
+        resolved_engine = engine or os.environ.get("PYTRON_ENGINE")
+        if not resolved_engine:
+            resolved_engine = "chrome" if sys.platform.startswith("linux") else "native"
+        env["PYTRON_ENGINE"] = resolved_engine
 
         app_proc = subprocess.Popen([python_exe, str(script)] + extra_args, env=env)
 
@@ -455,8 +460,17 @@ def cmd_run(args: argparse.Namespace) -> int:
         env["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
         env["WINIT_UNIX_BACKEND"] = "x11"
 
-    engine = getattr(args, "engine", None) or os.environ.get("PYTRON_ENGINE", "native")
     if getattr(args, "chrome", False):
+        engine = "chrome"
+    else:
+        engine = getattr(args, "engine", None) or os.environ.get("PYTRON_ENGINE")
+        if not engine:
+            engine = "chrome" if sys.platform.startswith("linux") else "native"
+    if engine == "servo":
+        log(
+            "Servo engine is disabled in this release train. Falling back to chrome.",
+            style="warning",
+        )
         engine = "chrome"
 
     env["PYTRON_ENGINE"] = engine

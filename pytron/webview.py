@@ -724,13 +724,13 @@ class Webview:
             self.unmaximize()
 
     def toggle_maximize(self):
-        # Native Toggle using pytron_os check
         if sys.platform == "win32" and self.hwnd:
-            from .dependencies import pytron_os
+            from .utils import resolve_native_bridge
 
-            if pytron_os:
+            bridge = resolve_native_bridge()
+            if bridge:
                 try:
-                    return pytron_os.toggle_maximize(self.hwnd)
+                    return bridge.toggle_maximize(self.hwnd)
                 except Exception:
                     pass
 
@@ -742,11 +742,12 @@ class Webview:
     def is_visible(self):
         """Checks if the window is currently visible."""
         if sys.platform == "win32" and self.hwnd:
-            from .dependencies import pytron_os
+            from .utils import resolve_native_bridge
 
-            if pytron_os:
+            bridge = resolve_native_bridge()
+            if bridge:
                 try:
-                    return pytron_os.is_visible(self.hwnd)
+                    return bridge.is_visible(self.hwnd)
                 except Exception:
                     pass
         return True  # Default fallback
@@ -765,11 +766,12 @@ class Webview:
         if call_native:
             call_native(enable)
         elif sys.platform == "win32" and self.hwnd:
-            from .dependencies import pytron_os
+            from .utils import resolve_native_bridge
 
-            if pytron_os:
+            bridge = resolve_native_bridge()
+            if bridge:
                 try:
-                    pytron_os.set_always_on_top(self.hwnd, enable)
+                    bridge.set_always_on_top(self.hwnd, enable)
                     return
                 except Exception:
                     pass

@@ -4,11 +4,17 @@ import sys
 from .constants import *
 from .utils import get_hwnd
 from . import toasts
+from ...utils import resolve_native_bridge
 
-try:
-    from pytron.dependencies import pytron_os
-except ImportError:
-    pytron_os = None
+
+_AUTO_NATIVE_BRIDGE = object()
+pytron_native = _AUTO_NATIVE_BRIDGE
+
+
+def _get_native_bridge():
+    if pytron_native is _AUTO_NATIVE_BRIDGE:
+        return resolve_native_bridge()
+    return pytron_native
 
 try:
     import winreg
@@ -132,16 +138,17 @@ if user32 and shell32 and kernel32 and comdlg32:
 
 
 def notification(w, title, message, icon=None):
-    if pytron_os:
+    native_bridge = _get_native_bridge()
+    if native_bridge:
         try:
             hwnd = get_hwnd(w)
             if hwnd:
-                pytron_os.show_notification(
+                native_bridge.show_notification(
                     hwnd, title, message, str(os.path.abspath(icon)) if icon else None
                 )
                 return
         except Exception as e:
-            print(f"[Pytron] Notification error (pytron_os): {e}")
+            print(f"[Pytron] Notification error (pytron_native): {e}")
 
     try:
         hwnd = get_hwnd(w)
@@ -209,9 +216,9 @@ def toast(w, config):
 
 
 def message_box(w, title, message, style=0):
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.message_box(get_hwnd(w), title, message, style)
+            return pytron_native.message_box(get_hwnd(w), title, message, style)
         except Exception:
             pass
     hwnd = get_hwnd(w)
@@ -221,9 +228,9 @@ def message_box(w, title, message, style=0):
 def set_window_icon(w, icon_path):
     if not icon_path or not os.path.exists(icon_path):
         return
-    if pytron_os:
+    if pytron_native:
         try:
-            pytron_os.set_window_icon(get_hwnd(w), str(os.path.abspath(icon_path)))
+            pytron_native.set_window_icon(get_hwnd(w), str(os.path.abspath(icon_path)))
             return
         except Exception:
             pass
@@ -286,9 +293,9 @@ def _prepare_ofn(w, title, default_path, file_types, file_buffer_size=1024):
 
 
 def open_file_dialog(w, title, default_path=None, file_types=None):
-    if pytron_os:
+    if pytron_native:
         try:
-            res = pytron_os.open_file_dialog(
+            res = pytron_native.open_file_dialog(
                 get_hwnd(w), title, default_path, str(file_types)
             )
             if res:
@@ -305,9 +312,9 @@ def open_file_dialog(w, title, default_path=None, file_types=None):
 
 
 def save_file_dialog(w, title, default_path=None, default_name=None, file_types=None):
-    if pytron_os:
+    if pytron_native:
         try:
-            res = pytron_os.save_file_dialog(
+            res = pytron_native.save_file_dialog(
                 get_hwnd(w), title, default_path, default_name, str(file_types)
             )
             if res:
@@ -331,9 +338,9 @@ def save_file_dialog(w, title, default_path=None, default_name=None, file_types=
 
 
 def open_folder_dialog(w, title, default_path=None):
-    if pytron_os:
+    if pytron_native:
         try:
-            res = pytron_os.open_folder_dialog(get_hwnd(w), title, default_path)
+            res = pytron_native.open_folder_dialog(get_hwnd(w), title, default_path)
             if res:
                 return res
         except Exception:
@@ -379,12 +386,26 @@ def register_protocol(scheme):
 
 
 def set_launch_on_boot(app_name, exe_path, enable=True):
-    try:
-        from pytron.dependencies import pytron_os
+    native_bridge = _get_native_bridge()
+    if native_bridge:
+        try:
+            result = native_bridge.set_launch_on_boot(app_name, exe_path, enable)
+            if result:
+                return result
+        except Exception:
+            pass
 
-        return pytron_os.set_launch_on_boot(app_name, exe_path, enable)
-    except Exception:
-        pass
+    if pytron_native is _AUTO_NATIVE_BRIDGE:
+        try:
+            import pytron.dependencies as _deps
+
+            legacy_bridge = getattr(_deps, "pytron_native", None)
+            if legacy_bridge:
+                result = legacy_bridge.set_launch_on_boot(app_name, exe_path, enable)
+                if result:
+                    return result
+        except Exception:
+            pass
 
     if not winreg:
         return False
@@ -409,9 +430,10 @@ def set_launch_on_boot(app_name, exe_path, enable=True):
 
 
 def set_app_id(app_id):
-    if pytron_os:
+    native_bridge = _get_native_bridge()
+    if native_bridge:
         try:
-            pytron_os.set_app_id(app_id)
+            native_bridge.set_app_id(app_id)
             return
         except Exception:
             pass
@@ -422,33 +444,85 @@ def set_app_id(app_id):
 
 
 def set_taskbar_progress(w, state="normal", value=0, max_value=100):
-    if pytron_os:
+    native_bridge = _get_native_bridge()
+    if native_bridge:
         try:
             hwnd = get_hwnd(w)
-            pytron_os.set_taskbar_progress(hwnd, state, int(value), int(max_value))
+            native_bridge.set_taskbar_progress(
+                hwnd, state, int(value), int(max_value)
+            )
             return
         except Exception as e:
-            print(f"[Pytron] Taskbar progress error (pytron_os): {e}")
+            print(f"[Pytron] Taskbar progress error (pytron_native): {e}")
 
 
 def set_clipboard_text(text: str):
     """Copies text to the system clipboard."""
-    if pytron_os:
+    native_bridge = _get_native_bridge()
+    if native_bridge:
         try:
-            return pytron_os.set_clipboard_text(text)
+            return native_bridge.set_clipboard_text(text)
         except Exception as e:
-            print(f"[Pytron] Clipboard Set Error (pytron_os): {e}")
-    return False
+            print(f"[Pytron] Clipboard Set Error (pytron_native): {e}")
+
+    if not (user32 and kernel32):
+        return False
+
+    try:
+        if not user32.OpenClipboard(None):
+            return False
+
+        try:
+            user32.EmptyClipboard()
+
+            text_buffer = ctypes.create_unicode_buffer(text)
+            size = ctypes.sizeof(text_buffer)
+            h_mem = kernel32.GlobalAlloc(0x0002, size)  # GMEM_MOVEABLE
+            if not h_mem:
+                return False
+
+            p_mem = kernel32.GlobalLock(h_mem)
+            if not p_mem:
+                return False
+
+            ctypes.memmove(p_mem, ctypes.addressof(text_buffer), size)
+            kernel32.GlobalUnlock(h_mem)
+
+            return bool(user32.SetClipboardData(13, h_mem))  # CF_UNICODETEXT
+        finally:
+            user32.CloseClipboard()
+    except Exception as e:
+        print(f"[Pytron] Clipboard Set Error (ctypes): {e}")
+        return False
 
 
 def get_clipboard_text():
     """Returns text from the system clipboard."""
-    if pytron_os:
+    native_bridge = _get_native_bridge()
+    if native_bridge:
         try:
-            return pytron_os.get_clipboard_text()
+            return native_bridge.get_clipboard_text()
         except Exception as e:
-            print(f"[Pytron] Clipboard Get Error (pytron_os): {e}")
-    return None
+            print(f"[Pytron] Clipboard Get Error (pytron_native): {e}")
+
+    if not user32:
+        return None
+
+    try:
+        if not user32.OpenClipboard(None):
+            return None
+
+        try:
+            handle = user32.GetClipboardData(13)  # CF_UNICODETEXT
+            if not handle:
+                return None
+
+            return ctypes.wstring_at(handle)
+        finally:
+            user32.CloseClipboard()
+    except Exception as e:
+        print(f"[Pytron] Clipboard Get Error (ctypes): {e}")
+        return None
 
 
 def get_system_info():

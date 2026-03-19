@@ -7,11 +7,21 @@ except ImportError:
     ctypes.wintypes = None
 from .constants import *
 from .utils import get_hwnd
+from ...utils import resolve_native_bridge
 
-try:
-    from pytron.dependencies import pytron_os
-except ImportError:
-    pytron_os = None
+
+class _NativeBridgeProxy:
+    def __bool__(self):
+        return resolve_native_bridge() is not None
+
+    def __getattr__(self, name):
+        bridge = resolve_native_bridge()
+        if bridge is None:
+            raise AttributeError(name)
+        return getattr(bridge, name)
+
+
+pytron_native = _NativeBridgeProxy()
 
 # -------------------------------------------------------------------
 # Hardened User32
@@ -160,9 +170,9 @@ _fullscreen_storage = {}
 
 
 def set_fullscreen(w, enable):
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.set_fullscreen(get_hwnd(w), enable)
+            return pytron_native.set_fullscreen(get_hwnd(w), enable)
         except Exception:
             pass
 
@@ -217,18 +227,18 @@ def minimize(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.minimize(hwnd)
+            return pytron_native.minimize(hwnd)
         except Exception:
             pass
     user32.ShowWindow(hwnd, SW_MINIMIZE)
 
 
 def set_bounds(w, x, y, width, height):
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.set_bounds(
+            return pytron_native.set_bounds(
                 get_hwnd(w), int(x), int(y), int(width), int(height)
             )
         except Exception:
@@ -242,9 +252,9 @@ def set_bounds(w, x, y, width, height):
 
 
 def close(w):
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.close(get_hwnd(w))
+            return pytron_native.close(get_hwnd(w))
         except Exception:
             pass
     hwnd = get_hwnd(w)
@@ -257,9 +267,9 @@ def toggle_maximize(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return False
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.toggle_maximize(hwnd)
+            return pytron_native.toggle_maximize(hwnd)
         except Exception:
             pass
     is_zoomed = user32.IsZoomed(hwnd)
@@ -275,9 +285,9 @@ def set_always_on_top(w, enable):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.set_always_on_top(hwnd, enable)
+            return pytron_native.set_always_on_top(hwnd, enable)
         except Exception:
             pass
     HWND_TOPMOST = -1
@@ -292,9 +302,9 @@ def make_frameless(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.make_frameless(hwnd)
+            return pytron_native.make_frameless(hwnd)
         except Exception:
             pass
     style = user32.GetWindowLongW(hwnd, GWL_STYLE)
@@ -307,9 +317,9 @@ def set_utility_window(w, enable):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.set_utility_window(hwnd, enable)
+            return pytron_native.set_utility_window(hwnd, enable)
         except Exception:
             pass
     ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
@@ -327,9 +337,9 @@ def start_drag(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.start_drag(hwnd)
+            return pytron_native.start_drag(hwnd)
         except Exception:
             pass
     user32.ReleaseCapture()
@@ -340,9 +350,9 @@ def hide(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.hide(hwnd)
+            return pytron_native.hide(hwnd)
         except Exception:
             pass
     user32.ShowWindow(hwnd, SW_HIDE)
@@ -352,9 +362,9 @@ def is_visible(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return False
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.is_visible(hwnd)
+            return pytron_native.is_visible(hwnd)
         except Exception:
             pass
     return bool(user32.IsWindowVisible(hwnd))
@@ -364,9 +374,9 @@ def show(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.show(hwnd)
+            return pytron_native.show(hwnd)
         except Exception:
             pass
     user32.ShowWindow(hwnd, SW_SHOW)
@@ -377,9 +387,9 @@ def center(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    if pytron_os:
+    if pytron_native:
         try:
-            return pytron_os.center(hwnd)
+            return pytron_native.center(hwnd)
         except Exception:
             pass
     rect = ctypes.wintypes.RECT()
@@ -446,7 +456,7 @@ def set_border_color(w, color_hex):
     if not hwnd:
         return
 
-    if pytron_os:
+    if pytron_native:
         try:
             # Convert hex #RRGGBB to COLORREF (0x00BBGGRR)
             color_hex = color_hex.lstrip("#")
@@ -463,7 +473,7 @@ def set_border_color(w, color_hex):
             else:
                 return
 
-            pytron_os.set_border_color(hwnd, color_ref)
+            pytron_native.set_border_color(hwnd, color_ref)
             return
         except Exception:
             pass

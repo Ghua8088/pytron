@@ -39,7 +39,6 @@ jobs:
           rust_native:
             - 'pytron/engines/native/**'
             - 'pytron/engines/native/Cargo.toml'
-            - 'pytron/platforms/pytron_os/**'
           rust_loader:
             - 'pytron/pack/secure_loader/**'
             - 'pytron/pack/secure_loader/Cargo.toml'
@@ -61,7 +60,6 @@ jobs:
         workspaces: |
           pytron/engines/native
           pytron/pack/secure_loader
-          pytron/platforms/pytron_os
 
     - name: 🐧 Install Linux System Dependencies
       if: startsWith(matrix.os, 'ubuntu')
@@ -92,7 +90,6 @@ jobs:
       run: |
         if [ "${{ steps.filter.outputs.rust_native }}" == "true" ]; then
           cargo check --manifest-path pytron/engines/native/Cargo.toml
-          cargo check --manifest-path pytron/platforms/pytron_os/Cargo.toml
         fi
         if [ "${{ steps.filter.outputs.rust_loader }}" == "true" ]; then
           cargo check --manifest-path pytron/pack/secure_loader/Cargo.toml
@@ -101,10 +98,6 @@ jobs:
     - name: 🦾 Build Native Engine
       if: steps.filter.outputs.rust_native == 'true' || github.event_name == 'push' || startsWith(github.ref, 'refs/tags/v')
       run: python pytron/engines/native/build.py
-
-    - name: 🦾 Build OS Platform Hook
-      if: steps.filter.outputs.rust_native == 'true' || github.event_name == 'push' || startsWith(github.ref, 'refs/tags/v')
-      run: python pytron/platforms/pytron_os/build.py
 
     - name: Install Python Dependencies
       run: |

@@ -1,7 +1,9 @@
 use pyo3::prelude::*;
-use windows::Win32::Foundation::{HWND, HANDLE};
-use windows::Win32::System::DataExchange::{OpenClipboard, CloseClipboard, EmptyClipboard, SetClipboardData, GetClipboardData};
-use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GHND};
+use windows::Win32::Foundation::{HANDLE, HWND};
+use windows::Win32::System::DataExchange::{
+    CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData,
+};
+use windows::Win32::System::Memory::{GHND, GlobalAlloc, GlobalLock, GlobalUnlock};
 
 #[pyfunction]
 pub fn set_clipboard_text(py: Python<'_>, text: String) -> PyResult<bool> {
@@ -25,7 +27,7 @@ pub fn set_clipboard_text(py: Python<'_>, text: String) -> PyResult<bool> {
         std::ptr::copy_nonoverlapping(text_u16.as_ptr(), p_mem as *mut u16, text_u16.len());
         let _ = GlobalUnlock(h_mem);
 
-        let res = SetClipboardData(13, HANDLE(h_mem.0 as isize)); // CF_UNICODETEXT = 13
+        let res = SetClipboardData(13, HANDLE(h_mem.0 as isize));
         let _ = CloseClipboard();
         Ok(res.is_ok())
     })
@@ -44,7 +46,9 @@ pub fn get_clipboard_text(py: Python<'_>) -> PyResult<Option<String>> {
             let text = if !p_mem.is_null() {
                 let ptr = p_mem as *const u16;
                 let mut len = 0;
-                while *ptr.add(len) != 0 { len += 1; }
+                while *ptr.add(len) != 0 {
+                    len += 1;
+                }
                 let s = String::from_utf16_lossy(std::slice::from_raw_parts(ptr, len));
                 let _ = GlobalUnlock(h_mem);
                 Some(s)

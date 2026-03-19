@@ -21,9 +21,12 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         from .utils import com_thread_initializer
         import os
 
+        env_engine = os.environ.get("PYTRON_ENGINE")
+        engine_explicit = env_engine is not None
+
         # Engine Selection (PRO FEATURES) - MUST HAPPEN FIRST for Schism protection
-        self.engine = os.environ.get(
-            "PYTRON_ENGINE", "native"  # Default to native if not set
+        self.engine = env_engine or (
+            "chrome" if sys.platform.startswith("linux") else "native"
         )
         os.environ["PYTRON_ENGINE"] = self.engine
 
@@ -82,8 +85,8 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
 
         # Update engine based on config or CLI flags if they override the initial detection
         config_engine = self.config.get("engine")
-        if config_engine and os.environ.get("PYTRON_ENGINE") == "native":
-            # Only override if we weren't explicitly told by CLI to use something else
+        cli_engine_explicit = "--web" in sys.argv or "--engine" in sys.argv
+        if config_engine and not engine_explicit and not cli_engine_explicit:
             self.engine = config_engine
             os.environ["PYTRON_ENGINE"] = self.engine
 
@@ -96,6 +99,13 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
             if arg == "--engine" and i + 1 < len(sys.argv):
                 self.engine = sys.argv[i + 1]
                 os.environ["PYTRON_ENGINE"] = self.engine
+
+        if self.engine == "servo":
+            self.logger.warning(
+                "Servo engine is disabled in this release train. Falling back to Chrome."
+            )
+            self.engine = "chrome"
+            os.environ["PYTRON_ENGINE"] = "chrome"
 
         if self.engine == "chrome":
             self.logger.info("Using Chrome Shell Engine (Mojo IPC)")

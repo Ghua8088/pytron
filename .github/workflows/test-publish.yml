@@ -77,16 +77,12 @@ jobs:
           workspaces: |
             pytron/engines/native
             pytron/pack/secure_loader
-            pytron/platforms/pytron_os
 
       - name: 🛡️ Build Rust Loader
         run: python pytron/pack/secure_loader/build_loader.py || echo "Skipping loader build"
 
       - name: 🦾 Build Native Engine
         run: python pytron/engines/native/build.py
-
-      - name: 🦾 Build OS Platform Hook
-        run: python pytron/platforms/pytron_os/build.py
 
       - name: 🧪 Run Tests
         run: |

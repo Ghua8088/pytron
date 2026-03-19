@@ -42,35 +42,35 @@ def test_set_start_on_boot_dev_mode_returns_false(app):
     assert result is False
 
 
-def test_set_start_on_boot_dev_mode_never_calls_pytron_os(app):
+def test_set_start_on_boot_dev_mode_never_calls_pytron_native(app):
     mock_os = MagicMock()
     with patch("sys.frozen", False, create=True):
-        with patch("pytron.apputils.native.pytron_os", mock_os):
+        with patch("pytron.apputils.native.pytron_native", mock_os):
             app.set_start_on_boot(True)
     mock_os.set_launch_on_boot.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
-# set_start_on_boot — pytron_os (Rust) path
+# set_start_on_boot — pytron_native (Rust) path
 # ---------------------------------------------------------------------------
 
 
-def test_set_start_on_boot_via_pytron_os(app):
+def test_set_start_on_boot_via_pytron_native(app):
     """Rust path succeeds → returns True, correct args forwarded."""
     mock_os = MagicMock()
     mock_os.set_launch_on_boot.return_value = True
     with patch("sys.frozen", True, create=True):
-        with patch("pytron.apputils.native.pytron_os", mock_os):
+        with patch("pytron.apputils.native.pytron_native", mock_os):
             result = app.set_start_on_boot(True)
     assert result is True
     mock_os.set_launch_on_boot.assert_called_once_with("Test_App", sys.executable, True)
 
 
-def test_set_start_on_boot_pytron_os_enable_false(app):
+def test_set_start_on_boot_pytron_native_enable_false(app):
     mock_os = MagicMock()
     mock_os.set_launch_on_boot.return_value = True
     with patch("sys.frozen", True, create=True):
-        with patch("pytron.apputils.native.pytron_os", mock_os):
+        with patch("pytron.apputils.native.pytron_native", mock_os):
             app.set_start_on_boot(False)
     assert mock_os.set_launch_on_boot.call_args[0][2] is False
 
@@ -81,20 +81,20 @@ def test_set_start_on_boot_safe_name_sanitisation(app):
     mock_os = MagicMock()
     mock_os.set_launch_on_boot.return_value = True
     with patch("sys.frozen", True, create=True):
-        with patch("pytron.apputils.native.pytron_os", mock_os):
+        with patch("pytron.apputils.native.pytron_native", mock_os):
             app.set_start_on_boot(True)
     assert mock_os.set_launch_on_boot.call_args[0][0] == "My_Awesome_App_"
 
 
 # ---------------------------------------------------------------------------
-# set_start_on_boot — platform fallback (pytron_os absent / returns False)
+# set_start_on_boot — platform fallback (pytron_native absent / returns False)
 # ---------------------------------------------------------------------------
 
 
-def test_set_start_on_boot_windows_fallback_when_pytron_os_none(app):
-    """pytron_os=None → Windows impl is called."""
+def test_set_start_on_boot_windows_fallback_when_pytron_native_none(app):
+    """pytron_native=None → Windows impl is called."""
     with patch("sys.frozen", True, create=True):
-        with patch("pytron.apputils.native.pytron_os", None):
+        with patch("pytron.apputils.native.pytron_native", None):
             with patch("sys.platform", "win32"):
                 with patch("pytron.platforms.windows.WindowsImplementation") as MockWin:
                     MockWin.return_value.set_launch_on_boot.return_value = True
@@ -106,7 +106,7 @@ def test_set_start_on_boot_windows_fallback_when_pytron_os_none(app):
 def test_set_start_on_boot_windows_fallback_args(app):
     """Windows impl receives sanitised name, exe path, and enable flag."""
     with patch("sys.frozen", True, create=True):
-        with patch("pytron.apputils.native.pytron_os", None):
+        with patch("pytron.apputils.native.pytron_native", None):
             with patch("sys.platform", "win32"):
                 with patch("pytron.platforms.windows.WindowsImplementation") as MockWin:
                     MockWin.return_value.set_launch_on_boot.return_value = True
@@ -116,12 +116,12 @@ def test_set_start_on_boot_windows_fallback_args(app):
     assert args[2] is False
 
 
-def test_set_start_on_boot_falls_through_when_pytron_os_returns_false(app):
-    """pytron_os returns False → platform fallback is tried."""
+def test_set_start_on_boot_falls_through_when_pytron_native_returns_false(app):
+    """pytron_native returns False → platform fallback is tried."""
     mock_os = MagicMock()
     mock_os.set_launch_on_boot.return_value = False
     with patch("sys.frozen", True, create=True):
-        with patch("pytron.apputils.native.pytron_os", mock_os):
+        with patch("pytron.apputils.native.pytron_native", mock_os):
             with patch("sys.platform", "win32"):
                 with patch("pytron.platforms.windows.WindowsImplementation") as MockWin:
                     MockWin.return_value.set_launch_on_boot.return_value = True
@@ -130,13 +130,13 @@ def test_set_start_on_boot_falls_through_when_pytron_os_returns_false(app):
     assert result is True
 
 
-def test_set_start_on_boot_falls_through_when_pytron_os_raises(app):
-    """pytron_os raises → silently falls through, no exception propagated."""
+def test_set_start_on_boot_falls_through_when_pytron_native_raises(app):
+    """pytron_native raises → silently falls through, no exception propagated."""
     mock_os = MagicMock()
     # It would be RuntimeError in real use
     mock_os.set_launch_on_boot.side_effect = RuntimeError("no pyd")
     with patch("sys.frozen", True, create=True):
-        with patch("pytron.apputils.native.pytron_os", mock_os):
+        with patch("pytron.apputils.native.pytron_native", mock_os):
             with patch("sys.platform", "win32"):
                 with patch("pytron.platforms.windows.WindowsImplementation") as MockWin:
                     MockWin.return_value.set_launch_on_boot.return_value = True
@@ -146,7 +146,7 @@ def test_set_start_on_boot_falls_through_when_pytron_os_raises(app):
 
 def test_set_start_on_boot_linux_fallback(app):
     with patch("sys.frozen", True, create=True):
-        with patch("pytron.apputils.native.pytron_os", None):
+        with patch("pytron.apputils.native.pytron_native", None):
             with patch("sys.platform", "linux"):
                 with patch("pytron.platforms.linux.LinuxImplementation") as MockLin:
                     MockLin.return_value.set_launch_on_boot.return_value = True
@@ -157,7 +157,7 @@ def test_set_start_on_boot_linux_fallback(app):
 
 def test_set_start_on_boot_darwin_fallback(app):
     with patch("sys.frozen", True, create=True):
-        with patch("pytron.apputils.native.pytron_os", None):
+        with patch("pytron.apputils.native.pytron_native", None):
             with patch("sys.platform", "darwin"):
                 with patch(
                     "pytron.platforms.darwin.DarwinImplementation"
@@ -170,7 +170,7 @@ def test_set_start_on_boot_darwin_fallback(app):
 
 def test_set_start_on_boot_unknown_platform_returns_false(app):
     with patch("sys.frozen", True, create=True):
-        with patch("pytron.apputils.native.pytron_os", None):
+        with patch("pytron.apputils.native.pytron_native", None):
             with patch("sys.platform", "freebsd"):
                 result = app.set_start_on_boot(True)
     assert result is False
@@ -181,7 +181,7 @@ def test_set_start_on_boot_no_window_delegation(app):
     mock_window = MagicMock()
     app.windows.append(mock_window)
     with patch("sys.frozen", True, create=True):
-        with patch("pytron.apputils.native.pytron_os", None):
+        with patch("pytron.apputils.native.pytron_native", None):
             with patch("sys.platform", "win32"):
                 with patch("pytron.platforms.windows.WindowsImplementation"):
                     app.set_start_on_boot(True)

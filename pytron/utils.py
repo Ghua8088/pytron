@@ -206,6 +206,13 @@ def resolve_native_module():
         return None
 
 
+def resolve_native_bridge():
+    """
+    Resolve the shared native bridge used for platform hooks.
+    """
+    return resolve_native_module()
+
+
 def _log_shield(msg):
     # Internal logging helper
     try:
@@ -233,97 +240,16 @@ _OS_CACHE = {"module": None, "checked": False}
 
 def resolve_os_module():
     """
-    Safe resolver for pytron_os.so/.pyd.
-    On Linux, we MUST skip loading this if using Native Engine to avoid GLib Schism.
+    Deprecated compatibility resolver.
+    pytron_os has been retired in favor of pytron_native.
     """
-    if _OS_CACHE["checked"]:
-        return _OS_CACHE["module"]
-
-    res = _resolve_os_module_internal()
-    _OS_CACHE["module"] = res
     _OS_CACHE["checked"] = True
-    return res
+    _OS_CACHE["module"] = None
+    return None
 
 
 def _resolve_os_module_internal():
-    # 1. Linux Schism Guard (CRITICAL)
-    # We MUST NOT load the OS module on Linux if using the Native Engine.
-    # It initializes a competing GLib context that causes a process-wide crash.
-    if sys.platform.startswith("linux"):
-        # If we are running 'pytron run' or 'pytron package', we assume native context
-        # unless explicitly told otherwise.
-        engine = os.environ.get("PYTRON_ENGINE", "native")
-        if engine == "native":
-            if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
-                print(
-                    f"[Pytron Debug] resolve_os_module: SKIPPING load on Linux (Engine: {engine}) to prevent Schism."
-                )
-            return None
-
-        if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
-            print(
-                f"[Pytron Debug] resolve_os_module: PROCEEDING on Linux (Engine: {engine})."
-            )
-
-    # 1b. macOS in-process ownership guard.
-    # AppKit/Objective-C calls are process-global and must have a single owner for
-    # in-process engines. Out-of-process engines can still safely use pytron_os.
-    if sys.platform == "darwin":
-        engine = os.environ.get("PYTRON_ENGINE", "native")
-        if engine == "native":
-            if os.environ.get("PYTRON_DEBUG_SCHISM") == "1":
-                print(
-                    f"[Pytron Debug] resolve_os_module: SKIPPING load on macOS (Engine: {engine}) to preserve single AppKit owner."
-                )
-            return None
-
-    # 2. Search for existing module
-    if "pytron.dependencies.pytron_os" in sys.modules:
-        return sys.modules["pytron.dependencies.pytron_os"]
-
-    # 3. Discovery
-    img_ext = ".pyd" if sys.platform == "win32" else ".so"
-    search_paths = []
-
-    if getattr(sys, "frozen", False):
-        if hasattr(sys, "_MEIPASS"):
-            search_paths.append(os.path.join(sys._MEIPASS, "pytron", "dependencies"))
-        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-        search_paths.append(
-            os.path.join(exe_dir, "_internal", "pytron", "dependencies")
-        )
-        search_paths.append(os.path.join(exe_dir, "dependencies"))
-    else:
-        # Dev path
-        base_utils = os.path.dirname(os.path.abspath(__file__))
-        search_paths.append(os.path.join(base_utils, "dependencies"))
-
-    for path in search_paths:
-        bin_path = os.path.join(path, "pytron_os" + img_ext)
-        if os.path.exists(bin_path):
-            try:
-                # Add DLL directory for Windows dependencies
-                if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
-                    os.add_dll_directory(path)
-
-                spec = importlib.util.spec_from_file_location(
-                    "pytron.dependencies.pytron_os", bin_path
-                )
-                if spec and spec.loader:
-                    mod = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(mod)
-                    sys.modules["pytron.dependencies.pytron_os"] = mod
-                    return mod
-            except Exception as e:
-                _log_shield(f"Failed to load pytron_os from {bin_path}: {e}")
-
-    # Fallback to direct import if possible
-    try:
-        from .dependencies import pytron_os
-
-        return pytron_os
-    except:
-        return None
+    return None
 
 
 def get_native_error_details():

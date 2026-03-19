@@ -2,7 +2,7 @@ import os
 import shlex
 import subprocess
 from .interface import PlatformInterface
-from ..utils import resolve_os_module
+from ..utils import resolve_native_bridge
 
 
 class DarwinImplementation(PlatformInterface):
@@ -10,14 +10,14 @@ class DarwinImplementation(PlatformInterface):
         self.is_native = os.environ.get("PYTRON_ENGINE") == "native"
         self.runtime_owner = "engine" if self.is_native else "platform"
         self.legacy_backend = "applescript"
-        self._pytron_os = None if self.is_native else resolve_os_module()
+        self._native_bridge = None if self.is_native else resolve_native_bridge()
 
     def _get_native(self, w):
         return getattr(w, "native", None)
 
     def _call_os(self, method_name, *args):
-        if self._pytron_os and hasattr(self._pytron_os, method_name):
-            return getattr(self._pytron_os, method_name)(*args)
+        if self._native_bridge and hasattr(self._native_bridge, method_name):
+            return getattr(self._native_bridge, method_name)(*args)
         return None
 
     def _run_osascript(self, script):
@@ -193,7 +193,7 @@ class DarwinImplementation(PlatformInterface):
 
     def set_app_id(self, app_id):
         # Runtime bundle id is immutable on macOS; only subprocess engines should
-        # attempt pytron_os hooks here.
+        # attempt native bridge hooks here.
         self._call_os("set_app_id", app_id)
 
     def set_launch_on_boot(self, app_name, exe_path, enable=True):

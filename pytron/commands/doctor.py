@@ -233,15 +233,6 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 f"  [error]✗[/error] Native Bridge: MISSING ({', '.join(missing)}) from {pkg_root / 'dependencies'}"
             )
 
-        # Check for pytron_os (Binary & Package)
-        pytron_os_pyd = pkg_root / "dependencies" / "pytron_os.pyd"
-        if pytron_os_pyd.exists():
-            console.print(f"  [success]✓[/success] pytron_os (Binary): Found")
-        else:
-            console.print(
-                f"  [error]✗[/error] pytron_os (Binary): Missing from dependencies/"
-            )
-
         # Android Bundle Check
         android_deps = pkg_root / "dependencies" / "android"
         if android_deps.exists() and any(android_deps.iterdir()):

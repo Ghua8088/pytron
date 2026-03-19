@@ -1,7 +1,7 @@
 """Tests for ShortcutManager (pytron.shortcuts).
 
-All ctypes-path tests patch `pytron.shortcuts.pytron_os` to None so the
-Rust path (which calls the real blocking pytron_os.get_message()) is never
+All ctypes-path tests patch `pytron.shortcuts.native_bridge` to None so the
+Rust path (which calls the real blocking native bridge `get_message()`) is never
 taken.  Win32 message structs are written via ctypes.memmove so that the
 loop sees correct msg.message / msg.wParam values.
 """
@@ -180,7 +180,7 @@ def test_register_unsupported_platform_logs_warning(manager):
 
 
 # ---------------------------------------------------------------------------
-# _msg_loop — ctypes path (patching pytron_os=None forces it)
+# _msg_loop — ctypes path (patching native_bridge=None forces it)
 # ---------------------------------------------------------------------------
 
 
@@ -201,7 +201,7 @@ def test_msg_loop_registers_hotkey_on_wm_app_register(manager):
             return 1
         return 0  # causes loop to exit
 
-    with patch("pytron.shortcuts.pytron_os", None), patch(
+    with patch("pytron.shortcuts.native_bridge", None), patch(
         "ctypes.windll.user32.GetMessageW", side_effect=_get_msg
     ), patch(
         "ctypes.windll.user32.RegisterHotKey", return_value=True
@@ -250,7 +250,7 @@ def test_msg_loop_fires_callback_on_wm_hotkey(manager):
 
     cb = MagicMock()
 
-    with patch("pytron.shortcuts.pytron_os", None), patch(
+    with patch("pytron.shortcuts.native_bridge", None), patch(
         "ctypes.windll.user32.GetMessageW", side_effect=_get_msg
     ), patch("ctypes.windll.user32.PeekMessageW"), patch(
         "ctypes.windll.user32.TranslateMessage"
@@ -286,7 +286,7 @@ def test_msg_loop_skips_already_registered(manager):
             return 1
         return 0
 
-    with patch("pytron.shortcuts.pytron_os", None), patch(
+    with patch("pytron.shortcuts.native_bridge", None), patch(
         "ctypes.windll.user32.GetMessageW", side_effect=_get_msg
     ), patch("ctypes.windll.user32.RegisterHotKey") as mock_reg, patch(
         "ctypes.windll.user32.PeekMessageW"
@@ -315,7 +315,7 @@ def test_msg_loop_skips_already_registered(manager):
 @pytest.mark.skipif(sys.platform != "win32", reason="ctypes Win32 only")
 def test_msg_loop_sets_thread_id_and_signals_ready(manager):
     """_msg_loop records thread ID and sets _queue_ready for register() to unblock."""
-    with patch("pytron.shortcuts.pytron_os", None), patch(
+    with patch("pytron.shortcuts.native_bridge", None), patch(
         "ctypes.windll.user32.GetMessageW", return_value=0
     ), patch("ctypes.windll.user32.PeekMessageW"), patch(
         "ctypes.windll.user32.TranslateMessage"
@@ -333,12 +333,12 @@ def test_msg_loop_sets_thread_id_and_signals_ready(manager):
 
 
 # ---------------------------------------------------------------------------
-# _msg_loop — Rust path (pytron_os present)
+# _msg_loop — Rust path (native_bridge present)
 # ---------------------------------------------------------------------------
 
 
 def test_msg_loop_rust_path_registers_hotkey():
-    """With pytron_os available, the loop uses pytron_os.get_message / register_hotkey."""
+    """With native_bridge available, the loop uses get_message / register_hotkey."""
     mock_os = MagicMock()
     mock_os.get_current_thread_id.return_value = 9999
     mock_os.init_message_queue.return_value = None
@@ -366,7 +366,7 @@ def test_msg_loop_rust_path_registers_hotkey():
     }
     mgr._running = True
 
-    with patch("pytron.shortcuts.pytron_os", mock_os):
+    with patch("pytron.shortcuts.native_bridge", mock_os):
         mgr._msg_loop()
 
     mock_os.register_hotkey.assert_called_with(0, 1, MOD_CONTROL, 0x41)
@@ -394,7 +394,7 @@ def test_msg_loop_rust_path_fires_callback():
     mgr.shortcuts[1] = {"callback": cb}
     mgr._running = True
 
-    with patch("pytron.shortcuts.pytron_os", mock_os), patch(
+    with patch("pytron.shortcuts.native_bridge", mock_os), patch(
         "pytron.shortcuts.threading.Thread"
     ) as mock_thread:
         mgr._msg_loop()
@@ -411,7 +411,7 @@ def test_msg_loop_rust_path_fires_callback():
 @pytest.mark.skipif(sys.platform != "win32", reason="PostThreadMessageW only on win32")
 def test_stop_posts_wm_quit_ctypes():
     """stop() sends WM_QUIT (0x0012) to the message loop thread."""
-    with patch("pytron.shortcuts.pytron_os", None), patch(
+    with patch("pytron.shortcuts.native_bridge", None), patch(
         "ctypes.windll.user32.PostThreadMessageW"
     ) as mock_post:
         mgr = ShortcutManager()
@@ -421,10 +421,12 @@ def test_stop_posts_wm_quit_ctypes():
     mock_post.assert_called_with(4321, 0x0012, 0, 0)
 
 
-def test_stop_uses_pytron_os_when_available():
+def test_stop_uses_pytron_native_when_available():
     mock_os = MagicMock()
     mock_os.post_thread_message.return_value = True
-    with patch("pytron.shortcuts.pytron_os", mock_os), patch("sys.platform", "win32"):
+    with patch("pytron.shortcuts.native_bridge", mock_os), patch(
+        "sys.platform", "win32"
+    ):
         mgr = ShortcutManager()
         mgr._running = True
         mgr._thread_id = 4321

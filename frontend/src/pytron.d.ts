@@ -56,7 +56,7 @@ declare module 'pytron-client' {
     /**
      * Gets a value from the persistent store.
      */
-    store_get(key: any, defaultValue: any): Promise<any>;
+    store_get(key: any, default: any): Promise<any>;
     /**
      * Removes a key from the persistent store.
      */
@@ -70,6 +70,7 @@ declare module 'pytron-client' {
      * This enables simple cross-window communication.
      */
     app_publish(event_name: string, data: any): Promise<any>;
+    app_ping(): Promise<any>;
     /**
      * Checks for application updates.
      * Returns update info if available, else None.
@@ -98,15 +99,6 @@ declare module 'pytron-client' {
     set_size(w: any, h: any): Promise<any>;
     center(): Promise<any>;
     system_notification(title: any, message: any, icon: any): Promise<any>;
-    toast(config: {
-      title: string;
-      body?: string;
-      icon?: string;
-      image?: string;
-      inline_image?: string;
-      actions?: { label: string; action: string }[];
-      circle_icon?: boolean;
-    }): Promise<any>;
     set_bounds(x: any, y: any, width: any, height: any): Promise<any>;
     trigger_shortcut(combo: string): Promise<boolean>;
     get_registered_shortcuts(): Promise<string[]>;

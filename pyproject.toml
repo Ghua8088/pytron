@@ -8,11 +8,12 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["pytron*"]
+exclude = ["pytron.engines.servo", "pytron.engines.servo.*"]
 namespaces = false
 
 [project]
 name = "pytron-kit"
-version = "0.3.14.post28"
+version = "0.3.14.post29"
 description = "An Electron-like library for Python to build Cross Platform Apps"
 readme = "README.md"
 requires-python = ">=3.7"
@@ -97,4 +98,27 @@ pytron = [
     "platforms/android/shell/settings.gradle",
     "platforms/android/shell/app/src/main/jnilibs/arm64-v8a/*",
     "pack/secure_loader/bin/*"
+]
+
+[tool.setuptools.exclude-package-data]
+pytron = [
+    "dependencies/pytron_servo.*",
+    "engines/servo/**/*",
+    "engines/servo/*",
+    "engines/native/target/**/*",
+    "engines/native/target/*",
+    "platforms/android/shell/build/**/*",
+    "platforms/android/shell/build/*",
+    "platforms/android/shell/.gradle/**/*",
+    "platforms/android/shell/.gradle/*",
+    "platforms/android/shell/app/build/**/*",
+    "platforms/android/shell/app/build/*",
+    "platforms/android/shell/app/.cxx/**/*",
+    "platforms/android/shell/app/.cxx/*",
+    "engines/**/__pycache__/*",
+    "**/*.pdb",
+    "**/*.rlib",
+    "**/*.rmeta",
+    "**/*.d",
+    "**/*.obj",
 ]

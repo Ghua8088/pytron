@@ -1,10 +1,12 @@
 import sys
 import os
+from ..utils import resolve_native_bridge
 from typing import Optional
 
-from pytron.utils import resolve_os_module
-
-pytron_os = resolve_os_module()
+# Legacy compatibility symbol retained so older tests and patch points
+# can still intercept the bridge during migration.
+_AUTO_NATIVE_BRIDGE = object()
+pytron_native = _AUTO_NATIVE_BRIDGE
 
 
 class NativeMixin:
@@ -24,16 +26,23 @@ class NativeMixin:
             self.logger.info("Skipping Start-on-Boot registration in Development Mode.")
             return False
 
-        # Attempt native Rust implementation first for performance
-        try:
-            if pytron_os is not None:
-                exe_path = sys.executable
-                if pytron_os.set_launch_on_boot(safe_name, exe_path, enable):
-                    return True
-        except Exception:
-            pass
+        native_bridge = (
+            resolve_native_bridge()
+            if pytron_native is _AUTO_NATIVE_BRIDGE
+            else pytron_native
+        )
+        if native_bridge:
+            try:
+                result = native_bridge.set_launch_on_boot(
+                    safe_name, sys.executable, enable
+                )
+                if result:
+                    return result
+            except Exception:
+                pass
 
-        # Fallback to platform-specific Python implementations
+        # Platform-specific implementations are the authoritative path during the
+        # pytron_native consolidation.
         try:
             sys_plat = sys.platform
             exe_path = f'"{sys.executable}"'

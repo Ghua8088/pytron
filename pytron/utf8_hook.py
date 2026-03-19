@@ -40,12 +40,13 @@ def _set_utf8_mode():
     # On Windows try to set the console code page to UTF-8 (65001).
     if sys.platform.startswith("win"):
         _set_ok = False
-        # Try Rust extension first (no ctypes overhead)
+        # Try the unified native bridge first.
         try:
-            from pytron.dependencies import pytron_os as _pytron_os
+            from pytron.utils import resolve_native_bridge
 
-            if _pytron_os:
-                _set_ok = _pytron_os.set_console_utf8()
+            bridge = resolve_native_bridge()
+            if bridge:
+                _set_ok = bridge.set_console_utf8()
         except Exception:
             pass
 

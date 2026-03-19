@@ -15,12 +15,28 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 urlencoding = "2"
 mime_guess = "2.0"
-# image removed — load_icon deleted with tray-icon crate
 url = "2.5"
-# rfd, tray-icon, notify-rust removed — OS-level concerns owned by pytron_os
 
-
-# Windows-specific dependencies for native message box if needed
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.52", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_UI_Shell", "Win32_System_Com", "Win32_UI_Controls", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_IO"] }
-
+image = "0.25"
+tray-icon = "0.19"
+windows = { version = "0.52", features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+    "Win32_System_Com",
+    "Win32_UI_Controls",
+    "Win32_System_Pipes",
+    "Win32_Storage_FileSystem",
+    "Win32_Security",
+    "Win32_System_IO",
+    "Win32_System_LibraryLoader",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Registry",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_Graphics_Dwm",
+    "Win32_System_Console"
+] }

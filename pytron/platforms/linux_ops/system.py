@@ -138,11 +138,11 @@ def set_launch_on_boot(app_name, exe_path, enable=True):
     import os
 
     try:
-        from pytron.utils import resolve_os_module
+        from pytron.utils import resolve_native_bridge
 
-        pytron_os = resolve_os_module()
-        if pytron_os:
-            return pytron_os.set_launch_on_boot(app_name, exe_path, enable)
+        native_bridge = resolve_native_bridge()
+        if native_bridge:
+            return native_bridge.set_launch_on_boot(app_name, exe_path, enable)
     except Exception:
         pass
 
@@ -361,18 +361,18 @@ _INTERNAL_CLIPBOARD = None
 def set_clipboard_text(text):
     """
     Sets the system clipboard text.
-    Priority: 1. pytron_os (Rust), 2. xclip (CLI), 3. xsel (CLI), 4. Internal Cache
+    Priority: 1. pytron_native (Rust), 2. xclip (CLI), 3. xsel (CLI), 4. Internal Cache
     """
     global _INTERNAL_CLIPBOARD
     _INTERNAL_CLIPBOARD = text
 
     # 1. Try Native Rust
     try:
-        from pytron.utils import resolve_os_module
+        from pytron.utils import resolve_native_bridge
 
-        pytron_os = resolve_os_module()
-        if pytron_os:
-            if pytron_os.set_clipboard_text(text):
+        native_bridge = resolve_native_bridge()
+        if native_bridge:
+            if native_bridge.set_clipboard_text(text):
                 return True
     except Exception:
         pass
@@ -413,15 +413,15 @@ def set_clipboard_text(text):
 def get_clipboard_text():
     """
     Gets the system clipboard text.
-    Priority: 1. pytron_os (Rust), 2. xclip (CLI), 3. xsel (CLI), 4. Internal Cache
+    Priority: 1. pytron_native (Rust), 2. xclip (CLI), 3. xsel (CLI), 4. Internal Cache
     """
     # 1. Try Native Rust
     try:
-        from pytron.utils import resolve_os_module
+        from pytron.utils import resolve_native_bridge
 
-        pytron_os = resolve_os_module()
-        if pytron_os:
-            res = pytron_os.get_clipboard_text()
+        native_bridge = resolve_native_bridge()
+        if native_bridge:
+            res = native_bridge.get_clipboard_text()
             if res is not None:
                 return res
     except Exception:
