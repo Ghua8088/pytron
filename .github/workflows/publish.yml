@@ -93,6 +93,15 @@ jobs:
       - name: 📦 Build Wheel
         run: python -m build --wheel
 
+      - name: 🏷️ Retag Linux Wheel (Experimental)
+        if: startsWith(matrix.os, 'ubuntu')
+        shell: bash
+        run: |
+          for whl in dist/*.whl; do
+            new_whl=$(echo "$whl" | sed 's/linux_x86_64/manylinux_2_35_x86_64/g')
+            mv "$whl" "$new_whl"
+          done
+
       # Linux note:
       # auditwheel is NOT safe for this project right now. It vendors GTK/WebKit/
       # gdk-pixbuf/gstreamer into pytron_kit.libs, but runtime loader modules
@@ -168,7 +177,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: 📦 Prepare PyPI Upload Set
+        shell: bash
+        run: |
+          mkdir -p pypi-dist
+          cp dist/*.whl pypi-dist/ 2>/dev/null || true
+          cp dist/*.tar.gz pypi-dist/ 2>/dev/null || true
+          echo "PyPI upload set:"
+          ls -1 pypi-dist
+
       - name: 🐍 Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          packages-dir: pypi-dist
           skip-existing: true

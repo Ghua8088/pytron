@@ -93,6 +93,15 @@ jobs:
       - name: 📦 Build Wheel
         run: python -m build --wheel
 
+      - name: 🏷️ Retag Linux Wheel (Experimental)
+        if: startsWith(matrix.os, 'ubuntu')
+        shell: bash
+        run: |
+          for whl in dist/*.whl; do
+            new_whl=$(echo "$whl" | sed 's/linux_x86_64/manylinux_2_35_x86_64/g')
+            mv "$whl" "$new_whl"
+          done
+
       # Linux note:
       # Do not run auditwheel here. Repairing the wheel vendors GTK/WebKit and
       # related GLib stack libraries into pytron_kit.libs, which then mix with
@@ -140,10 +149,20 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: 📦 Prepare TestPyPI Upload Set
+        shell: bash
+        run: |
+          mkdir -p pypi-dist
+          cp dist/*.whl pypi-dist/ 2>/dev/null || true
+          cp dist/*.tar.gz pypi-dist/ 2>/dev/null || true
+          echo "TestPyPI upload set:"
+          ls -1 pypi-dist
+
       - name: 🐍 Publish to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+          packages-dir: pypi-dist
           skip-existing: true
           # Attestations are a production PyPI security feature — TestPyPI doesn't
           # require them and re-uploading the same attestation causes a generic
