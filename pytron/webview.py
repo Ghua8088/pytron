@@ -152,9 +152,18 @@ class Webview:
                 else None
             )
 
+            # Linux WebKit has proven fragile when we bootstrap with about:blank
+            # and then issue a later custom-protocol navigation. The callbacks map
+            # is already populated synchronously by native.bind(), and the injected
+            # proxy can route arbitrary method names, so we can safely start on the
+            # real URL there and avoid the blank-page transition hazard.
+            initial_url = (
+                final_url if sys.platform.startswith("linux") else "about:blank"
+            )
+
             self.native = pytron_native.NativeWebview(
                 debug,
-                "about:blank",  # Start empty
+                initial_url,
                 root_path,
                 bool(resizable),
                 bool(frameless),
