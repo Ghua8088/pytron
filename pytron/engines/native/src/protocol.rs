@@ -68,6 +68,33 @@ fn inject_bridge(data: Vec<u8>, callbacks: Arc<Mutex<HashMap<String, PyObject>>>
     data
 }
 
+fn common_build_roots() -> [&'static str; 4] {
+    ["frontend/dist", "frontend/build", "dist", "build"]
+}
+
+fn resolve_disk_path(protocol_root: &PathBuf, decoded_path: &str) -> Option<PathBuf> {
+    let decoded_rel = PathBuf::from(decoded_path);
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    candidates.push(protocol_root.join(&decoded_rel));
+
+    for prefix in common_build_roots() {
+        let prefixed = PathBuf::from(prefix).join(&decoded_rel);
+        candidates.push(protocol_root.join(prefixed));
+    }
+
+    for mut candidate in candidates {
+        if candidate.is_dir() {
+            candidate = candidate.join("index.html");
+        }
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
 pub fn handle_pytron_protocol(
     request: Request<Vec<u8>>,
     protocol_root: PathBuf,
@@ -155,13 +182,9 @@ pub fn handle_pytron_protocol(
     }
 
     // --- DISK FALLBACK ---
-    let mut final_path = protocol_root.join(decoded.as_ref());
-    if final_path.is_dir() {
-        final_path = final_path.join("index.html");
-    }
-
-    match std::fs::read(&final_path) {
-        Ok(data) => {
+    match resolve_disk_path(&protocol_root, decoded.as_ref())
+        .and_then(|final_path| std::fs::read(&final_path).ok().map(|data| (final_path, data))) {
+        Some((final_path, data)) => {
             let mime = mime_guess::from_path(&final_path).first_or_octet_stream();
             let mime_str = mime.to_string();
             let mut resp_data = data;
@@ -177,7 +200,7 @@ pub fn handle_pytron_protocol(
                 .body(Cow::from(resp_data))
                 .unwrap()
         }
-        Err(_) => {
+        None => {
             Response::builder().status(StatusCode::NOT_FOUND).body(Cow::from(Vec::new())).unwrap()
         }
     }
@@ -233,5 +256,44 @@ mod tests {
         let result_str = String::from_utf8(result).unwrap();
         assert!(result_str.contains("window.pytron_is_native = true;"));
         assert!(result_str.contains("Just some text"));
+    }
+
+    #[test]
+    fn test_resolve_disk_path_prefers_direct_match() {
+        let temp = std::env::temp_dir().join(format!(
+            "pytron-native-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&temp).unwrap();
+        let direct = temp.join("index.html");
+        std::fs::write(&direct, b"ok").unwrap();
+
+        let resolved = resolve_disk_path(&temp, "index.html").unwrap();
+        assert_eq!(resolved, direct);
+
+        let _ = std::fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_resolve_disk_path_falls_back_to_frontend_dist() {
+        let temp = std::env::temp_dir().join(format!(
+            "pytron-native-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let asset_dir = temp.join("frontend").join("dist").join("assets");
+        std::fs::create_dir_all(&asset_dir).unwrap();
+        let asset = asset_dir.join("app.js");
+        std::fs::write(&asset, b"console.log('ok')").unwrap();
+
+        let resolved = resolve_disk_path(&temp, "assets/app.js").unwrap();
+        assert_eq!(resolved, asset);
+
+        let _ = std::fs::remove_dir_all(&temp);
     }
 }
