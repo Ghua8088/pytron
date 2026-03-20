@@ -169,6 +169,12 @@ class WindowMixin:
                 # Also notify the main window
                 main_window.emit("pytron:deep-link", {"url": url})
 
+            if self.config.pop("_pending_open_devtools", False):
+                try:
+                    main_window.open_devtools()
+                except Exception as e:
+                    self.logger.warning(f"Failed to open queued devtools: {e}")
+
             main_window.start()
 
         self.is_running = False

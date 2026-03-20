@@ -72,6 +72,28 @@ fn common_build_roots() -> [&'static str; 4] {
     ["frontend/dist", "frontend/build", "dist", "build"]
 }
 
+fn normalize_request_path(full_uri: &str, uri_path: &str) -> String {
+    let clean_path = if let Some(pos) = full_uri.find("/app/") {
+        &full_uri[pos + 5..]
+    } else if let Some(pos) = full_uri.find("app/") {
+        // Fallback for parsers that omit the leading slash.
+        &full_uri[pos + 4..]
+    } else {
+        uri_path.trim_start_matches('/')
+    };
+
+    // Remove query strings/fragments if they leaked into the extracted path.
+    let clean_path = clean_path.split('?').next().unwrap_or(clean_path);
+    let clean_path = clean_path.split('#').next().unwrap_or(clean_path);
+
+    // IMPORTANT: /app and /app/ are app-root URLs and must resolve to index.html.
+    if clean_path.is_empty() || clean_path == "app" {
+        "index.html".to_string()
+    } else {
+        clean_path.to_string()
+    }
+}
+
 fn resolve_disk_path(protocol_root: &PathBuf, decoded_path: &str) -> Option<PathBuf> {
     let decoded_rel = PathBuf::from(decoded_path);
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -112,32 +134,18 @@ pub fn handle_pytron_protocol(
             .body(Cow::from(Vec::new())).unwrap();
     }
 
-    // 2. Extract the path correctly
-    // We look for "app/" or "/app/" in the URI to find where our virtual files start.
+    // 2. Extract and normalize path
     let full_uri = uri.to_string();
-    
-    let clean_path = if let Some(pos) = full_uri.find("/app/") {
-        &full_uri[pos + 5..]
-    } else if let Some(pos) = full_uri.find("app/") {
-        // Fallback for cases where it might not have leading slash in some parsers
-        &full_uri[pos + 4..]
-    } else {
-        // If app/ not found, fallback to just the path part
-        uri.path().trim_start_matches('/')
-    };
-    
-    // Remove query strings or fragments if they leaked into clean_path
-    let clean_path = clean_path.split('?').next().unwrap_or(clean_path);
-    let clean_path = clean_path.split('#').next().unwrap_or(clean_path);
+    let clean_path = normalize_request_path(&full_uri, uri.path());
 
-    if clean_path == "about:blank" || clean_path.is_empty() {
+    if clean_path == "about:blank" {
          return Response::builder()
             .status(StatusCode::OK)
             .body(Cow::from(Vec::new()))
             .unwrap();
     }
 
-    let decoded = urlencoding::decode(clean_path).unwrap_or(Cow::Borrowed(clean_path));
+    let decoded = urlencoding::decode(&clean_path).unwrap_or(Cow::Borrowed(clean_path.as_str()));
     
     // SECURITY: Path Traversal Mitigation
     // Reject paths with '..' or absolute roots to prevent escaping protocol_root
@@ -201,7 +209,17 @@ pub fn handle_pytron_protocol(
                 .unwrap()
         }
         None => {
-            Response::builder().status(StatusCode::NOT_FOUND).body(Cow::from(Vec::new())).unwrap()
+            let html = format!(
+                "<!doctype html><html><head><meta charset=\"utf-8\"><title>Pytron Asset Not Found</title></head><body style=\"font-family:sans-serif;padding:16px\"><h2>Pytron: Asset Not Found</h2><p>Requested path: <code>{}</code></p><p>Protocol root: <code>{}</code></p><p>This usually means your entry file is missing (expected <code>index.html</code>) or the app root is incorrect.</p></body></html>",
+                decoded.as_ref(),
+                protocol_root.display()
+            );
+
+            Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+                .body(Cow::from(html.into_bytes()))
+                .unwrap()
         }
     }
 }
@@ -295,5 +313,17 @@ mod tests {
         assert_eq!(resolved, asset);
 
         let _ = std::fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_normalize_request_path_maps_app_root_to_index() {
+        let p1 = normalize_request_path("pytron://localhost/app/", "/app/");
+        assert_eq!(p1, "index.html");
+
+        let p2 = normalize_request_path("pytron://localhost/app", "/app");
+        assert_eq!(p2, "index.html");
+
+        let p3 = normalize_request_path("pytron://localhost/app/index.html?x=1#ok", "/app/index.html");
+        assert_eq!(p3, "index.html");
     }
 }

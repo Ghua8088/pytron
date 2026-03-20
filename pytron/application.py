@@ -478,12 +478,23 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         Opens developer tools for the primary window when supported.
         """
         if self.windows:
+            window = self.windows[0]
             try:
-                return bool(self.windows[0].open_devtools())
+                if hasattr(window, "is_alive") and not window.is_alive():
+                    self.config["_pending_open_devtools"] = True
+                    self.logger.info(
+                        "Queued devtools open until the primary window event loop starts."
+                    )
+                    return True
+
+                return bool(window.open_devtools())
             except Exception as e:
                 self.logger.warning(f"Failed to open devtools: {e}")
                 return False
-        return False
+
+        self.config["_pending_open_devtools"] = True
+        self.logger.info("Queued devtools open until the primary window exists.")
+        return True
 
     def load_plugins(self, plugins_dir: str):
         """

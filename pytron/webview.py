@@ -653,10 +653,12 @@ class Webview:
     def open_devtools(self):
         call_native = getattr(self.native, "open_devtools", None)
         if call_native:
+            self.logger.info("Requesting native devtools open.")
             call_native()
             return True
 
         # Chromium/Electron fallback for non-native engines.
+        self.logger.info("Requesting fallback devtools open.")
         self.eval(
             "try { window.__pytron_open_devtools?.(); } catch (e) { console.warn('open_devtools unavailable', e); }"
         )
