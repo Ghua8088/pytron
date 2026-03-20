@@ -68,9 +68,17 @@ def test_webview_init_success(mock_native, webview_config):
 
     wv = Webview(webview_config)
 
-    native_mod.NativeWebview.assert_called_with(
+    native_mod.NativeWebview.assert_called_once()
+    actual_args = native_mod.NativeWebview.call_args[0]
+    expected_initial_url = (
+        "pytron://localhost/app/index.html"
+        if sys.platform.startswith("linux")
+        else "about:blank"
+    )
+
+    assert actual_args == (
         webview_config["debug"],
-        "about:blank",
+        expected_initial_url,
         ANY,  # root_path
         True,  # resizable
         False,  # frameless
