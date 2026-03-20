@@ -12,6 +12,7 @@ pub enum UserEvent {
     SetSize(i32, i32, u32),
     SetBounds(i32, i32, i32, i32), // x, y, w, h
     Navigate(String),
+    OpenDevtools,
     Quit,
     Minimize,
     SetMaximized(bool),

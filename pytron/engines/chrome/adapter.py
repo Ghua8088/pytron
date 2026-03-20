@@ -9,6 +9,7 @@ import struct
 import subprocess
 import tempfile
 import ctypes
+import stat
 
 try:
     from ...dependencies import pytron_native
@@ -342,6 +343,18 @@ class ChromeAdapter:
         # binary_path is abs path, and app_path is abs path. Should be fine.
 
         logger.info(f"Spawning Mojo Process (IPC): {' '.join(cmd)}")
+        if os.name != "nt" and os.path.exists(self.binary_path):
+            try:
+                mode = os.stat(self.binary_path).st_mode
+                if not (mode & stat.S_IXUSR):
+                    os.chmod(
+                        self.binary_path,
+                        mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH,
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to ensure Chrome shell executable permissions: {e}"
+                )
         self.process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,

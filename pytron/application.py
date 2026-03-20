@@ -415,6 +415,9 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
             self.expose(
                 self.toggle_inspector, name="app_toggle_inspector", run_in_thread=False
             )
+            self.expose(
+                self.open_devtools, name="app_open_devtools", run_in_thread=False
+            )
 
     def check_updates(self, url: str):
         """
@@ -469,6 +472,18 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         if self.inspector:
             self.inspector.toggle()
         return True
+
+    def open_devtools(self):
+        """
+        Opens developer tools for the primary window when supported.
+        """
+        if self.windows:
+            try:
+                return bool(self.windows[0].open_devtools())
+            except Exception as e:
+                self.logger.warning(f"Failed to open devtools: {e}")
+                return False
+        return False
 
     def load_plugins(self, plugins_dir: str):
         """

@@ -382,6 +382,7 @@ impl NativeWebview {
                                  },
                                  UserEvent::Eval(_) => { /* Mute eval logs, too spammy for state sync */ },
                                  UserEvent::Navigate(u) => println!("[PYTRON NAVIGATE] Request: '{}'", u),
+                                 UserEvent::OpenDevtools => println!("[PYTRON DEVTOOLS] Open request"),
                                  UserEvent::Return(_seq, _status, _) => {
                                      // println!("[PYTRON BRIDGE] RETURN: seq={} status={}", seq, status);
                                  },
@@ -408,6 +409,10 @@ impl NativeWebview {
                                 
                                 UserEvent::Navigate(u) => { 
                                     let _ = state.webview.load_url(&u);
+                                }
+
+                                UserEvent::OpenDevtools => {
+                                    state.webview.open_devtools();
                                 }
 
                                 UserEvent::Bind(name, _) => {
@@ -566,6 +571,7 @@ impl NativeWebview {
     pub fn set_size(&self, w: i32, h: i32, hints: u32) { let _ = self.proxy.send_event(UserEvent::SetSize(w, h, hints)); }
     pub fn set_bounds(&self, x: i32, y: i32, w: i32, h: i32) { let _ = self.proxy.send_event(UserEvent::SetBounds(x, y, w, h)); }
     pub fn navigate(&self, u: String) { let _ = self.proxy.send_event(UserEvent::Navigate(u)); }
+    pub fn open_devtools(&self) { let _ = self.proxy.send_event(UserEvent::OpenDevtools); }
     pub fn eval(&self, j: String) { let _ = self.proxy.send_event(UserEvent::Eval(j)); }
     pub fn bind(&self, n: String, f: PyObject) { 
         if let Ok(mut cbs) = self.callbacks.lock() {

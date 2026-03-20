@@ -4,12 +4,69 @@ import shutil
 import requests
 import sys
 import logging
+import stat
 from ...exceptions import ForgeError
 
 logger = logging.getLogger("Pytron.ChromeForge")
 
 # Configuration
 ELECTRON_VERSION = "30.0.6"  # Stable version used for the Mojo Bridge
+
+
+def _runtime_keep_files():
+    if sys.platform == "win32":
+        return [
+            "electron.exe",
+            "resources.pak",
+            "chrome_100_percent.pak",
+            "chrome_200_percent.pak",
+            "icudtl.dat",
+            "v8_context_snapshot.bin",
+            "snapshot_blob.bin",
+            "ffmpeg.dll",
+            "libEGL.dll",
+            "libGLESv2.dll",
+            "vk_swiftshader_icd.json",
+            "vk_swiftshader.dll",
+            "vulkan-1.dll",
+            "d3dcompiler_47.dll",
+        ]
+
+    if sys.platform == "darwin":
+        return [
+            "Electron.app",
+        ]
+
+    return [
+        "electron",
+        "chrome-sandbox",
+        "chrome_crashpad_handler",
+        "resources.pak",
+        "chrome_100_percent.pak",
+        "chrome_200_percent.pak",
+        "icudtl.dat",
+        "v8_context_snapshot.bin",
+        "snapshot_blob.bin",
+        "libffmpeg.so",
+        "libEGL.so",
+        "libGLESv2.so",
+        "vk_swiftshader_icd.json",
+    ]
+
+
+def _runtime_keep_dirs():
+    keep = ["locales", "resources"]
+    if sys.platform.startswith("linux"):
+        keep.append("swiftshader")
+    return keep
+
+
+def _required_runtime_files():
+    if sys.platform == "win32":
+        return ["electron.exe", "ffmpeg.dll", "resources.pak"]
+    if sys.platform == "darwin":
+        return ["Electron.app"]
+    return ["electron", "libffmpeg.so", "resources.pak"]
 
 
 def get_electron_url():
@@ -83,29 +140,13 @@ def perform_surgery(path):
     """Strips the Electron binary down to a minimal Chrome Shell."""
     logger.info("Performing binary surgery (removing bloat)...")
 
-    # Files to keep
-    to_keep = [
-        "electron.exe",
-        "electron",
-        "resources.pak",
-        "chrome_100_percent.pak",
-        "chrome_200_percent.pak",
-        "icudtl.dat",
-        "v8_context_snapshot.bin",
-        "snapshot_blob.bin",
-        "ffmpeg.dll",
-        "libEGL.dll",
-        "libGLESv2.dll",
-        "vk_swiftshader_icd.json",
-        "vk_swiftshader.dll",
-        "vulkan-1.dll",
-        "d3dcompiler_47.dll",
-    ]
+    to_keep = _runtime_keep_files()
+    keep_dirs = _runtime_keep_dirs()
 
     try:
         # 1. Clean root
         for item in os.listdir(path):
-            if item not in to_keep and item not in ["locales", "resources"]:
+            if item not in to_keep and item not in keep_dirs:
                 p = os.path.join(path, item)
                 if os.path.isdir(p):
                     shutil.rmtree(p)
@@ -141,17 +182,51 @@ class ChromeForge:
     def __init__(self, target_dir=None):
         self.target_dir = target_dir or os.path.expanduser("~/.pytron/engines/chrome")
 
+    def _is_runtime_intact(self):
+        for name in _required_runtime_files():
+            if not os.path.exists(os.path.join(self.target_dir, name)):
+                return False
+        return True
+
+    def _reset_target_dir(self):
+        if os.path.exists(self.target_dir):
+            shutil.rmtree(self.target_dir, ignore_errors=True)
+        os.makedirs(self.target_dir, exist_ok=True)
+
     def provision(self):
         """Ensures the Chrome engine is installed and ready."""
         exe_name = "electron.exe" if sys.platform == "win32" else "electron"
         exe_path = os.path.join(self.target_dir, exe_name)
 
-        if not os.path.exists(exe_path):
-            if not os.path.exists(self.target_dir):
-                os.makedirs(self.target_dir, exist_ok=True)
+        if not os.path.exists(exe_path) or not self._is_runtime_intact():
+            self._reset_target_dir()
 
             download_electron(self.target_dir)
             perform_surgery(self.target_dir)
+
+        if sys.platform != "win32" and os.path.exists(exe_path):
+            try:
+                current_mode = os.stat(exe_path).st_mode
+                os.chmod(
+                    exe_path,
+                    current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to mark Chrome shell executable: {e}")
+
+            for helper in ["chrome-sandbox", "chrome_crashpad_handler"]:
+                helper_path = os.path.join(self.target_dir, helper)
+                if os.path.exists(helper_path):
+                    try:
+                        helper_mode = os.stat(helper_path).st_mode
+                        os.chmod(
+                            helper_path,
+                            helper_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to mark Chrome helper executable ({helper}): {e}"
+                        )
 
         return exe_path
 

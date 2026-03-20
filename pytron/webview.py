@@ -350,6 +350,7 @@ class Webview:
         self.bind("pytron_set_size", self.set_size, run_in_thread=False)
         self.bind("pytron_close", self.close, run_in_thread=False)
         self.bind("pytron_reload", self.reload, run_in_thread=False)
+        self.bind("pytron_open_devtools", self.open_devtools, run_in_thread=False)
         self.bind("pytron_toggle_maximize", self.toggle_maximize, run_in_thread=False)
         self.bind("pytron_hide", self.hide, run_in_thread=False)
         self.bind("pytron_show", self.show, run_in_thread=False)
@@ -403,6 +404,7 @@ class Webview:
         self.bind("maximize", self.maximize, run_in_thread=False)
         self.bind("center", self.center, run_in_thread=False)
         self.bind("reload", self.reload, run_in_thread=False)
+        self.bind("open_devtools", self.open_devtools, run_in_thread=False)
         self.bind("toggle_maximize", self.toggle_maximize, run_in_thread=False)
         self.bind("set_title", self.set_title, run_in_thread=False)
         self.bind("set_size", self.set_size, run_in_thread=False)
@@ -647,6 +649,18 @@ class Webview:
 
     def reload(self):
         self.native.eval("location.reload()")
+
+    def open_devtools(self):
+        call_native = getattr(self.native, "open_devtools", None)
+        if call_native:
+            call_native()
+            return True
+
+        # Chromium/Electron fallback for non-native engines.
+        self.eval(
+            "try { window.__pytron_open_devtools?.(); } catch (e) { console.warn('open_devtools unavailable', e); }"
+        )
+        return False
 
     def close(self, force=False):
         """
