@@ -138,164 +138,117 @@ class ChromeWebView(Webview):
     """
 
     def __init__(self, config):
+        # 1. Initialize Base (Components, Loops, Infra)
+        super().__init__(config)
         self.logger = logging.getLogger("Pytron.ChromeWebView")
 
-        # --- Replicate Webview Basic Init ---
-        self.config = config
-        self.id = config.get("id") or str(int(__import__("time").time() * 1000))
-
-        # 1. Resolve Root
-        self.app = config.get("__app__")
-
-        if self.app and hasattr(self.app, "app_root"):
-            self._app_root = __import__("pathlib").Path(self.app.app_root)
-        elif getattr(sys, "frozen", False):
-            self._app_root = __import__("pathlib").Path(sys.executable).parent
-            if hasattr(sys, "_MEIPASS"):
-                self._app_root = __import__("pathlib").Path(sys._MEIPASS)
-        else:
-            self._app_root = __import__("pathlib").Path.cwd()
-
-        if self.app:
-            self.thread_pool = self.app.thread_pool
-        else:
-            from pytron.utils import com_thread_initializer
-
-            self.thread_pool = __import__(
-                "concurrent.futures"
-            ).futures.ThreadPoolExecutor(
-                max_workers=5, initializer=com_thread_initializer
-            )
-
-        # Determine Scheme (Always pytron:// for Chrome engine)
-        self._scheme = "pytron://localhost"
-
-        self._bound_functions = {}
-        self._served_data = {}
-
-        # 3. Resolve Chrome Binary
+        # 2. Resolve Chrome Binary
         shell_path = config.get("engine_path")
         if not shell_path:
-            renamed_engine = None
-            if getattr(sys, "frozen", False):
-                exe_name = os.path.splitext(os.path.basename(sys.executable))[0]
-                candidates = [
-                    f"{exe_name}.exe",
-                    f"{exe_name}-Renderer.exe",
-                    f"{exe_name}-Engine.exe",
-                    "electron.exe",
-                ]
-                base_dir = os.path.dirname(sys.executable)
-                std_dir = os.path.join(base_dir, "pytron", "dependencies", "chrome")
-                mei_dir = getattr(sys, "_MEIPASS", None)
-                search_roots = [base_dir]
-                if std_dir:
-                    search_roots.append(std_dir)
-                if mei_dir:
-                    search_roots.append(
-                        os.path.join(mei_dir, "pytron", "dependencies", "chrome")
-                    )
-                for root in search_roots:
-                    if not os.path.exists(root):
-                        continue
-                    for candidate in candidates:
-                        candidate_path = os.path.join(root, candidate)
-                        if os.path.exists(candidate_path):
-                            if os.path.abspath(candidate_path) == os.path.abspath(
-                                sys.executable
-                            ):
-                                continue
-                            renamed_engine = candidate_path
-                            break
-                    if renamed_engine:
-                        break
+            shell_path = self._resolve_chrome_binary(config)
 
-            if renamed_engine:
-                shell_path = renamed_engine
-            else:
-                global_path = os.path.expanduser(
-                    "~/.pytron/engines/chrome/electron.exe"
-                )
-                if os.path.exists(global_path):
-                    shell_path = global_path
-                else:
-                    search_path = os.path.abspath(
-                        os.path.join(
-                            os.getcwd(),
-                            "..",
-                            "pytron-electron-engine",
-                            "bin",
-                            "electron.exe",
-                        )
-                    )
-                    if os.path.exists(search_path):
-                        shell_path = search_path
-                    else:
-                        self.logger.warning(
-                            "Chrome Engine not found. Auto-provisioning..."
-                        )
-                        forge = ChromeForge()
-                        shell_path = forge.provision()
+        if not shell_path or not os.path.exists(shell_path):
+            from .forge import ChromeForge
 
-        # 4. Resolve Root Path (Robust Common Ancestor Logic)
-        # We need a root that covers both 'frontend/dist' and 'plugins'
-        raw_url = config.get("url", "")
-        root_path = str(self._app_root)  # Default fallback
-        navigate_url = raw_url
+            self.logger.warning("Chrome Engine not found. Auto-provisioning...")
+            forge = ChromeForge()
+            shell_path = forge.provision()
 
-        if not raw_url.startswith(("http:", "https:", "pytron:")):
-            p = __import__("pathlib").Path(raw_url).resolve()
-            # Assume standard structure: <root>/frontend/dist/index.html
-            # We want <root> to be the base.
-            # Heuristic: Go up until we find 'plugins' folder or hit root
-            candidate = p.parent
-            found_root = None
-            for _ in range(4):  # Check up to 4 levels up
-                if (candidate / "plugins").exists():
-                    found_root = candidate
-                    break
-                candidate = candidate.parent
-
-            if found_root:
-                root_path = str(found_root)
-                try:
-                    rel = os.path.relpath(str(p), str(found_root))
-                    navigate_url = (
-                        f"pytron://app/{urllib.parse.quote(rel.replace(os.sep, '/'))}"
-                    )
-                except ValueError:
-                    pass
-            else:
-                root_path = str(p.parent)
-                navigate_url = f"pytron://app/{urllib.parse.quote(p.name)}"
-
-        self.logger.info(f"Target Root: {root_path}")
-        self.logger.info(f"Navigating to: {navigate_url}")
+        # 3. Path & URL Setup
+        navigate_url = self._routing_comp.normalize_to_pytron(config.get("url", ""))
+        self._start_url = navigate_url
+        root_path = self._routing_comp.root_path
 
         if "cwd" not in config:
             config["cwd"] = root_path
 
-        # 5. Initialize Bridge & Start Adapter
+        # 4. Initialize Bridge & Start Adapter
         self.logger.info(f"Using Chrome Shell (v3): {shell_path}")
         self.adapter = ChromeAdapter(shell_path, config)
         self.bridge = ChromeBridge(self.adapter)
+        self.native = self.bridge  # For facade compatibility
 
         self.adapter.start()
         self.adapter.bind_raw(self._handle_ipc_message)
 
-        # Mock Window Object
-        if "resizable" not in config:
-            config["resizable"] = True
-
+        # 5. Initialize Window & Bindings
         self.w = self.bridge.webview_create(
-            config.get("debug", False), None, root_path=root_path
+            config.get("debug", False), self, root_path=root_path
         )
 
-        # Safety Net
-        self.native = None
+        self._ipc_comp.init_core_bindings()
 
-        # 5. Bindings & Init
-        self._init_bindings()
+        self.set_title(config.get("title", "Pytron App"))
+        self._setup_icon(config)
+
+        w, h = config.get("dimensions", [800, 600])
+        self.set_size(w, h)
+
+        if not config.get("start_hidden", False):
+            self.show()
+
+        # 6. Navigate
+        self.navigate(navigate_url)
+
+    def _setup_icon(self, config):
+        """Resolves and sets the window icon."""
+        icon_raw = config.get("icon")
+        if icon_raw:
+            if os.path.exists(icon_raw):
+                config["icon"] = os.path.abspath(icon_raw)
+            else:
+                possible = os.path.join(self._routing_comp.root_path, icon_raw)
+                if os.path.exists(possible):
+                    config["icon"] = os.path.abspath(possible)
+
+        if config.get("icon"):
+            self.set_icon(config["icon"])
+
+    def _resolve_chrome_binary(self, config) -> Optional[str]:
+        """Chrome-specific binary detection logic."""
+        renamed_engine = None
+        if getattr(sys, "frozen", False):
+            exe_name = os.path.splitext(os.path.basename(sys.executable))[0]
+            candidates = [
+                f"{exe_name}.exe",
+                f"{exe_name}-Renderer.exe",
+                f"{exe_name}-Engine.exe",
+                "electron.exe",
+            ]
+            base_dir = os.path.dirname(sys.executable)
+            search_roots = [
+                base_dir,
+                os.path.join(base_dir, "pytron", "dependencies", "chrome"),
+                (
+                    os.path.join(
+                        getattr(sys, "_MEIPASS", ""), "pytron", "dependencies", "chrome"
+                    )
+                    if hasattr(sys, "_MEIPASS")
+                    else None
+                ),
+            ]
+            for root in filter(None, search_roots):
+                if not os.path.exists(root):
+                    continue
+                for candidate in candidates:
+                    path = os.path.join(root, candidate)
+                    if os.path.exists(path) and os.path.abspath(
+                        path
+                    ) != os.path.abspath(sys.executable):
+                        return path
+
+        global_path = os.path.expanduser("~/.pytron/engines/chrome/electron.exe")
+        if os.path.exists(global_path):
+            return global_path
+
+        dev_path = os.path.abspath(
+            os.path.join(
+                os.getcwd(), "..", "pytron-electron-engine", "bin", "electron.exe"
+            )
+        )
+        if os.path.exists(dev_path):
+            return dev_path
+        return None
 
         # 6. Window Settings
         self.set_title(config.get("title", "Pytron App"))

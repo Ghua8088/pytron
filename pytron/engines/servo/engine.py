@@ -10,6 +10,7 @@ import asyncio
 import inspect
 import pathlib
 import time
+from typing import Optional, Any, Dict, List
 from ...webview import Webview
 from .adapter import ServoAdapter
 from ...serializer import pytron_serialize
@@ -221,13 +222,9 @@ class ServoWebView(Webview):
     """
 
     def __init__(self, config):
+        # 1. Initialize Base (Components, Loops, Infra)
+        super().__init__(config)
         self.logger = logging.getLogger("Pytron.ServoWebView")
-
-        # --- Replicate Webview Basic Init ---
-        self.config = config
-        self.id = config.get("id") or str(int(time.time() * 1000))
-
-        # 1. Resolve Root
         self.app = config.get("__app__")
 
         if self.app and hasattr(self.app, "app_root"):
@@ -384,7 +381,7 @@ class ServoWebView(Webview):
         self.native = None
 
         # 5. Bindings & Init
-        self._init_bindings()
+        self._ipc_comp.init_core_bindings()
 
         # 6. Window Settings
         self.set_title(config.get("title", "Pytron App"))
