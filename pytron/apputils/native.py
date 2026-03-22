@@ -9,7 +9,10 @@ _AUTO_NATIVE_BRIDGE = object()
 pytron_native = _AUTO_NATIVE_BRIDGE
 
 
-class NativeMixin:
+from .component import AppComponent
+
+
+class NativeComponent(AppComponent):
     """
     Mixin class to handle native system interactions.
     """

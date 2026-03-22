@@ -9,7 +9,10 @@ except ImportError:
     pydantic = None
 
 
-class CodegenMixin:
+from .component import AppComponent
+
+
+class CodegenComponent(AppComponent):
     """
     Mixin class to handle TypeScript generation.
     """
@@ -136,7 +139,50 @@ class CodegenMixin:
                 if py_type == inspect.Parameter.empty:
                     ts_type = "any"
 
-                params.append(f"{param_name}: {ts_type}")
+                # Escape TypeScript reserved keywords
+                ts_param_name = param_name
+                reserved = [
+                    "default",
+                    "delete",
+                    "class",
+                    "interface",
+                    "type",
+                    "module",
+                    "export",
+                    "import",
+                    "enum",
+                    "extends",
+                    "const",
+                    "let",
+                    "var",
+                    "function",
+                    "for",
+                    "while",
+                    "if",
+                    "else",
+                    "switch",
+                    "case",
+                    "break",
+                    "continue",
+                    "return",
+                    "throw",
+                    "try",
+                    "catch",
+                    "finally",
+                    "new",
+                    "this",
+                    "super",
+                    "null",
+                    "undefined",
+                    "true",
+                    "false",
+                    "typeof",
+                    "instanceof",
+                ]
+                if ts_param_name in reserved:
+                    ts_param_name = f"{ts_param_name}_"
+
+                params.append(f"{ts_param_name}: {ts_type}")
 
             param_str = ", ".join(params)
 
@@ -157,6 +203,7 @@ class CodegenMixin:
             return "\n".join(lines)
 
         except Exception as e:
+            # Fallback that at least captures the name and ensures valid TS syntax
             self.logger.warning(f"Could not generate types for {name}: {e}")
             return f"    {name}(...args: any[]): Promise<any>;"
 
@@ -197,16 +244,24 @@ class CodegenMixin:
         lines.append("  }")
         return "\n".join(lines)
 
-    def _python_type_to_ts(self, py_type):
-        if py_type == str:
+    def _python_type_to_ts(self, py_type, _stack=None):
+        if _stack is None:
+            _stack = set()
+
+        # Recursion protection
+        if py_type in _stack:
+            return "any"
+
+        _stack.add(py_type)
+        if py_type is str:
             return "string"
-        if py_type == int:
+        if py_type is int:
             return "number"
-        if py_type == float:
+        if py_type is float:
             return "number"
-        if py_type == bool:
+        if py_type is bool:
             return "boolean"
-        if py_type == type(None):
+        if py_type is type(None):
             return "void"
         if py_type == list:
             return "any[]"
@@ -229,20 +284,20 @@ class CodegenMixin:
 
         if origin is list or origin is typing.List:
             if args:
-                return f"{self._python_type_to_ts(args[0])}[]"
+                return f"{self._python_type_to_ts(args[0], _stack)}[]"
             return "any[]"
 
         if origin is dict or origin is typing.Dict:
             if args and len(args) == 2:
-                k = self._python_type_to_ts(args[0])
-                v = self._python_type_to_ts(args[1])
+                k = self._python_type_to_ts(args[0], _stack)
+                v = self._python_type_to_ts(args[1], _stack)
                 if k == "number":
                     return f"Record<number, {v}>"
                 return f"Record<string, {v}>"
             return "Record<string, any>"
 
         if origin is typing.Union:
-            non_none = [t for t in args if t != type(None)]
+            non_none = [t for t in args if t is not type(None)]
             # Check for pydantic models inside Union
             if pydantic:
                 for t in non_none:
@@ -250,12 +305,12 @@ class CodegenMixin:
                         self._pydantic_models[t.__name__] = t
 
             if len(non_none) == len(args):
-                return " | ".join([self._python_type_to_ts(t) for t in args])
+                return " | ".join([self._python_type_to_ts(t, _stack) for t in args])
             else:
                 if len(non_none) == 1:
-                    return f"{self._python_type_to_ts(non_none[0])} | null"
+                    return f"{self._python_type_to_ts(non_none[0], _stack)} | null"
                 return (
-                    " | ".join([self._python_type_to_ts(t) for t in non_none])
+                    " | ".join([self._python_type_to_ts(t, _stack) for t in non_none])
                     + " | null"
                 )
         return "any"

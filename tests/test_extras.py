@@ -1,15 +1,16 @@
 import os
 import pytest
 from unittest.mock import MagicMock, patch
-from pytron.apputils.extras import ExtrasMixin
+from pytron.apputils.extras import ExtrasComponent
 from pytron.exceptions import PytronError
 
 # Mock PluginError since we can't easily import it if it's inside a function in the mixin
 # Wait, the mixin imports it from ..plugin. Let's mock that module.
 
 
-class MockApp(ExtrasMixin):
+class MockApp(ExtrasComponent):
     def __init__(self):
+        self._app = self
         self.config = {"title": "Test App", "icon": "app.ico"}
         self.plugins = []
         self.logger = MagicMock()

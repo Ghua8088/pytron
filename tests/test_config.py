@@ -3,19 +3,21 @@ import json
 import pytest
 import logging
 from unittest.mock import MagicMock, patch
-from pytron.apputils.config import ConfigMixin
+from pytron.apputils.config import ConfigComponent
 from pytron.exceptions import ConfigError
 
 
 # Mock State object
 class MockState:
     def __init__(self):
+        self._app = self
         self.launch_url = None
 
 
-# Test Class inheriting from ConfigMixin
-class MockApp(ConfigMixin):
+# Test Class inheriting from ConfigComponent
+class MockApp(ConfigComponent):
     def __init__(self):
+        self._app = self
         self.state = MockState()
         self.logger = logging.getLogger("TestApp")
 

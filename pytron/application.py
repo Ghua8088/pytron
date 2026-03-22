@@ -1,25 +1,36 @@
 import os
 import sys
-from typing import Any
+from typing import Any, List
 from .state import ReactiveState
 from .router import Router
 
 from .plugin import Plugin
 
 from .shortcuts import ShortcutManager
-from .apputils.codegen import CodegenMixin
-from .apputils.native import NativeMixin
-from .apputils.config import ConfigMixin
-from .apputils.window_mixin import WindowMixin
-from .apputils.extras import ExtrasMixin
-from .apputils.shell import Shell
+from .apputils.codegen import CodegenComponent
+from .apputils.native import NativeComponent
+from .apputils.config import ConfigComponent
+from .apputils.window_mixin import WindowComponent
+from .apputils.extras import ExtrasComponent
+from .apputils.shell import ShellComponent
+from .apputils.plugins import PluginComponent
+from .apputils.reporter import CrashReporter
 from .inspector import Inspector
 
 
-class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shell):
+class App:
     def __init__(self, config_file="settings.json"):
+        # Initialize Components
+        self._config_comp = ConfigComponent(self)
+        self._window_comp = WindowComponent(self)
+        self._extras_comp = ExtrasComponent(self)
+        self._codegen_comp = CodegenComponent(self)
+        self._native_comp = NativeComponent(self)
+        self._shell_comp = ShellComponent(self)
+        self._plugin_comp = PluginComponent(self)
+        self._crash_comp = CrashReporter(self)
+
         from .utils import com_thread_initializer
-        import os
 
         env_engine = os.environ.get("PYTRON_ENGINE")
         engine_explicit = env_engine is not None
@@ -47,7 +58,12 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         self.tray = None
         self.shortcut_manager = ShortcutManager()
         self._on_file_drop_callback = None
-        self.plugin_statuses = []  # Track load status for inspector
+        self.app_root: str = ""
+
+        # Explicit Attribute Declarations for IDE Support
+        self.config: dict = {}
+        self.logger: Any = None
+        self.storage_path: str = ""
 
         # Router Init
         self.router = Router()
@@ -61,8 +77,8 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
 
-        # ConfigMixin setup
-        self._setup_logging()
+        # ConfigComponent setup
+        self._config_comp._setup_logging()
         self.router.logger = self.logger  # Share logger
 
         from .state import log_shield
@@ -70,17 +86,13 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         log_shield(f"App __init__ called. Frozen={getattr(sys, 'frozen', False)}")
 
         self.state = ReactiveState(self)
-        try:
-            log_shield(f"App State Mode: {self.state._store.__class__.__name__}")
-        except:
-            pass
 
-        self._check_deep_link()
-        self._load_config(config_file)
-        _, safe_title = self._setup_identity()
-        self._setup_storage(safe_title)
-        self._setup_crash_handler()
-        self._resolve_resources()
+        self._config_comp._check_deep_link()
+        self._config_comp._load_config(config_file)
+        _, safe_title = self._config_comp._setup_identity()
+        self._config_comp._setup_storage(safe_title)
+        self._crash_comp.setup()
+        self._config_comp._resolve_resources()
         self._register_core_apis()
 
         # Update engine based on config or CLI flags if they override the initial detection
@@ -117,7 +129,7 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
             # ConfigMixin already handles this via _setup_identity -> _setup_single_instance
             pass
 
-        self._setup_key_value_store()
+        self._config_comp._setup_key_value_store()
 
         # Register automatic cleanup for thread pool
         # Register automatic cleanup for thread pool
@@ -130,21 +142,6 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
                 except Exception as e:
                     self.logger.debug(f"Error shutting down thread pool: {e}")
                 self.thread_pool = None
-
-        # AUTO-CODEGEN: Generate TypeScript definitions in debug mode
-        if self.config.get("debug", False):
-            # We use a small delay via the event loop or just run it before start
-            # To ensure all plugins/modules have had a chance to .expose()
-            # But usually they do it during __init__ or before app.run()
-            # We'll attach it to a pre-run hook or just before the loop starts in WindowMixin.run
-            pass
-
-        # Actually, let's trigger it once here for early feedback
-        if self.config.get("debug", False):
-            try:
-                self.generate_types()
-            except Exception as e:
-                self.logger.debug(f"Initial codegen skipped: {e}")
 
             # Register Inspector Shortcuts
             self.logger.debug("Registering Inspector shortcuts (F12, Ctrl+Shift+I)")
@@ -159,97 +156,159 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
             self.expose(self.toggle_inspector, name="inspector_toggle")
 
         # Load Plugins
-        # We must use the script/exe directory (sys.path[0]), NOT cwd, because cwd changes to AppData
-        if getattr(sys, "frozen", False):
-            # Senior Fix: Use sys._MEIPASS for internal assets/plugins in frozen builds.
-            # Fallback to sys.executable dir if _MEIPASS is somehow missing.
-            base_dir = getattr(
-                sys, "_MEIPASS", os.path.dirname(os.path.abspath(sys.executable))
-            )
-        else:
-            # Prefer the directory of the actual main script if possible
-            main_script = (
-                sys.modules.get("__main__", {}).__file__
-                if "__main__" in sys.modules
-                else None
-            )
-            if main_script:
-                base_dir = os.path.dirname(os.path.abspath(main_script))
-            elif sys.path[0]:
-                base_dir = os.path.abspath(sys.path[0])
-            else:
-                base_dir = os.getcwd()
+        self._plugin_comp.discover_and_load()
 
-            self.logger.debug(f"Plugin Base Dir resolved to: {base_dir}")
-
-        self.app_root = base_dir
-
-        # Plugin Discovery: Check both bundled (internal) and drop-in (external) paths
-        candidate_dirs = []
-        if getattr(sys, "frozen", False):
-            # 1. Bundled plugins inside _internal
-            if hasattr(sys, "_MEIPASS"):
-                candidate_dirs.append(os.path.join(sys._MEIPASS, "plugins"))
-            # 2. Drop-in plugins next to the EXE
-            exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-            candidate_dirs.append(os.path.join(exe_dir, "plugins"))
-        else:
-            # Local dev plugins next to the script
-            candidate_dirs.append(os.path.join(base_dir, "plugins"))
-
-        custom_plugins_dir = self.config.get("plugins_dir")
-        if custom_plugins_dir:
-            if not os.path.isabs(custom_plugins_dir):
-                custom_plugins_dir = os.path.join(base_dir, custom_plugins_dir)
-            candidate_dirs.append(custom_plugins_dir)
-
-        # Remove duplicates and resolve
-        seen = set()
-        for p_dir in candidate_dirs:
-            p_dir = os.path.abspath(p_dir)
-            if p_dir not in seen and os.path.exists(p_dir):
-                self.logger.info(f"Scanning for plugins in: {p_dir}")
-                self.load_plugins(p_dir)
-                seen.add(p_dir)
-
-    def _setup_crash_handler(self):
-        """Registers a global exception hook to capture and log crashes."""
-        import traceback
-        import datetime
-
-        def _handle_exception(exc_type, exc_value, exc_traceback):
-            if issubclass(exc_type, KeyboardInterrupt):
-                sys.__excepthook__(exc_type, exc_value, exc_traceback)
-                return
-
-            crash_msg = "".join(
-                traceback.format_exception(exc_type, exc_value, exc_traceback)
-            )
-            self.logger.critical(f"FATAL CRASH:\n{crash_msg}")
-
-            # Save to storage
+        # AUTO-CODEGEN: Generate TypeScript definitions in debug mode (After plugins are loaded)
+        if self.config.get("debug", False):
             try:
-                crash_file = os.path.join(self.storage_path, "crash.log")
-                with open(crash_file, "a", encoding="utf-8") as f:
-                    f.write(f"\n--- CRASH AT {datetime.datetime.now()} ---\n")
-                    f.write(crash_msg)
-            except:
-                pass
+                self.generate_types()
+            except Exception as e:
+                self.logger.debug(f"Codegen failed: {e}")
 
-            # Show native alert if possible
-            try:
-                title = self.config.get("title", "Pytron App")
-                self.message_box(
-                    f"{title} - Fatal Error",
-                    f"The application has encountered a fatal error and must close.\n\nDetails saved to: {self.storage_path}/crash.log",
-                    style=0x10,  # MB_ICONERROR
-                )
-            except:
-                pass
+    # --- Config Component Forwarding ---
+    def store_set(self, key: str, value: Any):
+        """Sets a value in the persistent store."""
+        return self._config_comp.store_set(key, value)
 
-            sys.exit(1)
+    def store_get(self, key: str, default: Any = None) -> Any:
+        """Gets a value from the persistent store."""
+        return self._config_comp.store_get(key, default)
 
-        sys.excepthook = _handle_exception
+    def store_delete(self, key: str) -> bool:
+        """Removes a key from the persistent store."""
+        return self._config_comp.store_delete(key)
+
+    # --- Window Component Forwarding ---
+    def create_window(self, **kwargs) -> Any:
+        """Creates a new application window."""
+        return self._window_comp.create_window(**kwargs)
+
+    def run(self, **kwargs):
+        """Starts the application event loop and shows the main window."""
+        return self._window_comp.run(**kwargs)
+
+    def register_protocol(self, scheme: str = "pytron"):
+        """Registers a custom URL protocol for the application."""
+        return self._window_comp.register_protocol(scheme)
+
+    def broadcast(self, event_name: str, data: Any):
+        """Sends an event to all open windows."""
+        return self._window_comp.broadcast(event_name, data)
+
+    def emit_to(self, window_id: str, event_name: str, data: Any) -> bool:
+        """Send an event to a specific window by its ID."""
+        return self._window_comp.emit_to(window_id, event_name, data)
+
+    def get_window(self, window_id: str) -> Any:
+        """Find a window by its ID."""
+        return self._window_comp.get_window(window_id)
+
+    def emit(self, event_name: str, data: Any):
+        """Alias for broadcast."""
+        return self._window_comp.emit(event_name, data)
+
+    def hide(self):
+        """Hides all application windows."""
+        return self._window_comp.hide()
+
+    def show(self):
+        """Shows all application windows."""
+        return self._window_comp.show()
+
+    def notify(
+        self, title: str, message: str, type: str = "info", duration: int = 5000
+    ):
+        """Shows a notification in all windows."""
+        return self._window_comp.notify(title, message, type, duration)
+
+    def quit(self):
+        """Quits the application."""
+        return self._window_comp.quit()
+
+    def set_menubar(self, menu_bar: Any):
+        """Sets the menu bar for the primary window."""
+        return self._window_comp.set_menubar(menu_bar)
+
+    @property
+    def is_visible(self) -> bool:
+        """Returns True if the primary window is visible."""
+        return self._window_comp.is_visible
+
+    # --- Extras Component Forwarding ---
+    def load_plugin(self, manifest_path: str):
+        """Loads a plugin from the specified manifest path."""
+        return self._extras_comp.load_plugin(manifest_path)
+
+    def setup_tray(self, title: str = None, icon: str = None) -> Any:
+        """Initializes the system tray icon."""
+        return self._extras_comp.setup_tray(title, icon)
+
+    def setup_tray_standard(self, title: str = None, icon: str = None) -> Any:
+        """Initializes a standard system tray with Show/Hide/Quit items."""
+        return self._extras_comp.setup_tray_standard(title, icon)
+
+    # --- Codegen Component Forwarding ---
+    def generate_types(self, output_path: str = "frontend/src/pytron.d.ts"):
+        """Generates TypeScript definitions for all exposed functions."""
+        return self._codegen_comp.generate_types(output_path)
+
+    # --- Native Component Forwarding ---
+    def set_start_on_boot(self, enable: bool = True) -> bool:
+        """Enables or disables automatic application startup on system boot."""
+        return self._native_comp.set_start_on_boot(enable)
+
+    def message_box(self, title: str, message: str, style: int = 0) -> int:
+        """Shows a native message box."""
+        return self._native_comp.message_box(title, message, style)
+
+    def dialog_save_file(
+        self, title="Save File", default_path=None, default_name=None, file_types=None
+    ):
+        """Opens a native save file dialog."""
+        return self._native_comp.dialog_save_file(
+            title, default_path, default_name, file_types
+        )
+
+    def dialog_open_file(self, title="Open File", default_path=None, file_types=None):
+        """Opens a native file selection dialog."""
+        return self._native_comp.dialog_open_file(title, default_path, file_types)
+
+    def dialog_open_folder(self, title="Select Folder", default_path=None):
+        """Opens a native folder selection dialog."""
+        return self._native_comp.dialog_open_folder(title, default_path)
+
+    def system_notification(self, title: str = None, message: str = ""):
+        """Sends a system-level notification via the OS."""
+        return self._native_comp.system_notification(title, message)
+
+    def show_toast(self, config: dict):
+        """Sends a rich, modern system notification."""
+        return self._native_comp.show_toast(config)
+
+    def copy_to_clipboard(self, text: str) -> bool:
+        """Copies text to the system clipboard."""
+        return self._native_comp.copy_to_clipboard(text)
+
+    def get_clipboard_text(self) -> str:
+        """Returns text from the system clipboard."""
+        return self._native_comp.get_clipboard_text()
+
+    def get_system_info(self) -> dict:
+        """Returns hardware and OS information."""
+        return self._native_comp.get_system_info()
+
+    # --- Shell Component Forwarding ---
+    def open_external(self, url: str):
+        """Opens a URL or file path in the default system browser/handler."""
+        return self._shell_comp.open_external(url)
+
+    def show_item_in_folder(self, path: str):
+        """Opens the folder containing the file and selects it."""
+        return self._shell_comp.show_item_in_folder(path)
+
+    def trash_item(self, path: str) -> bool:
+        """Moves a file to the system trash/recycle bin."""
+        return self._shell_comp.trash_item(path)
 
     def get_base_url(self) -> str:
         """Returns the base URL for the current platform and engine."""
@@ -314,29 +373,37 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
                 if callable(attr):
                     try:
                         # For classes, we assume default security unless specified?
-                        # Or maybe we shouldn't support granular security on class-based expose yet for simplicity
+                        # Or maybe we shouldn't support granular security on class-based expose yet
+                        # for simplicity
                         # just pass 'secure' to all methods.
                         self._exposed_functions[attr_name] = {
                             "func": attr,
                             "secure": secure,
                             "run_in_thread": run_in_thread,
                         }
-                        self._exposed_ts_defs[attr_name] = self._get_ts_definition(
-                            attr_name, attr
+                        self._exposed_ts_defs[attr_name] = (
+                            self._codegen_comp._get_ts_definition(attr_name, attr)
                         )
                     except Exception:
                         pass
             return func
 
         if name is None:
-            name = func.__name__
+            if hasattr(func, "__name__"):
+                name = func.__name__
+            elif hasattr(func, "func") and hasattr(
+                getattr(func, "func"), "__name__"
+            ):  # partials
+                name = getattr(func, "func").__name__
+            else:
+                name = f"exposed_{id(func)}"
 
         self._exposed_functions[name] = {
             "func": func,
             "secure": secure,
             "run_in_thread": run_in_thread,
         }
-        self._exposed_ts_defs[name] = self._get_ts_definition(name, func)
+        self._exposed_ts_defs[name] = self._codegen_comp._get_ts_definition(name, func)
         return func
 
     def shortcut(self, key_combo, func=None):
@@ -465,6 +532,19 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
                 window.dispatch(event_name, payload)
         return True
 
+    @property
+    def plugin_statuses(self) -> List[dict]:
+        """Returns the status of all plugins."""
+        if not hasattr(self, "_plugin_comp"):
+            return []
+        return self._plugin_comp.plugin_statuses
+
+    @plugin_statuses.setter
+    def plugin_statuses(self, value: List[dict]):
+        """Allows setting the plugin statuses (delegates to component)."""
+        if hasattr(self, "_plugin_comp"):
+            self._plugin_comp.plugin_statuses = value
+
     def toggle_inspector(self):
         """
         Toggles the Pytron Inspector window.
@@ -497,206 +577,9 @@ class App(ConfigMixin, WindowMixin, ExtrasMixin, CodegenMixin, NativeMixin, Shel
         return True
 
     def load_plugins(self, plugins_dir: str):
-        """
-        Discovers and loads plugins from the specified directory.
-        Each subdirectory with a manifest.json is considered a plugin.
-        """
-        if not os.path.exists(plugins_dir):
-            self.logger.warning(f"Plugins directory not found: {plugins_dir}")
-            return
-
-        # Initialize plugin list in state if not present
-        if not hasattr(self.state, "plugins"):
-            self.state.plugins = []
-
-        # Resolve frontend dir for NPM dependency installation
-        frontend_dir = os.path.join(self.app_root, "frontend")
-        if not os.path.exists(frontend_dir):
-            # Try to find it by looking for package.json
-            potential = os.path.join(
-                self.app_root, self.config.get("url", "").split("/")[0]
-            )
-            if os.path.exists(os.path.join(potential, "package.json")):
-                frontend_dir = potential
-
-        # Filter and order by 'plugins' config list if present
-        allowed_plugins = self.config.get("plugins", [])
-        scan_items = []
-
-        if (
-            allowed_plugins
-            and isinstance(allowed_plugins, list)
-            and len(allowed_plugins) > 0
-        ):
-            scan_items = allowed_plugins
-        else:
-            # Fallback to scanning directory
-            if os.path.exists(plugins_dir):
-                scan_items = sorted(os.listdir(plugins_dir))
-
-        for item in scan_items:
-            plugin_path = os.path.join(plugins_dir, item)
-            manifest_path = os.path.join(plugin_path, "manifest.json")
-
-            if os.path.isdir(plugin_path) and os.path.exists(manifest_path):
-                try:
-                    self.logger.info(f"Loading plugin from {plugin_path}...")
-                    plugin = Plugin(manifest_path)
-
-                    # Dependency Check & Install
-                    # For NPM, we usually want to install if there are any listed to be safe,
-                    # as check_dependencies currently only verifies Python modules.
-                    if not plugin.check_dependencies() or (
-                        plugin.npm_dependencies and not plugin.check_js_dependencies()
-                    ):
-                        self.logger.info(
-                            f"Checking/Installing dependencies for {plugin.name}..."
-                        )
-                        # Pass the configured provider to ensure consistency
-                        provider = self.config.get("frontend_provider", "npm")
-                        plugin.install_dependencies(
-                            frontend_dir=frontend_dir, provider=provider
-                        )
-
-                    plugin.load(self)
-                    self.plugins.append(plugin)
-
-                    # Update state with plugin metadata for the frontend
-                    plugins_list = list(self.state.plugins or [])
-                    base_url = self.get_base_url()
-                    plugin_meta = {
-                        "name": plugin.name,
-                        "version": plugin.version,
-                        "ui_entry": (
-                            f"{base_url}/app/plugins/{item}/{plugin.ui_entry}"
-                            if plugin.ui_entry
-                            else None
-                        ),
-                        "slot": plugin.manifest.get(
-                            "slot"
-                        ),  # NEW: Support slot mapping
-                    }
-                    plugins_list.append(plugin_meta)
-                    self.state.plugins = plugins_list
-
-                    self.plugin_statuses.append(
-                        {
-                            "name": plugin.name,
-                            "status": "loaded",
-                            "version": plugin.version,
-                            "path": plugin_path,
-                        }
-                    )
-                    self.logger.info(
-                        f"Plugin '{plugin.name}' (v{plugin.version}) loaded successfully."
-                    )
-
-                    self.publish("pytron:plugin-loaded", plugin_meta)
-
-                except Exception as e:
-                    self.plugin_statuses.append(
-                        {
-                            "name": item,
-                            "status": "error",
-                            "error": str(e),
-                            "path": plugin_path,
-                        }
-                    )
-                    self.logger.error(f"Failed to load plugin at {plugin_path}: {e}")
+        """Discovers and loads plugins from the specified directory."""
+        return self._plugin_comp.load_plugins(plugins_dir)
 
     def unload_plugins(self):
-        """
-        Unloads all loaded plugins.
-        """
-        for plugin in self.plugins:
-            try:
-                plugin.unload()
-            except Exception as e:
-                self.logger.error(f"Error unloading plugin {plugin.name}: {e}")
-        self.plugins.clear()
-
-    def audit_dependencies(self):
-        """
-        Packaging Heuristic:
-        Traverses all exposed functions to find hidden dependencies (imports inside functions).
-        Triggers sys.audit('import') events for found modules so packaging tools can capture them.
-        """
-        import inspect
-        import dis
-        import sys
-
-        visited = set()
-
-        def _report(name, file=None):
-            if name:
-                sys.audit("import", name, file, None, None, None)
-
-        def _inspect(func, depth=0):
-            if depth > 5:
-                return
-            try:
-                if func in visited:
-                    return
-                visited.add(func)
-            except:
-                return
-
-            try:
-                # 1. Handle Classes/Instances (if stored directly)
-                if inspect.isclass(func) or (
-                    not callable(func) and hasattr(func, "__dict__")
-                ):
-                    if hasattr(func, "__module__") and func.__module__:
-                        _report(func.__module__)
-                    for attr_name in dir(func):
-                        if attr_name.startswith("_"):
-                            continue
-                        try:
-                            val = getattr(func, attr_name)
-                            if inspect.isfunction(val) or inspect.ismethod(val):
-                                _inspect(val, depth + 1)
-                        except:
-                            pass
-                    return
-
-                # Report the module of the function itself
-                if hasattr(func, "__module__") and func.__module__:
-                    _report(func.__module__)
-
-                # Check method self if applicable
-                if inspect.ismethod(func) and hasattr(func, "__self__"):
-                    if hasattr(func.__self__, "__module__"):
-                        _report(func.__self__.__module__)
-
-                # 2. Inspect closures and globals
-                closures = inspect.getclosurevars(func)
-
-                for name, value in closures.globals.items():
-                    if inspect.ismodule(value):
-                        _report(value.__name__, getattr(value, "__file__", None))
-                    elif hasattr(value, "__module__") and value.__module__:
-                        _report(value.__module__)
-                        if inspect.isfunction(value) or inspect.isclass(value):
-                            _inspect(value, depth + 1)
-
-                for name, value in closures.nonlocals.items():
-                    if hasattr(value, "__module__") and value.__module__:
-                        _report(value.__module__)
-                        if inspect.isfunction(value):
-                            _inspect(value, depth + 1)
-
-                # 3. Bytecode Analysis
-                if hasattr(func, "__code__"):
-                    for instr in dis.get_instructions(func):
-                        if instr.opname == "IMPORT_NAME":
-                            _report(instr.argval)
-
-            except Exception:
-                pass
-
-        # Trigger inspection for all registered entry points
-        self.logger.info("Running Packaging Heuristic on exposed functions...")
-        for info in self._exposed_functions.values():
-            func = info.get("func")
-            if func:
-                _inspect(func)
+        """Unloads all loaded plugins."""
+        return self._plugin_comp.unload_plugins()

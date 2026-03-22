@@ -30,19 +30,20 @@ def test_app_init_minimal(tmp_path):
     config_file = tmp_path / "settings.json"
     config_file.touch()
     with patch(
-        "pytron.application.App._load_config",
+        "pytron.apputils.config.ConfigComponent._load_config",
         side_effect=mock_load_config,
         autospec=True,
     ), patch(
-        "pytron.application.App._setup_identity", return_value=(None, "testapp")
+        "pytron.apputils.config.ConfigComponent._setup_identity",
+        return_value=(None, "testapp"),
     ), patch(
-        "pytron.application.App._setup_storage"
+        "pytron.apputils.config.ConfigComponent._setup_storage"
     ), patch(
-        "pytron.application.App._resolve_resources"
+        "pytron.apputils.config.ConfigComponent._resolve_resources"
     ), patch(
         "pytron.application.App._register_core_apis"
     ), patch(
-        "pytron.application.App._setup_key_value_store"
+        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
     ), patch(
         "pytron.application.App.load_plugins"
     ):
@@ -61,19 +62,20 @@ def test_app_create_window(mock_webview, tmp_path):
     config_file = tmp_path / "settings.json"
     config_file.touch()
     with patch(
-        "pytron.application.App._load_config",
+        "pytron.apputils.config.ConfigComponent._load_config",
         side_effect=mock_load_config,
         autospec=True,
     ), patch(
-        "pytron.application.App._setup_identity", return_value=(None, "testapp")
+        "pytron.apputils.config.ConfigComponent._setup_identity",
+        return_value=(None, "testapp"),
     ), patch(
-        "pytron.application.App._setup_storage"
+        "pytron.apputils.config.ConfigComponent._setup_storage"
     ), patch(
-        "pytron.application.App._resolve_resources"
+        "pytron.apputils.config.ConfigComponent._resolve_resources"
     ), patch(
         "pytron.application.App._register_core_apis"
     ), patch(
-        "pytron.application.App._setup_key_value_store"
+        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
     ), patch(
         "pytron.application.App.load_plugins"
     ):
@@ -97,19 +99,20 @@ def test_app_run_starts_windows(mock_webview, tmp_path):
     config_file = tmp_path / "settings.json"
     config_file.touch()
     with patch(
-        "pytron.application.App._load_config",
+        "pytron.apputils.config.ConfigComponent._load_config",
         side_effect=mock_load_config,
         autospec=True,
     ), patch(
-        "pytron.application.App._setup_identity", return_value=(None, "testapp")
+        "pytron.apputils.config.ConfigComponent._setup_identity",
+        return_value=(None, "testapp"),
     ), patch(
-        "pytron.application.App._setup_storage"
+        "pytron.apputils.config.ConfigComponent._setup_storage"
     ), patch(
-        "pytron.application.App._resolve_resources"
+        "pytron.apputils.config.ConfigComponent._resolve_resources"
     ), patch(
         "pytron.application.App._register_core_apis"
     ), patch(
-        "pytron.application.App._setup_key_value_store"
+        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
     ), patch(
         "pytron.application.App.load_plugins"
     ):
@@ -123,21 +126,22 @@ def test_app_run_starts_windows(mock_webview, tmp_path):
 
 
 def test_app_path_resolution(tmp_path):
-    # Testing the actual _resolve_resources in ConfigMixin
+    # Testing the actual _resolve_resources in ConfigComponent
     config_file = tmp_path / "settings.json"
     config_file.touch()
     with patch(
-        "pytron.application.App._load_config",
+        "pytron.apputils.config.ConfigComponent._load_config",
         side_effect=mock_load_config,
         autospec=True,
     ), patch(
-        "pytron.application.App._setup_identity", return_value=(None, "testapp")
+        "pytron.apputils.config.ConfigComponent._setup_identity",
+        return_value=(None, "testapp"),
     ), patch(
-        "pytron.application.App._setup_storage"
+        "pytron.apputils.config.ConfigComponent._setup_storage"
     ), patch(
         "pytron.application.App._register_core_apis"
     ), patch(
-        "pytron.application.App._setup_key_value_store"
+        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
     ), patch(
         "pytron.application.App.load_plugins"
     ):
@@ -149,7 +153,7 @@ def test_app_path_resolution(tmp_path):
         idx = tmp_path / "index.html"
         idx.touch()
 
-        app._resolve_resources()
+        app._config_comp._resolve_resources()
         assert app.config["url"] == str(idx)
 
 
@@ -157,19 +161,20 @@ def test_app_emit_to_all_windows(tmp_path):
     config_file = tmp_path / "settings.json"
     config_file.touch()
     with patch(
-        "pytron.application.App._load_config",
+        "pytron.apputils.config.ConfigComponent._load_config",
         side_effect=mock_load_config,
         autospec=True,
     ), patch(
-        "pytron.application.App._setup_identity", return_value=(None, "testapp")
+        "pytron.apputils.config.ConfigComponent._setup_identity",
+        return_value=(None, "testapp"),
     ), patch(
-        "pytron.application.App._setup_storage"
+        "pytron.apputils.config.ConfigComponent._setup_storage"
     ), patch(
-        "pytron.application.App._resolve_resources"
+        "pytron.apputils.config.ConfigComponent._resolve_resources"
     ), patch(
         "pytron.application.App._register_core_apis"
     ), patch(
-        "pytron.application.App._setup_key_value_store"
+        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
     ), patch(
         "pytron.application.App.load_plugins"
     ):

@@ -4,7 +4,10 @@ import subprocess
 import shutil
 
 
-class Shell:
+from .component import AppComponent
+
+
+class ShellComponent(AppComponent):
     """
     Native OS Shell utilities for Pytron.
     """
@@ -23,10 +26,10 @@ class Shell:
         if sys.platform == "win32":
             os.startfile(url)
         elif sys.platform == "darwin":
-            bin_path = Shell._resolve_bin("open")
+            bin_path = ShellComponent._resolve_bin("open")
             subprocess.run([bin_path, url])
         else:
-            bin_path = Shell._resolve_bin("xdg-open")
+            bin_path = ShellComponent._resolve_bin("xdg-open")
             subprocess.run([bin_path, url])
 
     @staticmethod
@@ -38,14 +41,14 @@ class Shell:
 
         path = os.path.abspath(path)
         if sys.platform == "win32":
-            bin_path = Shell._resolve_bin("explorer")
+            bin_path = ShellComponent._resolve_bin("explorer")
             subprocess.run([bin_path, "/select,", path])
         elif sys.platform == "darwin":
-            bin_path = Shell._resolve_bin("open")
+            bin_path = ShellComponent._resolve_bin("open")
             subprocess.run([bin_path, "-R", path])
         else:
             # Linux doesn't have a universal 'select' but we can open the dir
-            bin_path = Shell._resolve_bin("xdg-open")
+            bin_path = ShellComponent._resolve_bin("xdg-open")
             subprocess.run([bin_path, os.path.dirname(path)])
 
     @staticmethod

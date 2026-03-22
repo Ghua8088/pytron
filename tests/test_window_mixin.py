@@ -2,12 +2,13 @@ import os
 import sys
 import pytest
 from unittest.mock import MagicMock, patch
-from pytron.apputils.window_mixin import WindowMixin
+from pytron.apputils.window_mixin import WindowComponent
 
 
 # Mock App class that uses the mixin
-class MockApp(WindowMixin):
+class MockApp(WindowComponent):
     def __init__(self):
+        self._app = self
         self.config = {"title": "Test App", "width": 800, "height": 600}
         self.windows = []
         self._exposed_functions = {}

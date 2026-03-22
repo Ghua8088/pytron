@@ -2,14 +2,17 @@ import os
 from ..tray import SystemTray
 
 
-class ExtrasMixin:
+from .component import AppComponent
+
+
+class ExtrasComponent(AppComponent):
     def load_plugin(self, manifest_path):
         from ..plugin import Plugin, PluginError
 
         try:
             plugin = Plugin(manifest_path)
             plugin.check_dependencies()
-            plugin.load(self)
+            plugin.load(self.app)
             self.plugins.append(plugin)
             self.logger.info(f"Loaded plugin: {plugin.name} v{plugin.version}")
         except PluginError as e:

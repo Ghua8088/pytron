@@ -1,18 +1,19 @@
-"""Tests for NativeMixin (pytron.apputils.native)."""
+"""Tests for NativeComponent (pytron.apputils.native)."""
 
 import sys
 import platform
 import pytest
 from unittest.mock import MagicMock, patch, call
-from pytron.apputils.native import NativeMixin
+from pytron.apputils.native import NativeComponent
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 
-class MockApp(NativeMixin):
+class MockApp(NativeComponent):
     def __init__(self):
+        self._app = self
         self.config = {"title": "Test App", "author": "Me"}
         self.windows = []
         self.logger = MagicMock()
@@ -177,7 +178,7 @@ def test_set_start_on_boot_unknown_platform_returns_false(app):
 
 
 def test_set_start_on_boot_no_window_delegation(app):
-    """NativeMixin must NOT delegate to an open window's _platform."""
+    """NativeComponent must NOT delegate to an open window's _platform."""
     mock_window = MagicMock()
     app.windows.append(mock_window)
     with patch("sys.frozen", True, create=True):
@@ -359,7 +360,7 @@ def test_get_clipboard_text_returns_none_without_window(app):
 
 def test_native_mixin_store_set_calls_super(app):
     # We need to mock the super() call.
-    # Since NativeMixin doesn't inherit from anything that defines store_set in our MockApp,
+    # Since NativeComponent doesn't inherit from anything that defines store_set in our MockApp,
     # it hits the 'return False' fallback.
     assert app.store_set("key", "value") is False
 
@@ -374,6 +375,7 @@ def test_native_mixin_store_delete_calls_super(app):
 
 class AppWithStorage:
     def __init__(self):
+        self._app = self
         self.storage = {}
 
     def store_set(self, k, v):
@@ -394,15 +396,16 @@ def test_native_mixin_with_actual_storage():
     # This specifically tests the 'if hasattr(super(), ...)' logic
     # by using a class that implements the storage methods.
 
-    class CorrectMROApp(NativeMixin, AppWithStorage):
-        # MRO: [CorrectMROApp, NativeMixin, AppWithStorage, object]
+    class CorrectMROApp(NativeComponent, AppWithStorage):
+        # MRO: [CorrectMROApp, NativeComponent, AppWithStorage, object]
         def __init__(self):
-            # We don't call super().__init__() here because NativeMixin doesn't have one
+            self._app = self
+            # We don't call super().__init__() here because NativeComponent doesn't have one
             # and AppWithStorage needs its storage dict.
             AppWithStorage.__init__(self)
 
     app = CorrectMROApp()
-    # Mock config for NativeMixin methods if needed (though not used in storage methods)
+    # Mock config for NativeComponent methods if needed (though not used in storage methods)
     app.config = {}
 
     assert app.store_set("a", 1) is True

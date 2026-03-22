@@ -5,7 +5,7 @@ import time
 import sys
 from unittest.mock import patch, MagicMock
 from pytron.apputils.deadmansswitch import DeadMansSwitch
-from pytron.apputils.shell import Shell
+from pytron.apputils.shell import ShellComponent
 
 
 # DeadMansSwitch Tests
@@ -38,12 +38,12 @@ def test_deadmansswitch_monitor_triggers(mock_thread, mock_exit):
     assert dms.running is False
 
 
-# Shell Tests
+# ShellComponent Tests
 @patch("sys.platform", "win32")
 @patch("os.startfile", create=True)
 @patch("subprocess.run")
 def test_shell_open_external_windows(mock_run, mock_startfile):
-    Shell.open_external("https://google.com")
+    ShellComponent.open_external("https://google.com")
     mock_startfile.assert_called_with("https://google.com")
 
 
@@ -51,7 +51,7 @@ def test_shell_open_external_windows(mock_run, mock_startfile):
 @patch("subprocess.run")
 def test_shell_open_external_darwin(mock_run):
     with patch("shutil.which", return_value="/usr/bin/open"):
-        Shell.open_external("https://google.com")
+        ShellComponent.open_external("https://google.com")
         mock_run.assert_called_with(["/usr/bin/open", "https://google.com"])
 
 
@@ -59,7 +59,7 @@ def test_shell_open_external_darwin(mock_run):
 @patch("subprocess.run")
 def test_shell_open_external_linux(mock_run):
     with patch("shutil.which", return_value="/usr/bin/xdg-open"):
-        Shell.open_external("https://google.com")
+        ShellComponent.open_external("https://google.com")
         mock_run.assert_called_with(["/usr/bin/xdg-open", "https://google.com"])
 
 
@@ -67,7 +67,7 @@ def test_shell_open_external_linux(mock_run):
 @patch("subprocess.run")
 def test_shell_show_item_windows(mock_run):
     with patch("shutil.which", return_value="explorer"):
-        Shell.show_item_in_folder("C:\\test.txt")
+        ShellComponent.show_item_in_folder("C:\\test.txt")
         mock_run.assert_called()
 
 
@@ -76,11 +76,11 @@ def test_shell_trash_item():
     with patch.dict("sys.modules", {"send2trash": MagicMock(send2trash=mock_s2t)}):
         from send2trash import send2trash
 
-        result = Shell.trash_item("some_file.txt")
+        result = ShellComponent.trash_item("some_file.txt")
         assert result is True
         mock_s2t.assert_called_with("some_file.txt")
 
 
 def test_shell_trash_item_no_lib():
     with patch.dict("sys.modules", {"send2trash": None}):
-        assert Shell.trash_item("file.txt") is False
+        assert ShellComponent.trash_item("file.txt") is False

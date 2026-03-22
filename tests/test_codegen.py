@@ -1,11 +1,12 @@
 import os
 import pytest
 from unittest.mock import MagicMock, patch
-from pytron.apputils.codegen import CodegenMixin
+from pytron.apputils.codegen import CodegenComponent
 
 
-class MockApp(CodegenMixin):
+class MockApp(CodegenComponent):
     def __init__(self):
+        self._app = self
         self.logger = MagicMock()
         self._pydantic_models = {}
         self._exposed_ts_defs = {}
@@ -78,3 +79,12 @@ def test_pydantic_model_generation(app):
     assert "export interface User {" in interface
     assert "name: string;" in interface
     assert "age: number;" in interface
+
+
+def test_ts_reserved_keywords(app):
+    def my_func(key: str, default: int):
+        pass
+
+    ts_def = app._get_ts_definition("my_func", my_func)
+    assert "default_: number" in ts_def
+    assert "key: string" in ts_def

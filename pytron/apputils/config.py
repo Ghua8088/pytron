@@ -6,7 +6,10 @@ from ..utils import get_resource_path
 from ..exceptions import ConfigError
 
 
-class ConfigMixin:
+from .component import AppComponent
+
+
+class ConfigComponent(AppComponent):
     def _setup_logging(self):
         # If we use basicConfig, it might interfere with user's settings.
         # But for a simple CLI tool, it's often preferred.

@@ -11,7 +11,7 @@ class TestAppLifecycle:
         app.on_exit(mock_func)
 
         # Simulate app exit
-        from pytron.apputils.window_mixin import WindowMixin
+        from pytron.apputils.window_mixin import WindowComponent
 
         # The exit logic usually runs through _on_exit_cleanup which we should verify
         # or simulate the callback execution.

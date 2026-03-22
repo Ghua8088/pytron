@@ -6,7 +6,10 @@ import asyncio
 from ..webview import Webview
 
 
-class WindowMixin:
+from .component import AppComponent
+
+
+class WindowComponent(AppComponent):
     def create_window(self, **kwargs):
         if "url" in kwargs and not getattr(sys, "frozen", False):
             if not kwargs["url"].startswith(
@@ -16,7 +19,7 @@ class WindowMixin:
                     kwargs["url"] = os.path.join(self.app_root, kwargs["url"])
         window_config = self.config.copy()
         window_config.update(kwargs)
-        window_config["__app__"] = self
+        window_config["__app__"] = self.app
 
         # Only navigate if a URL was explicitly provided, or if this is the first (main) window and no URL was given
         target_url = kwargs.get("url")
