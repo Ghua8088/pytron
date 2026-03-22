@@ -5,6 +5,7 @@ import logging
 import ctypes
 import subprocess
 import urllib.parse
+from typing import Optional, List, Any
 from ...webview import Webview
 from .adapter import ChromeAdapter
 from ...serializer import pytron_serialize
@@ -249,48 +250,6 @@ class ChromeWebView(Webview):
         if os.path.exists(dev_path):
             return dev_path
         return None
-
-        # 6. Window Settings
-        self.set_title(config.get("title", "Pytron App"))
-
-        # Robust Icon Resolution
-        icon_raw = config.get("icon")
-        if icon_raw:
-            # Check if absolute
-            if os.path.exists(icon_raw):
-                config["icon"] = os.path.abspath(icon_raw)
-            else:
-                # Try relative to root
-                possible = os.path.join(self._app_root, icon_raw)
-                if os.path.exists(possible):
-                    config["icon"] = os.path.abspath(possible)
-
-        w, h = config.get("dimensions", [800, 600])
-        self.set_size(w, h)
-        if not config.get("start_hidden", False):
-            self.show()
-
-        # Navigate
-        self.navigate(navigate_url)
-
-        # --- Platform Helpers (All Platforms) ---
-        self._platform = None
-        current_sys = sys.platform
-        try:
-            if current_sys == "win32":
-                from ...platforms.windows import WindowsImplementation
-
-                self._platform = WindowsImplementation()
-            elif current_sys == "darwin":
-                from ...platforms.darwin import DarwinImplementation
-
-                self._platform = DarwinImplementation()
-            elif current_sys == "linux":
-                from ...platforms.linux import LinuxImplementation
-
-                self._platform = LinuxImplementation()
-        except Exception as e:
-            self.logger.warning(f"Failed to load platform helpers: {e}")
 
         # 7. JS Init Shim (With Proxy for Dynamic Methods)
         init_js = f"""

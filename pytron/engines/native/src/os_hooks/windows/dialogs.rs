@@ -34,7 +34,7 @@ pub fn message_box(
 #[pyfunction]
 #[pyo3(signature = (hwnd_val, title, default_path=None, _file_types=None))]
 pub fn open_file_dialog(
-    _hwnd_val: usize,
+    hwnd_val: usize,
     title: String,
     default_path: Option<String>,
     _file_types: Option<String>,
@@ -50,7 +50,7 @@ pub fn open_file_dialog(
 #[pyfunction]
 #[pyo3(signature = (hwnd_val, title, default_path=None))]
 pub fn open_folder_dialog(
-    _hwnd_val: usize,
+    hwnd_val: usize,
     title: String,
     default_path: Option<String>,
 ) -> PyResult<Option<String>> {
@@ -65,7 +65,7 @@ pub fn open_folder_dialog(
 #[pyfunction]
 #[pyo3(signature = (hwnd_val, title, default_path=None, default_name=None, _file_types=None))]
 pub fn save_file_dialog(
-    _hwnd_val: usize,
+    hwnd_val: usize,
     title: String,
     default_path: Option<String>,
     default_name: Option<String>,
