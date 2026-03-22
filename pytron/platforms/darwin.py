@@ -1,4 +1,5 @@
 import os
+import sys
 import shlex
 import subprocess
 from .interface import PlatformInterface
@@ -31,50 +32,226 @@ class DarwinImplementation(PlatformInterface):
             pass
         return None
 
-    def minimize(self, w):
+    # --- Abstract Method Implementations (PlatformInterface) ---
+
+    def show(self, w):
         native = self._get_native(w)
         if native:
-            native.minimize()
+            native.show()
         else:
-            self._call_os("minimize", w)
+            try:
+                import pytron_native
 
-    def center(self, w):
-        native = self._get_native(w)
-        if native and hasattr(native, "center"):
-            native.center()
-        else:
-            self._call_os("center", w)
+                pytron_native.show(0)
+            except (ImportError, AttributeError):
+                self._run_osascript(
+                    'tell application "System Events" to set visible of process (name of current application) to true'
+                )
 
-    def set_bounds(self, w, x, y, width, height):
+    def hide(self, w):
         native = self._get_native(w)
-        if native and hasattr(native, "set_bounds"):
-            native.set_bounds(int(x), int(y), int(width), int(height))
+        if native:
+            native.hide()
         else:
-            self._call_os("set_bounds", w, x, y, width, height)
+            try:
+                import pytron_native
+
+                pytron_native.hide(0)
+            except (ImportError, AttributeError):
+                self._run_osascript(
+                    'tell application "System Events" to set visible of process (name of current application) to false'
+                )
 
     def close(self, w):
         native = self._get_native(w)
         if native:
             native.terminate()
         else:
-            self._call_os("close", w)
+            try:
+                import pytron_native
+
+                pytron_native.terminate(0)
+            except (ImportError, AttributeError):
+                self._run_osascript("tell window 1 to close")
+
+    def minimize(self, w):
+        native = self._get_native(w)
+        if native:
+            native.minimize()
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.minimize(0)
+            except (ImportError, AttributeError):
+                self._run_osascript("set miniaturized of window 1 to true")
 
     def toggle_maximize(self, w):
         native = self._get_native(w)
         if native:
             native.maximize()
             return True
-        res = self._call_os("toggle_maximize", w)
-        return bool(res) if res is not None else True
+        try:
+            import pytron_native
+
+            res = pytron_native.toggle_maximize(0)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
+        self.maximize(w)
+        return True
+
+    def maximize(self, w):
+        native = self._get_native(w)
+        if native:
+            native.maximize()
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.maximize(0)
+            except (ImportError, AttributeError):
+                self._run_osascript("set zoomed of window 1 to true")
+
+    def restore(self, w):
+        native = self._get_native(w)
+        if native:
+            if hasattr(native, "restore"):
+                native.restore()
+            else:
+                native.unmaximize()
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.restore(0)
+            except (ImportError, AttributeError):
+                self._run_osascript("set zoomed of window 1 to false")
+
+    def set_title(self, w, title):
+        native = self._get_native(w)
+        if native:
+            native.set_title(title)
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.set_title(0, title)
+            except (ImportError, AttributeError):
+                self._run_osascript(f'set title of window 1 to "{title}"')
+
+    def set_bounds(self, w, x, y, width, height):
+        native = self._get_native(w)
+        if native:
+            if hasattr(native, "set_bounds"):
+                native.set_bounds(int(x), int(y), int(width), int(height))
+            else:
+                native.set_size(int(width), int(height), 0)
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.set_bounds(0, x, y, width, height)
+            except (ImportError, AttributeError):
+                # AppleScript bounds are {x1, y1, x2, y2}
+                self._run_osascript(
+                    f"set bounds of window 1 to {{{x}, {y}, {x+width}, {y+height}}}"
+                )
+
+    def set_fullscreen(self, w, enable):
+        native = self._get_native(w)
+        if native:
+            native.set_fullscreen(enable)
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.set_fullscreen(0, enable)
+            except (ImportError, AttributeError):
+                pass
+
+    def set_always_on_top(self, w, enable):
+        native = self._get_native(w)
+        if native and hasattr(native, "set_always_on_top"):
+            native.set_always_on_top(enable)
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.set_always_on_top(0, enable)
+            except (ImportError, AttributeError):
+                pass
+
+    def is_visible(self, w):
+        native = self._get_native(w)
+        if native:
+            return True
+        try:
+            import pytron_native
+
+            res = pytron_native.is_visible(0)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
+        return True
+
+    def center(self, w):
+        native = self._get_native(w)
+        if native and hasattr(native, "center"):
+            native.center()
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.center(0)
+            except (ImportError, AttributeError):
+                pass
+
+    def is_alive(self, w):
+        return self.is_visible(w)
+
+    # --- Extended Capabilities ---
 
     def make_frameless(self, w):
         native = self._get_native(w)
         if native and hasattr(native, "set_decorations"):
             native.set_decorations(False)
         else:
-            self._call_os("make_frameless", w)
+            pass
 
     def start_drag(self, w):
+        native = self._get_native(w)
+        if native:
+            native.start_drag()
+        else:
+            pass
+
+    def message_box(self, w, title, message, style=0):
+        try:
+            import pytron_native
+
+            level = "informational"
+            if style in (4, 5):
+                level = "warning"
+            res = pytron_native.message_box(0, title, message, level)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
+
+        script = ""
+        if style == 4:
+            script = f'display alert "{title}" message "{message}" buttons {{"No", "Yes"}} default button "Yes"'
+        elif style == 1:
+            script = f'display alert "{title}" message "{message}" buttons {{"Cancel", "OK"}} default button "OK"'
+        else:
+            script = f'display alert "{title}" message "{message}" buttons {{"OK"}} default button "OK"'
+        output = self._run_osascript(script)
+        if output and ("Yes" in output or "OK" in output):
+            return 6 if style == 4 else 1
+        return 7 if style == 4 else 2
         native = self._get_native(w)
         if native:
             native.start_drag()
@@ -82,12 +259,17 @@ class DarwinImplementation(PlatformInterface):
             self._call_os("start_drag", w)
 
     def message_box(self, w, title, message, style=0):
-        level = "informational"
-        if style in (4, 5):
-            level = "warning"
-        result = self._call_os("message_box", w, title, message, level)
-        if result is not None:
-            return result
+        try:
+            import pytron_native
+
+            level = "informational"
+            if style in (4, 5):
+                level = "warning"
+            res = pytron_native.message_box(0, title, message, level)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
 
         script = ""
         if style == 4:
@@ -101,48 +283,15 @@ class DarwinImplementation(PlatformInterface):
             return 6 if style == 4 else 1
         return 7 if style == 4 else 2
 
-    def hide(self, w):
-        native = self._get_native(w)
-        if native:
-            native.hide()
-        else:
-            self._call_os("hide", w)
-
-    def is_visible(self, w):
-        native = self._get_native(w)
-        if native:
-            return True
-        res = self._call_os("is_visible", w)
-        return bool(res) if res is not None else True
-
-    def is_alive(self, w):
-        native = self._get_native(w)
-        return bool(native)
-
-    def show(self, w):
-        native = self._get_native(w)
-        if native:
-            native.show()
-        else:
-            self._call_os("show", w)
-
-    def set_fullscreen(self, w, fullscreen):
-        native = self._get_native(w)
-        if native:
-            native.set_fullscreen(fullscreen)
-        else:
-            self._call_os("set_fullscreen", w, fullscreen)
-
-    def set_always_on_top(self, w, enable):
-        native = self._get_native(w)
-        if native and hasattr(native, "set_always_on_top"):
-            native.set_always_on_top(enable)
-        else:
-            self._call_os("set_always_on_top", w, enable)
-
     def notification(self, w, title, message, icon=None):
-        if self._call_os("show_notification", w, title, message, icon) is not None:
+        try:
+            import pytron_native
+
+            pytron_native.show_notification(0, title, message, icon)
             return
+        except (ImportError, AttributeError):
+            pass
+
         script = f'display notification "{message}" with title "{title}"'
         try:
             subprocess.Popen(["osascript", "-e", script])
@@ -150,9 +299,15 @@ class DarwinImplementation(PlatformInterface):
             pass
 
     def open_file_dialog(self, w, title, default_path=None, file_types=None):
-        res = self._call_os("open_file_dialog", w, title, default_path, file_types)
-        if res is not None:
-            return res
+        try:
+            import pytron_native
+
+            res = pytron_native.open_file_dialog(0, title, default_path, file_types)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
+
         script = f'POSIX path of (choose file with prompt "{title}"'
         if default_path:
             script += f' default location "{default_path}"'
@@ -162,11 +317,17 @@ class DarwinImplementation(PlatformInterface):
     def save_file_dialog(
         self, w, title, default_path=None, default_name=None, file_types=None
     ):
-        res = self._call_os(
-            "save_file_dialog", w, title, default_path, default_name, file_types
-        )
-        if res is not None:
-            return res
+        try:
+            import pytron_native
+
+            res = pytron_native.save_file_dialog(
+                0, title, default_path, default_name, file_types
+            )
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
+
         script = f'POSIX path of (choose file name with prompt "{title}"'
         if default_path:
             script += f' default location "{default_path}"'
@@ -176,95 +337,75 @@ class DarwinImplementation(PlatformInterface):
         return self._run_osascript(script)
 
     def open_folder_dialog(self, w, title, default_path=None):
-        res = self._call_os("open_folder_dialog", w, title, default_path)
-        if res is not None:
-            return res
+        try:
+            import pytron_native
+
+            res = pytron_native.open_folder_dialog(0, title, default_path)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
+
         script = f'POSIX path of (choose folder with prompt "{title}"'
         if default_path:
             script += f' default location "{default_path}"'
         script += ")"
         return self._run_osascript(script)
 
-    def set_taskbar_progress(self, w, state="normal", value=0, max_value=100):
-        self._call_os("set_taskbar_progress", w, state, value, max_value)
-
-    def set_window_icon(self, w, icon_path):
-        self._call_os("set_window_icon", w, icon_path)
-
-    def set_app_id(self, app_id):
-        # Runtime bundle id is immutable on macOS; only subprocess engines should
-        # attempt native bridge hooks here.
-        self._call_os("set_app_id", app_id)
-
-    def set_launch_on_boot(self, app_name, exe_path, enable=True):
-        res = self._call_os("set_launch_on_boot", app_name, exe_path, enable)
-        if res is not None:
-            return res
-
-        home = os.path.expanduser("~")
-        launch_agents = os.path.join(home, "Library/LaunchAgents")
-        plist_file = os.path.join(
-            launch_agents, f"com.{app_name.lower()}.startup.plist"
-        )
-
-        if enable:
+    def register_protocol(self, scheme):
+        # On Mac it mostly calls lsregister if bundled
+        # Current impl in DarwinImplementation was missing, adding a basic version
+        # using lsregister if bundled.
+        if getattr(sys, "frozen", False):
             try:
-                os.makedirs(launch_agents, exist_ok=True)
-                args = shlex.split(exe_path)
-                array_str = "\n".join([f"    <string>{a}</string>" for a in args])
-                content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.{app_name.lower()}.startup</string>
-    <key>ProgramArguments</key>
-    <array>
-{array_str}
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-</dict>
-</plist>
-"""
-                with open(plist_file, "w", encoding="utf-8") as f:
-                    f.write(content)
+                exe = sys.executable
+                subprocess.run(
+                    [
+                        "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister",
+                        "-f",
+                        exe,
+                    ],
+                    capture_output=True,
+                )
                 return True
             except Exception:
-                return False
+                pass
+        return False
+
+    def set_app_id(self, app_id):
+        pass
+
+    def set_window_icon(self, w, icon_path):
+        pass
+
+    def set_taskbar_progress(self, w, state="normal", value=0, max_value=100):
+        pass
+
+    def get_clipboard_text(self):
+        try:
+            import pytron_native
+
+            res = pytron_native.get_clipboard_text()
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
 
         try:
-            if os.path.exists(plist_file):
-                os.remove(plist_file)
-            return True
+            return subprocess.check_output(["pbpaste"], text=True).strip()
         except Exception:
-            return False
-
-    def register_protocol(self, scheme):
-        # Protocol registration still fundamentally belongs in the bundled app's
-        # Info.plist, but we preserve the Launch Services refresh hook for bundled
-        # apps so existing packaged-app flows keep working.
-        try:
-            import sys
-
-            if getattr(sys, "frozen", False):
-                exec_path = sys.executable
-                if ".app/Contents/MacOS/" in exec_path:
-                    app_path = exec_path.split(".app/Contents/MacOS/")[0] + ".app"
-                    lsregister_path = "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
-                    if os.path.exists(lsregister_path):
-                        subprocess.run(
-                            [lsregister_path, "-f", app_path], capture_output=True
-                        )
-                        return True
-            return False
-        except Exception:
-            return False
+            return None
 
     def set_clipboard_text(self, text):
-        res = self._call_os("set_clipboard_text", text)
-        if res is not None:
-            return bool(res)
+        try:
+            import pytron_native
+
+            res = pytron_native.set_clipboard_text(text)
+            if res is not None:
+                return bool(res)
+        except (ImportError, AttributeError):
+            pass
+
         try:
             subprocess.run(
                 ["pbcopy"],
@@ -276,12 +417,3 @@ class DarwinImplementation(PlatformInterface):
             return True
         except Exception:
             return False
-
-    def get_clipboard_text(self):
-        res = self._call_os("get_clipboard_text")
-        if res is not None:
-            return res
-        try:
-            return subprocess.check_output(["pbpaste"], text=True).strip()
-        except Exception:
-            return None

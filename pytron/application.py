@@ -1,12 +1,15 @@
 import os
 import sys
-from typing import Any, List
+import asyncio
+from typing import Any, List, Optional, Dict, Callable
+from concurrent.futures import ThreadPoolExecutor
+
 from .state import ReactiveState
 from .router import Router
-
-from .plugin import Plugin
-
 from .shortcuts import ShortcutManager
+from .inspector import Inspector
+
+# Component Imports
 from .apputils.codegen import CodegenComponent
 from .apputils.native import NativeComponent
 from .apputils.config import ConfigComponent
@@ -15,7 +18,6 @@ from .apputils.extras import ExtrasComponent
 from .apputils.shell import ShellComponent
 from .apputils.plugins import PluginComponent
 from .apputils.reporter import CrashReporter
-from .inspector import Inspector
 
 
 class App:
@@ -42,22 +44,23 @@ class App:
         os.environ["PYTRON_ENGINE"] = self.engine
 
         # PERFORMANCE: Shared thread pool for all internal window operations
-        self.thread_pool = __import__("concurrent.futures").futures.ThreadPoolExecutor(
-            max_workers=10, initializer=com_thread_initializer
-        )
+        initializer = __import__(
+            "pytron.utils", fromlist=["com_thread_initializer"]
+        ).com_thread_initializer
+        self.thread_pool = ThreadPoolExecutor(max_workers=10, initializer=initializer)
 
         # Init State
-        self.windows = []
-        self.is_running = False
-        self._exposed_functions = {}
-        self._exposed_ts_defs = {}
-        self._pydantic_models = {}
-        self.shortcuts = {}
-        self.plugins = []
-        self._on_exit_callbacks = []
-        self.tray = None
+        self.windows: List[Any] = []
+        self.is_running: bool = False
+        self._exposed_functions: Dict[str, Callable] = {}
+        self._exposed_ts_defs: Dict[str, str] = {}
+        self._pydantic_models: Dict[str, Any] = {}
+        self.shortcuts: Dict[str, Any] = {}
+        self.plugins: List[Any] = []
+        self._on_exit_callbacks: List[Callable] = []
+        self.tray: Any = None
         self.shortcut_manager = ShortcutManager()
-        self._on_file_drop_callback = None
+        self._on_file_drop_callback: Optional[Callable] = None
         self.app_root: str = ""
 
         # Explicit Attribute Declarations for IDE Support
@@ -69,8 +72,6 @@ class App:
         self.router = Router()
 
         # Event Loop (Asyncio) - Shared for core async tasks
-        import asyncio
-
         try:
             self.loop = asyncio.get_event_loop()
         except RuntimeError:

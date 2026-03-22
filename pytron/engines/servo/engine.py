@@ -40,13 +40,13 @@ class ServoBridge:
         if pytron_servo:
             self.engine = pytron_servo.ServoEngine()
 
-    def webview_create(self, debug, window, root_path=None):
+    def create(self, debug, window, root_path=None):
         self.adapter.send(
             {
                 "action": "init",
                 "options": {
                     "debug": bool(debug),
-                    "root": root_path,  # Pass the root path!
+                    "root": root_path,
                     "frameless": self.adapter.config.get("frameless", False),
                     "icon": self.adapter.config.get("icon", ""),
                     "width": self.adapter.config.get("width", 1024),
@@ -74,47 +74,46 @@ class ServoBridge:
         )
         return 1
 
-    def webview_show(self, w):
+    def show(self, w=None):
         if self.engine:
             self.engine.show()
         else:
             self.adapter.send({"action": "show"})
 
-    def webview_hide(self, w):
+    def hide(self, w=None):
         if self.engine:
             self.engine.hide()
         else:
             self.adapter.send({"action": "hide"})
 
-    def webview_set_title(self, w, title):
+    def set_title(self, title, w=None):
         t = _to_str(title)
         if self.engine:
             self.engine.set_title(t)
         else:
             self.adapter.send({"action": "set_title", "title": t})
 
-    def webview_set_icon(self, w, icon_path):
+    def set_icon(self, icon_path, w=None):
         self.adapter.send({"action": "set_icon", "icon": str(icon_path)})
 
-    def webview_set_size(self, w, width, height, hints):
+    def set_size(self, width, height, hints=None, w=None):
         self.adapter.send({"action": "set_size", "width": width, "height": height})
 
-    def webview_navigate(self, w, url):
+    def navigate(self, url, w=None):
         u = _to_str(url)
         if self.engine:
             self.engine.navigate(u)
         else:
             self.adapter.send({"action": "navigate", "url": u})
 
-    def webview_eval(self, w, js):
+    def eval(self, js, w=None):
         self.adapter.send({"action": "eval", "code": _to_str(js)})
 
-    def webview_init(self, w, js):
+    def init_script(self, js, w=None):
         self.adapter.send({"action": "init_script", "js": _to_str(js)})
 
-    def webview_run(self, w):
+    def run(self, w=None):
         if self.engine:
-            # We need to run the loop. Note: this blocks!
             title = self.adapter.config.get("title", "Pytron")
             width = self.adapter.config.get("width", 1024)
             height = self.adapter.config.get("height", 768)
@@ -122,18 +121,18 @@ class ServoBridge:
         elif self.adapter.process:
             self.adapter.process.wait()
 
-    def webview_destroy(self, w):
+    def terminate(self, w=None):
         if self.engine:
             self.engine.close()
         else:
             self.adapter.send({"action": "close"})
 
-    def webview_bind(self, w, name, fn, arg):
+    def bind(self, name, fn, arg=None, w=None):
         n = _to_str(name)
         self._callbacks[n] = fn
         self.adapter.send({"action": "bind", "name": n})
 
-    def webview_return(self, w, seq, status, result):
+    def return_result(self, seq, status, result, w=None):
         try:
             if result is None:
                 res_obj = None
@@ -146,21 +145,18 @@ class ServoBridge:
             {"action": "reply", "id": _to_str(seq), "status": status, "result": res_obj}
         )
 
-    def webview_set_fullscreen(self, w, fullscreen):
+    def set_fullscreen(self, fullscreen, w=None):
         self.adapter.send({"action": "set_fullscreen", "fullscreen": bool(fullscreen)})
 
-    def webview_set_resizable(self, w, resizable):
+    def set_resizable(self, resizable, w=None):
         self.adapter.send({"action": "set_resizable", "resizable": bool(resizable)})
 
-    def webview_set_always_on_top(self, w, always_on_top):
+    def set_always_on_top(self, always_on_top, w=None):
         self.adapter.send(
             {"action": "set_always_on_top", "always_on_top": bool(always_on_top)}
         )
 
-    def webview_dialog_open_file(self, title, default_path, filters):
-        # This is a bit tricky as it needs to be synchronous or handle callbacks.
-        # For now, we'll send the action and the shell should handle it.
-        # In a real Servo implementation, this might be a blocking call.
+    def dialog_open_file(self, title, default_path, filters):
         self.adapter.send(
             {
                 "action": "dialog_open_file",
@@ -171,7 +167,7 @@ class ServoBridge:
         )
         return []
 
-    def webview_dialog_save_file(self, title, default_path, default_name, filters):
+    def dialog_save_file(self, title, default_path, default_name, filters):
         self.adapter.send(
             {
                 "action": "dialog_save_file",
@@ -183,7 +179,7 @@ class ServoBridge:
         )
         return None
 
-    def webview_dialog_open_folder(self, title, default_path):
+    def dialog_open_folder(self, title, default_path):
         self.adapter.send(
             {
                 "action": "dialog_open_folder",
@@ -193,8 +189,7 @@ class ServoBridge:
         )
         return None
 
-    def webview_get_window(self, w):
-        # On Windows, returning the real HWND allows native features (Taskbar, Menus) to work.
+    def get_hwnd(self, w=None):
         if sys.platform == "win32":
             return self.real_hwnd
         return 0
@@ -204,10 +199,10 @@ class ServoBridge:
             {"action": "create_tray", "icon": str(icon_path), "tooltip": tooltip}
         )
 
-    def webview_dispatch(self, w, fn, arg):
+    def dispatch(self, w, fn, arg):
         try:
             js_code = _to_str(ctypes.cast(arg, ctypes.c_char_p))
-            self.webview_eval(w, js_code)
+            self.eval(js_code)
         except:
             pass
 
@@ -225,142 +220,27 @@ class ServoWebView(Webview):
         # 1. Initialize Base (Components, Loops, Infra)
         super().__init__(config)
         self.logger = logging.getLogger("Pytron.ServoWebView")
-        self.app = config.get("__app__")
 
-        if self.app and hasattr(self.app, "app_root"):
-            self._app_root = pathlib.Path(self.app.app_root)
-        elif getattr(sys, "frozen", False):
-            self._app_root = pathlib.Path(sys.executable).parent
-            if hasattr(sys, "_MEIPASS"):
-                self._app_root = pathlib.Path(sys._MEIPASS)
-        else:
-            self._app_root = pathlib.Path.cwd()
-
-        if self.app:
-            self.thread_pool = self.app.thread_pool
-        else:
-            from concurrent.futures import ThreadPoolExecutor
-            from pytron.utils import com_thread_initializer
-
-            self.thread_pool = ThreadPoolExecutor(
-                max_workers=5, initializer=com_thread_initializer
-            )
-
-        # Determine Scheme (Always pytron:// for Servo engine)
-        self._scheme = "pytron://localhost"
-
-        self._bound_functions = {}
-        self._served_data = {}
-
-        # 3. Resolve Servo Binary
+        # 2. Resolve Servo Binary
         shell_path = config.get("engine_path")
         if not shell_path:
-            renamed_engine = None
-            if getattr(sys, "frozen", False):
-                exe_name = os.path.splitext(os.path.basename(sys.executable))[0]
-                candidates = [
-                    f"{exe_name}.exe",
-                    f"{exe_name}-Renderer.exe",
-                    f"{exe_name}-Engine.exe",
-                    "servo-shell.exe",
-                ]
-                base_dir = os.path.dirname(sys.executable)
-                std_dir = os.path.join(base_dir, "pytron", "dependencies", "servo")
-                mei_dir = getattr(sys, "_MEIPASS", None)
-                search_roots = [base_dir]
-                if std_dir:
-                    search_roots.append(std_dir)
-                if mei_dir:
-                    search_roots.append(
-                        os.path.join(mei_dir, "pytron", "dependencies", "servo")
-                    )
-                for root in search_roots:
-                    if not os.path.exists(root):
-                        continue
-                    for candidate in candidates:
-                        candidate_path = os.path.join(root, candidate)
-                        if os.path.exists(candidate_path):
-                            if os.path.abspath(candidate_path) == os.path.abspath(
-                                sys.executable
-                            ):
-                                continue
-                            renamed_engine = candidate_path
-                            break
-                    if renamed_engine:
-                        break
+            shell_path = self._resolve_servo_binary(config)
 
-            if renamed_engine:
-                shell_path = renamed_engine
-            else:
-                global_path = os.path.expanduser(
-                    "~/.pytron/engines/servo/servo-shell.exe"
-                )
-                if os.path.exists(global_path):
-                    shell_path = global_path
-                else:
-                    search_path = os.path.abspath(
-                        os.path.join(
-                            os.getcwd(),
-                            "..",
-                            "pytron-servo-shell-engine",
-                            "bin",
-                            "servo-shell.exe",
-                        )
-                    )
-                    if os.path.exists(search_path):
-                        shell_path = search_path
-                    if pytron_servo:
-                        self.logger.info("Using Native Servo Pyd bridge.")
-                        shell_path = "NATIVE"
-                    else:
-                        self.logger.warning(
-                            "Servo Engine not found. Auto-provisioning..."
-                        )
-                        forge = ServoForge()
-                        shell_path = forge.provision()
+        if not shell_path or not os.path.exists(shell_path):
+            self.logger.warning("Servo Engine not found. Auto-provisioning...")
+            forge = ServoForge()
+            shell_path = forge.provision()
 
-        # 4. Resolve Root Path (Robust Common Ancestor Logic)
-        # We need a root that covers both 'frontend/dist' and 'plugins'
-        raw_url = config.get("url", "")
-        root_path = str(self._app_root)  # Default fallback
-        navigate_url = raw_url
+        # 3. Path & URL Setup
+        navigate_url = self._routing_comp.normalize_to_pytron(config.get("url", ""))
+        self._start_url = navigate_url
+        root_path = self._routing_comp.root_path
 
-        if not raw_url.startswith(("http:", "https:", "pytron:")):
-            p = pathlib.Path(raw_url).resolve()
-            # Assume standard structure: <root>/frontend/dist/index.html
-            # We want <root> to be the base.
-            # Heuristic: Go up until we find 'plugins' folder or hit root
-            candidate = p.parent
-            found_root = None
-            for _ in range(4):  # Check up to 4 levels up
-                if (candidate / "plugins").exists():
-                    found_root = candidate
-                    break
-                candidate = candidate.parent
-
-            if found_root:
-                root_path = str(found_root)
-                try:
-                    rel = os.path.relpath(str(p), str(found_root))
-                    navigate_url = (
-                        f"pytron://app/{urllib.parse.quote(rel.replace(os.sep, '/'))}"
-                    )
-                except ValueError:
-                    pass
-            else:
-                root_path = str(p.parent)
-                navigate_url = f"pytron://app/{urllib.parse.quote(p.name)}"
-
-        self.logger.info(f"Target Root: {root_path}")
-        self.logger.info(f"Navigating to: {navigate_url}")
-
-        if "cwd" not in config:
-            config["cwd"] = root_path
-
-        # 5. Initialize Bridge & Start Adapter
-        self.logger.info(f"Using Servo Shell (v3): {shell_path}")
+        # 4. Initialize Bridge & Start Adapter
+        self.logger.info(f"Using Servo Shell: {shell_path}")
         self.adapter = ServoAdapter(shell_path, config)
         self.bridge = ServoBridge(self.adapter)
+        self.native = self.bridge  # For facade compatibility
 
         # Connect the engine to the adapter so it can send events
         if self.bridge.engine:
@@ -369,61 +249,22 @@ class ServoWebView(Webview):
         self.adapter.start()
         self.adapter.bind_raw(self._handle_ipc_message)
 
-        # Mock Window Object
-        if "resizable" not in config:
-            config["resizable"] = True
-
-        self.w = self.bridge.webview_create(
-            config.get("debug", False), None, root_path=root_path
+        # 5. Initialize Window & Bindings
+        self.w = self.bridge.create(
+            config.get("debug", False), self, root_path=root_path
         )
 
-        # Safety Net
-        self.native = None
-
-        # 5. Bindings & Init
         self._ipc_comp.init_core_bindings()
 
-        # 6. Window Settings
         self.set_title(config.get("title", "Pytron App"))
-
-        # Robust Icon Resolution
-        icon_raw = config.get("icon")
-        if icon_raw:
-            # Check if absolute
-            if os.path.exists(icon_raw):
-                config["icon"] = os.path.abspath(icon_raw)
-            else:
-                # Try relative to root
-                possible = os.path.join(self._app_root, icon_raw)
-                if os.path.exists(possible):
-                    config["icon"] = os.path.abspath(possible)
-
         w, h = config.get("dimensions", [800, 600])
         self.set_size(w, h)
+
         if not config.get("start_hidden", False):
             self.show()
 
-        # Navigate
+        # 6. Navigate
         self.navigate(navigate_url)
-
-        # --- Platform Helpers (All Platforms) ---
-        self._platform = None
-        current_sys = sys.platform
-        try:
-            if current_sys == "win32":
-                from ...platforms.windows import WindowsImplementation
-
-                self._platform = WindowsImplementation()
-            elif current_sys == "darwin":
-                from ...platforms.darwin import DarwinImplementation
-
-                self._platform = DarwinImplementation()
-            elif current_sys == "linux":
-                from ...platforms.linux import LinuxImplementation
-
-                self._platform = LinuxImplementation()
-        except Exception as e:
-            self.logger.warning(f"Failed to load platform helpers: {e}")
 
         # 7. JS Init Shim (With Proxy for Dynamic Methods)
         init_js = f"""

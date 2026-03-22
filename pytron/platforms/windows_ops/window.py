@@ -1,5 +1,4 @@
 import ctypes
-import ctypes
 
 try:
     import ctypes.wintypes
@@ -23,16 +22,9 @@ class _NativeBridgeProxy:
 
 pytron_native = _NativeBridgeProxy()
 
-# -------------------------------------------------------------------
-# Hardened User32
-# -------------------------------------------------------------------
-# -------------------------------------------------------------------
-# Hardened User32
-# -------------------------------------------------------------------
 try:
     user32 = ctypes.windll.user32
 except AttributeError:
-    # Non-Windows platform (Linux/macOS) during generic import or tests
     user32 = None
 
 
@@ -112,6 +104,10 @@ if user32:
     user32.GetSystemMetrics.argtypes = [ctypes.c_int]
     user32.GetSystemMetrics.restype = ctypes.c_int
 
+    # SetWindowTextW
+    user32.SetWindowTextW.argtypes = [ctypes.wintypes.HWND, ctypes.c_wchar_p]
+    user32.SetWindowTextW.restype = ctypes.wintypes.BOOL
+
     # GetWindowLongPtrW - Check if available
     if hasattr(user32, "GetWindowLongPtrW"):
         user32.GetWindowLongPtrW.argtypes = [ctypes.wintypes.HWND, ctypes.c_int]
@@ -162,9 +158,6 @@ if user32:
     user32.GetMonitorInfoW.argtypes = [ctypes.c_void_p, ctypes.POINTER(MONITORINFO)]
     user32.GetMonitorInfoW.restype = ctypes.wintypes.BOOL
 
-# -------------------------------------------------------------------
-# Operations
-# -------------------------------------------------------------------
 
 _fullscreen_storage = {}
 
@@ -181,26 +174,23 @@ def set_fullscreen(w, enable):
         return
 
     if enable:
-        # Save current style and rect so we can restore later
         rect = ctypes.wintypes.RECT()
         user32.GetWindowRect(hwnd, ctypes.byref(rect))
         _fullscreen_storage[hwnd] = {
             "style": user32.GetWindowLongW(hwnd, GWL_STYLE),
             "rect": (rect.left, rect.top, rect.right, rect.bottom),
         }
-        # Strip caption / thick-frame so the window covers the taskbar
         new_style = _fullscreen_storage[hwnd]["style"] & ~WS_CAPTION & ~WS_THICKFRAME
         user32.SetWindowLongW(hwnd, GWL_STYLE, new_style)
 
-        # Stretch across the monitor that owns this window
-        hmon = user32.MonitorFromWindow(hwnd, 2)  # MONITOR_DEFAULTTONEAREST
+        hmon = user32.MonitorFromWindow(hwnd, 2)
         mi = MONITORINFO()
         mi.cbSize = ctypes.sizeof(MONITORINFO)
         user32.GetMonitorInfoW(hmon, ctypes.byref(mi))
         r = mi.rcMonitor
         user32.SetWindowPos(
             hwnd,
-            -1,  # HWND_TOPMOST
+            -1,
             r.left,
             r.top,
             r.right - r.left,
@@ -213,13 +203,7 @@ def set_fullscreen(w, enable):
             user32.SetWindowLongW(hwnd, GWL_STYLE, data["style"])
             left, top, right, bottom = data["rect"]
             user32.SetWindowPos(
-                hwnd,
-                0,
-                left,
-                top,
-                right - left,
-                bottom - top,
-                SWP_FRAMECHANGED,
+                hwnd, 0, left, top, right - left, bottom - top, SWP_FRAMECHANGED
             )
 
 
@@ -233,6 +217,27 @@ def minimize(w):
         except Exception:
             pass
     user32.ShowWindow(hwnd, SW_MINIMIZE)
+
+
+def maximize(w):
+    hwnd = get_hwnd(w)
+    if not hwnd:
+        return
+    user32.ShowWindow(hwnd, SW_MAXIMIZE)
+
+
+def restore(w):
+    hwnd = get_hwnd(w)
+    if not hwnd:
+        return
+    user32.ShowWindow(hwnd, SW_RESTORE)
+
+
+def set_title(w, title):
+    hwnd = get_hwnd(w)
+    if not hwnd:
+        return
+    user32.SetWindowTextW(hwnd, title)
 
 
 def set_bounds(w, x, y, width, height):
@@ -272,12 +277,11 @@ def toggle_maximize(w):
             return pytron_native.toggle_maximize(hwnd)
         except Exception:
             pass
-    is_zoomed = user32.IsZoomed(hwnd)
-    if is_zoomed:
-        user32.ShowWindow(hwnd, SW_RESTORE)
+    if user32.IsZoomed(hwnd):
+        restore(hwnd)
         return False
     else:
-        user32.ShowWindow(hwnd, SW_MAXIMIZE)
+        maximize(hwnd)
         return True
 
 
@@ -404,18 +408,14 @@ def center(w):
     user32.SetWindowPos(hwnd, 0, x, y, 0, 0, 0x0001)
 
 
-# Window Procedure Hooking for Menus
 _wnd_procs = {}
 
 
 def set_menu(w, menu_bar):
-    """Attaches a MenuBar to the window and hooks its messages."""
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-
     menu_bar.build_for_windows(hwnd)
-
     WNDPROC = ctypes.WINFUNCTYPE(
         ctypes.c_longlong,
         ctypes.wintypes.HWND,
@@ -423,26 +423,19 @@ def set_menu(w, menu_bar):
         ctypes.wintypes.WPARAM,
         ctypes.wintypes.LPARAM,
     )
-
-    # Get original proc
     from .constants import GWL_WNDPROC, WM_COMMAND
 
     old_proc = user32.GetWindowLongPtrW(hwnd, GWL_WNDPROC)
 
     def new_wnd_proc(hwnd_in, msg, wparam, lparam):
         if msg == WM_COMMAND:
-            # Low word of wparam is the menu ID
             cmd_id = wparam & 0xFFFF
             if menu_bar.handle_command(cmd_id):
                 return 0
-
         return user32.CallWindowProcW(old_proc, hwnd_in, msg, wparam, lparam)
 
-    # Keep reference to prevent GC
     new_proc_inst = WNDPROC(new_wnd_proc)
     _wnd_procs[hwnd] = (new_proc_inst, old_proc)
-
-    # Cast to void ptr for SetWindowLongPtrW
     new_proc_ptr = (
         ctypes.c_void_p(new_proc_inst) if hasattr(ctypes, "c_void_p") else new_proc_inst
     )
@@ -451,14 +444,11 @@ def set_menu(w, menu_bar):
 
 
 def set_border_color(w, color_hex):
-    """Sets the border color of the window using DWM (Windows 11+)."""
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-
     if pytron_native:
         try:
-            # Convert hex #RRGGBB to COLORREF (0x00BBGGRR)
             color_hex = color_hex.lstrip("#")
             if len(color_hex) == 6:
                 r = int(color_hex[0:2], 16)
@@ -472,20 +462,14 @@ def set_border_color(w, color_hex):
                 color_ref = b << 16 | g << 8 | r
             else:
                 return
-
             pytron_native.set_border_color(hwnd, color_ref)
             return
         except Exception:
             pass
-
     try:
-        # Fallback to legacy ctypes
         dwmapi = ctypes.windll.dwmapi
         dwmapi.DwmSetWindowAttribute(
-            hwnd,
-            DWMWA_BORDER_COLOR,
-            ctypes.byref(ctypes.c_int(color_ref)),
-            4,
+            hwnd, DWMWA_BORDER_COLOR, ctypes.byref(ctypes.c_int(color_ref)), 4
         )
     except Exception:
         pass

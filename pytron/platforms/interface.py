@@ -44,6 +44,18 @@ class PlatformInterface(ABC):
         pass
 
     @abstractmethod
+    def maximize(self, w: WindowHandle) -> None:
+        pass
+
+    @abstractmethod
+    def restore(self, w: WindowHandle) -> None:
+        pass
+
+    @abstractmethod
+    def set_title(self, w: WindowHandle, title: str) -> None:
+        pass
+
+    @abstractmethod
     def set_bounds(
         self, w: WindowHandle, x: int, y: int, width: int, height: int
     ) -> None:
@@ -70,6 +82,12 @@ class PlatformInterface(ABC):
     def is_alive(self, w: WindowHandle) -> bool:
         """Checks if the native window handle is still valid. Default True to prevent crashes."""
         return True
+
+    def set_size(
+        self, w: WindowHandle, width: int, height: int, hints: int = 0
+    ) -> None:
+        """Sets the window size. Default delegates to set_bounds with current pos."""
+        self.set_bounds(w, -1, -1, width, height)
 
     def make_frameless(self, w: WindowHandle) -> None:
         pass

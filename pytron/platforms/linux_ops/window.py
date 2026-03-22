@@ -113,3 +113,24 @@ def set_always_on_top(w, enable):
     win = get_window(w)
     # gtk_window_set_keep_above(GtkWindow *window, gboolean setting)
     libs.gtk.gtk_window_set_keep_above(win, int(enable))
+
+
+def maximize(w):
+    if not libs.gtk:
+        return
+    win = get_window(w)
+    libs.gtk.gtk_window_maximize(win)
+
+
+def restore(w):
+    if not libs.gtk:
+        return
+    win = get_window(w)
+    libs.gtk.gtk_window_unmaximize(win)
+
+
+def set_title(w, title):
+    if not libs.gtk:
+        return
+    win = get_window(w)
+    libs.gtk.gtk_window_set_title(win, title.encode("utf-8"))

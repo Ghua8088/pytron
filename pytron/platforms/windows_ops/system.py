@@ -459,7 +459,9 @@ def set_clipboard_text(text: str):
     native_bridge = _get_native_bridge()
     if native_bridge:
         try:
-            return native_bridge.set_clipboard_text(text)
+            res = native_bridge.set_clipboard_text(text)
+            if res is not None:
+                return bool(res)
         except Exception as e:
             print(f"[Pytron] Clipboard Set Error (pytron_native): {e}")
 
@@ -499,7 +501,9 @@ def get_clipboard_text():
     native_bridge = _get_native_bridge()
     if native_bridge:
         try:
-            return native_bridge.get_clipboard_text()
+            res = native_bridge.get_clipboard_text()
+            if res is not None:
+                return res
         except Exception as e:
             print(f"[Pytron] Clipboard Get Error (pytron_native): {e}")
 

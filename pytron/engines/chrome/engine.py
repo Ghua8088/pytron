@@ -26,13 +26,13 @@ class ChromeBridge:
         self._callbacks = {}
         self.real_hwnd = 0
 
-    def webview_create(self, debug, window, root_path=None):
+    def create(self, debug, window, root_path=None):
         self.adapter.send(
             {
                 "action": "init",
                 "options": {
                     "debug": bool(debug),
-                    "root": root_path,  # Pass the root path!
+                    "root": root_path,
                     "frameless": self.adapter.config.get("frameless", False),
                     "icon": self.adapter.config.get("icon", ""),
                     "width": self.adapter.config.get("width", 1024),
@@ -60,43 +60,43 @@ class ChromeBridge:
         )
         return 1
 
-    def webview_show(self, w):
+    def show(self, w=None):
         self.adapter.send({"action": "show"})
 
-    def webview_hide(self, w):
+    def hide(self, w=None):
         self.adapter.send({"action": "hide"})
 
-    def webview_set_title(self, w, title):
+    def set_title(self, title, w=None):
         self.adapter.send({"action": "set_title", "title": _to_str(title)})
 
-    def webview_set_icon(self, w, icon_path):
+    def set_icon(self, icon_path, w=None):
         self.adapter.send({"action": "set_icon", "icon": str(icon_path)})
 
-    def webview_set_size(self, w, width, height, hints):
+    def set_size(self, width, height, hints=None, w=None):
         self.adapter.send({"action": "set_size", "width": width, "height": height})
 
-    def webview_navigate(self, w, url):
+    def navigate(self, url, w=None):
         self.adapter.send({"action": "navigate", "url": _to_str(url)})
 
-    def webview_eval(self, w, js):
+    def eval(self, js, w=None):
         self.adapter.send({"action": "eval", "code": _to_str(js)})
 
-    def webview_init(self, w, js):
+    def init_script(self, js, w=None):
         self.adapter.send({"action": "init_script", "js": _to_str(js)})
 
-    def webview_run(self, w):
+    def run(self, w=None):
         if self.adapter.process:
             self.adapter.process.wait()
 
-    def webview_destroy(self, w):
+    def terminate(self, w=None):
         self.adapter.send({"action": "close"})
 
-    def webview_bind(self, w, name, fn, arg):
+    def bind(self, name, fn, arg=None, w=None):
         n = _to_str(name)
         self._callbacks[n] = fn
         self.adapter.send({"action": "bind", "name": n})
 
-    def webview_return(self, w, seq, status, result):
+    def return_result(self, seq, status, result, w=None):
         try:
             if result is None:
                 res_obj = None
@@ -109,7 +109,7 @@ class ChromeBridge:
             {"action": "reply", "id": _to_str(seq), "status": status, "result": res_obj}
         )
 
-    def webview_get_window(self, w):
+    def get_hwnd(self, w=None):
         # On Windows, returning the real HWND allows native features (Taskbar, Menus) to work.
         if sys.platform == "win32":
             return self.real_hwnd
@@ -120,10 +120,10 @@ class ChromeBridge:
             {"action": "create_tray", "icon": str(icon_path), "tooltip": tooltip}
         )
 
-    def webview_dispatch(self, w, fn, arg):
+    def dispatch(self, w, fn, arg):
         try:
             js_code = _to_str(ctypes.cast(arg, ctypes.c_char_p))
-            self.webview_eval(w, js_code)
+            self.eval(js_code)
         except:
             pass
 
@@ -172,7 +172,7 @@ class ChromeWebView(Webview):
         self.adapter.bind_raw(self._handle_ipc_message)
 
         # 5. Initialize Window & Bindings
-        self.w = self.bridge.webview_create(
+        self.w = self.bridge.create(
             config.get("debug", False), self, root_path=root_path
         )
 
@@ -400,7 +400,7 @@ class ChromeWebView(Webview):
 
         # Force Resizable Update (Fix gray maximize button)
         # Sometimes init flag is overridden by window style defaults in Electron
-        self.bridge.adapter.send({"action": "set_resizable", "resizable": True})
+        self.adapter.send({"action": "set_resizable", "resizable": True})
 
     @property
     def hwnd(self):
@@ -459,20 +459,16 @@ class ChromeWebView(Webview):
                     serialized_json = json.dumps(safe_obj)
 
                     if seq:
-                        self.bridge.webview_return(
-                            self.w, seq.encode("utf-8"), 0, serialized_json
-                        )
+                        self.bridge.return_result(seq, 0, serialized_json)
                 except Exception as e:
                     self.logger.error(f"Mojo IPC Error in {event}: {e}")
                     if seq:
                         safe_err = pytron_serialize(str(e), None)
-                        self.bridge.webview_return(
-                            self.w, seq.encode("utf-8"), 1, json.dumps(safe_err)
-                        )
+                        self.bridge.return_result(seq, 1, json.dumps(safe_err))
 
     def bind(self, name, func, run_in_thread=True, secure=False):
         self._bound_functions[name] = func
-        self.bridge.webview_bind(self.w, name.encode("utf-8"), None, None)
+        self.bridge.bind(name, None, None)
 
     # --- Feature Overrides (Compatibility Layer) ---
 
@@ -500,31 +496,31 @@ class ChromeWebView(Webview):
         self.bridge.adapter.send({"action": "unserve_data", "key": key})
 
     def set_icon(self, icon_path):
-        self.bridge.webview_set_icon(self.w, icon_path)
+        self.bridge.set_icon(icon_path)
 
     def minimize(self):
-        self.bridge.adapter.send({"action": "minimize"})
+        self.adapter.send({"action": "minimize"})
 
     def show(self):
-        self.bridge.webview_show(self.w)
+        self.bridge.show()
 
     def hide(self):
-        self.bridge.webview_hide(self.w)
+        self.bridge.hide()
 
     def close(self, force=False):
-        self.bridge.webview_destroy(self.w)
+        self.bridge.terminate()
 
     def set_title(self, title):
-        self.bridge.webview_set_title(self.w, title.encode("utf-8"))
+        self.bridge.set_title(title)
 
     def set_size(self, w, h):
-        self.bridge.webview_set_size(self.w, w, h, 0)
+        self.bridge.set_size(w, h)
 
     def navigate(self, url):
-        self.bridge.webview_navigate(self.w, url.encode("utf-8"))
+        self.bridge.navigate(url)
 
     def eval(self, js):
-        self.bridge.webview_eval(self.w, js)
+        self.bridge.eval(js)
 
     def toggle_maximize(self):
         self.bridge.adapter.send({"action": "toggle_maximize"})

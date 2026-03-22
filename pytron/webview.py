@@ -3,23 +3,22 @@ import json
 import time
 import threading
 import asyncio
-import inspect
 import pathlib
-import mimetypes
 import logging
-import os
-import urllib.parse
-from typing import Any, List, Optional, Callable
+from typing import Callable, Optional, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from concurrent.futures import ThreadPoolExecutor
 
 # Import Webview Components
 from .webview_components.ipc import IPCComponent
 from .webview_components.routing import RoutingComponent
 from .webview_components.assets import AssetComponent
 from .webview_components.dialogs import DialogComponent
+from .utils import resolve_native_module, resolve_native_bridge
+from .exceptions import NativeEngineError
 
-# Import Native Engine via Canonical Resolver
-from .utils import resolve_native_module
-
+# Initialize Native Engine via Canonical Resolver
 pytron_native = resolve_native_module()
 if not pytron_native:
     # Final legacy fallback for simple environments
@@ -28,9 +27,6 @@ if not pytron_native:
     except ImportError:
         pass
 
-from .serializer import pytron_serialize
-from .exceptions import ConfigError, NativeEngineError
-
 IS_ANDROID = False
 
 
@@ -38,7 +34,7 @@ IS_ANDROID = False
 # Browser wrapper (Native PyO3 Version)
 # -------------------------------------------------------------------
 class Webview:
-    def __init__(self, config):
+    def __init__(self, config: dict):
         if not pytron_native:
             from .utils import get_native_error_details
 
@@ -57,6 +53,20 @@ class Webview:
         self.app = config.get("__app__")
 
         # 1. Core Component & Loop Setup
+        self.native: Any = None
+        self._platform: Any = None
+        self._hwnd_cache: int = 0
+        self._routing_comp: Optional[RoutingComponent] = None
+        self._ipc_comp: Optional[IPCComponent] = None
+        self._asset_comp: Optional[AssetComponent] = None
+        self._dialog_comp: Optional[DialogComponent] = None
+
+        self.thread_pool: Optional["ThreadPoolExecutor"] = None
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
+        self._app_root: Optional[pathlib.Path] = None
+        self._running: bool = False
+        self._start_url: Optional[str] = None
+
         self._setup_core_infra()
         self._setup_components()
 
@@ -79,18 +89,18 @@ class Webview:
             self.thread_pool = self.app.thread_pool
         else:
             from .utils import com_thread_initializer
+            from concurrent.futures import ThreadPoolExecutor
 
-            self.thread_pool = __import__(
-                "concurrent.futures"
-            ).futures.ThreadPoolExecutor(
+            self.thread_pool = ThreadPoolExecutor(
                 max_workers=5, initializer=com_thread_initializer
             )
 
         self.loop = asyncio.new_event_loop()
 
         def start_loop():
-            asyncio.set_event_loop(self.loop)
-            self.loop.run_forever()
+            if self.loop:
+                asyncio.set_event_loop(self.loop)
+                self.loop.run_forever()
 
         t = threading.Thread(target=start_loop, daemon=True)
         t.start()
@@ -135,7 +145,7 @@ class Webview:
             self.native = pytron_native.NativeWebview(
                 debug,
                 initial_url,
-                self._routing_comp.root_path,
+                self._routing_comp.root_path if self._routing_comp else "",
                 bool(config.get("resizable", True)),
                 bool(config.get("frameless", False)),
                 store_instance,
@@ -255,7 +265,10 @@ class Webview:
     @property
     def hwnd(self):
         if hasattr(self.native, "get_hwnd"):
-            return self.native.get_hwnd()
+            res = self.native.get_hwnd()
+            if isinstance(res, (int, float)):
+                return int(res)
+            return 0
         return getattr(self, "_hwnd_cache", 0)
 
     def is_alive(self):
@@ -270,6 +283,8 @@ class Webview:
         secure: bool = False,
     ):
         self._ipc_comp.bind(name, func, run_in_thread, secure)
+        if self.native and hasattr(self.native, "bind"):
+            self.native.bind(name, None, None)
 
     def expose(self, entity):
         if callable(entity) and not isinstance(entity, type):
@@ -284,6 +299,8 @@ class Webview:
 
     # --- Routing Facade ---
     def navigate(self, url: str):
+        if not self._routing_comp or not self.native:
+            return
         target = self._routing_comp.normalize_to_pytron(url)
         self.config["url"] = target
         if not getattr(self, "_running", False):
@@ -328,12 +345,25 @@ class Webview:
 
     # --- Window Control ---
     def set_title(self, title):
-        self.native.set_title(title)
+        if self._platform and self.hwnd:
+            self._platform.set_title(self.hwnd, title)
+            return
+        if self.native:
+            self.native.set_title(title)
 
     def set_size(self, w, h):
-        self.native.set_size(w, h, 0)
+        if self._platform and self.hwnd:
+            self._platform.set_size(self.hwnd, w, h, 0)
+            return
+        if self.native:
+            self.native.set_size(w, h, 0)
 
     def set_bounds(self, x, y, width, height):
+        if self._platform and self.hwnd:
+            self._platform.set_bounds(
+                self.hwnd, int(x), int(y), int(width), int(height)
+            )
+            return
         if hasattr(self.native, "set_bounds"):
             self.native.set_bounds(int(x), int(y), int(width), int(height))
         else:
@@ -360,33 +390,41 @@ class Webview:
         self.native.terminate()
 
     def hide(self):
+        if self._platform and self.hwnd:
+            self._platform.hide(self.hwnd)
+            return
         self.native.hide()
 
     def show(self):
+        if self._platform and self.hwnd:
+            self._platform.show(self.hwnd)
+            return
         self.native.show()
 
     def minimize(self):
+        if self._platform and self.hwnd:
+            self._platform.minimize(self.hwnd)
+            return
         self.native.minimize()
 
     def maximize(self):
+        if self._platform and self.hwnd:
+            self._platform.maximize(self.hwnd)
+            return
         self.native.maximize()
 
     def restore(self):
+        if self._platform and self.hwnd:
+            self._platform.restore(self.hwnd)
+            return
         if hasattr(self.native, "restore"):
             self.native.restore()
         else:
             self.unmaximize()
 
     def toggle_maximize(self):
-        if sys.platform == "win32" and self.hwnd:
-            from .utils import resolve_native_bridge
-
-            bridge = resolve_native_bridge()
-            if bridge:
-                try:
-                    return bridge.toggle_maximize(self.hwnd)
-                except Exception:
-                    pass
+        if self._platform and self.hwnd:
+            return self._platform.toggle_maximize(self.hwnd)
         self.maximize()
 
     def unmaximize(self):
@@ -404,18 +442,12 @@ class Webview:
             self._platform.center(self.hwnd)
 
     def set_always_on_top(self, enable):
+        if self._platform and self.hwnd:
+            self._platform.set_always_on_top(self.hwnd, enable)
+            return
         call_native = getattr(self.native, "set_always_on_top", None)
         if call_native:
             call_native(enable)
-        elif sys.platform == "win32" and self.hwnd:
-            from .utils import resolve_native_bridge
-
-            bridge = resolve_native_bridge()
-            if bridge:
-                try:
-                    bridge.set_always_on_top(self.hwnd, enable)
-                except Exception:
-                    pass
 
     def set_resizable(self, enable):
         call_native = getattr(self.native, "set_resizable", None)
@@ -423,6 +455,9 @@ class Webview:
             call_native(enable)
 
     def start_drag(self):
+        if self._platform and self.hwnd:
+            self._platform.start_drag(self.hwnd)
+            return
         self.native.start_drag()
 
     def set_prevent_close(self, prevent):

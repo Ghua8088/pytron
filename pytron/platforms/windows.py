@@ -60,6 +60,32 @@ class WindowsImplementation(PlatformInterface):
     def start_drag(self, w):
         window.start_drag(w)
 
+    def set_title(self, w, title):
+        window.set_title(w, title)
+
+    def set_size(self, w, width, height, hints=0):
+        window.set_bounds(w, -1, -1, width, height)
+
+    def maximize(self, w):
+        window.maximize(w)
+
+    def restore(self, w) -> None:
+        window.restore(w)
+
+    def set_title(self, w, title):
+        window.set_title(w, title)
+
+    def set_size(self, w, width, height, hints=0):
+        window.set_bounds(
+            w, -1, -1, width, height
+        )  # -1 for x,y often means IGNORE in our helper or we need a specific flag
+
+    def maximize(self, w):
+        window.maximize(w)
+
+    def restore(self, w):
+        window.restore(w)
+
     def message_box(self, w, title, message, style=0):
         return system.message_box(w, title, message, style)
 
@@ -77,12 +103,21 @@ class WindowsImplementation(PlatformInterface):
 
     def is_alive(self, w):
         hwnd = self.get_hwnd(w)
-        # Harden IsWindow check
         if not hwnd:
             return False
 
+        # Try native check first
+        from .windows_ops.window import pytron_native
+
+        if pytron_native:
+            try:
+                # is_visible in rust calls IsWindowVisible
+                return pytron_native.is_visible(hwnd)
+            except Exception:
+                pass
+
         try:
-            # IsWindow takes HWND, returns BOOL (int)
+            # Fallback to ctypes IsWindow
             user32 = ctypes.windll.user32
             user32.IsWindow.argtypes = [ctypes.wintypes.HWND]
             user32.IsWindow.restype = ctypes.wintypes.BOOL

@@ -22,52 +22,206 @@ class LinuxImplementation(PlatformInterface):
         """Returns the native webview instance if available."""
         return getattr(w, "native", None)
 
-    def minimize(self, w):
+    # --- Abstract Method Implementations (PlatformInterface) ---
+
+    def show(self, w):
         native = self._get_native(w)
         if self.is_native and native:
-            native.minimize()
+            native.show()
         else:
-            from .linux_ops import window
+            try:
+                import pytron_native
 
-            window.minimize(w)
+                pytron_native.show(w.hwnd if hasattr(w, "hwnd") else 0)
+            except (ImportError, AttributeError):
+                from .linux_ops import window
 
-    def center(self, w):
+                window.show(w)
+
+    def hide(self, w):
         native = self._get_native(w)
         if self.is_native and native:
-            native.center()
+            native.hide()
         else:
-            from .linux_ops import window
+            try:
+                import pytron_native
 
-            window.center(w)
+                pytron_native.hide(w.hwnd if hasattr(w, "hwnd") else 0)
+            except (ImportError, AttributeError):
+                from .linux_ops import window
 
-    def set_bounds(self, w, x, y, width, height):
-        native = self._get_native(w)
-        if self.is_native and native:
-            native.set_bounds(int(x), int(y), int(width), int(height))
-        else:
-            from .linux_ops import window
-
-            window.set_bounds(w, x, y, width, height)
+                window.hide(w)
 
     def close(self, w):
         native = self._get_native(w)
         if self.is_native and native:
             native.terminate()
         else:
-            from .linux_ops import window
+            try:
+                import pytron_native
 
-            window.close(w)
+                pytron_native.terminate(w.hwnd if hasattr(w, "hwnd") else 0)
+            except (ImportError, AttributeError):
+                from .linux_ops import window
+
+                window.close(w)
+
+    def minimize(self, w):
+        native = self._get_native(w)
+        if self.is_native and native:
+            native.minimize()
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.minimize(w.hwnd if hasattr(w, "hwnd") else 0)
+            except (ImportError, AttributeError):
+                from .linux_ops import window
+
+                window.minimize(w)
 
     def toggle_maximize(self, w):
-        # We don't have a direct toggle in Rust yet, so we just maximize
         native = self._get_native(w)
         if self.is_native and native:
             native.maximize()
             return True
-        else:
+        try:
+            import pytron_native
+
+            res = pytron_native.toggle_maximize(w.hwnd if hasattr(w, "hwnd") else 0)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
             from .linux_ops import window
 
             return window.toggle_maximize(w)
+        return False
+
+    def maximize(self, w):
+        native = self._get_native(w)
+        if self.is_native and native:
+            native.maximize()
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.maximize(w.hwnd if hasattr(w, "hwnd") else 0)
+            except (ImportError, AttributeError):
+                from .linux_ops import window
+
+                window.maximize(w)
+
+    def restore(self, w):
+        native = self._get_native(w)
+        if self.is_native and native:
+            native.unmaximize()
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.restore(w.hwnd if hasattr(w, "hwnd") else 0)
+            except (ImportError, AttributeError):
+                from .linux_ops import window
+
+                window.restore(w)
+
+    def set_title(self, w, title):
+        native = self._get_native(w)
+        if self.is_native and native:
+            native.set_title(title)
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.set_title(w.hwnd if hasattr(w, "hwnd") else 0, title)
+            except (ImportError, AttributeError):
+                from .linux_ops import window
+
+                window.set_title(w, title)
+
+    def set_bounds(self, w, x, y, width, height):
+        native = self._get_native(w)
+        if self.is_native and native:
+            if hasattr(native, "set_bounds"):
+                native.set_bounds(int(x), int(y), int(width), int(height))
+            else:
+                native.set_size(int(width), int(height), 0)
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.set_bounds(
+                    w.hwnd if hasattr(w, "hwnd") else 0, x, y, width, height
+                )
+            except (ImportError, AttributeError):
+                from .linux_ops import window
+
+                window.set_bounds(w, x, y, width, height)
+
+    def set_fullscreen(self, w, fullscreen):
+        native = self._get_native(w)
+        if self.is_native and native:
+            native.set_fullscreen(fullscreen)
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.set_fullscreen(
+                    w.hwnd if hasattr(w, "hwnd") else 0, fullscreen
+                )
+            except (ImportError, AttributeError):
+                from .linux_ops import window
+
+                window.set_fullscreen(w, fullscreen)
+
+    def set_always_on_top(self, w, enable):
+        native = self._get_native(w)
+        if self.is_native and native:
+            native.set_always_on_top(enable)
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.set_always_on_top(
+                    w.hwnd if hasattr(w, "hwnd") else 0, enable
+                )
+            except (ImportError, AttributeError):
+                from .linux_ops import window
+
+                window.set_always_on_top(w, enable)
+
+    def is_visible(self, w):
+        native = self._get_native(w)
+        if native:
+            return True
+        try:
+            import pytron_native
+
+            res = pytron_native.is_visible(w.hwnd if hasattr(w, "hwnd") else 0)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
+        return True
+
+    def center(self, w):
+        native = self._get_native(w)
+        if self.is_native and native and hasattr(native, "center"):
+            native.center()
+        else:
+            try:
+                import pytron_native
+
+                pytron_native.center(w.hwnd if hasattr(w, "hwnd") else 0)
+            except (ImportError, AttributeError):
+                from .linux_ops import window
+
+                window.center(w)
+
+    def is_alive(self, w):
+        return self.is_visible(w)
+
+    # --- Extended Capabilities (Virtual) ---
 
     def make_frameless(self, w):
         native = self._get_native(w)
@@ -88,60 +242,39 @@ class LinuxImplementation(PlatformInterface):
             window.start_drag(w)
 
     def message_box(self, w, title, message, style=0):
-        # Fallback to zenity/kdialog subprocess (safe from Schism)
+        try:
+            import pytron_native
+
+            res = pytron_native.message_box(0, title, message, style)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
         from .linux_ops import system
 
         return system.message_box(w, title, message, style)
 
-    def hide(self, w):
-        native = self._get_native(w)
-        if self.is_native and native:
-            native.hide()
-        else:
-            from .linux_ops import window
-
-            window.hide(w)
-
-    def is_visible(self, w):
-        return True  # Default for native
-
-    def is_alive(self, w):
-        native = self._get_native(w)
-        return bool(native)
-
-    def show(self, w):
-        native = self._get_native(w)
-        if self.is_native and native:
-            native.show()
-        else:
-            from .linux_ops import window
-
-            window.show(w)
-
-    def set_fullscreen(self, w, fullscreen):
-        native = self._get_native(w)
-        if self.is_native and native:
-            native.set_fullscreen(fullscreen)
-        else:
-            from .linux_ops import window
-
-            window.set_fullscreen(w, fullscreen)
-
-    def set_always_on_top(self, w, enable):
-        native = self._get_native(w)
-        if self.is_native and native:
-            native.set_always_on_top(enable)
-        else:
-            from .linux_ops import window
-
-            window.set_always_on_top(w, enable)
-
     def notification(self, w, title, message, icon=None):
+        try:
+            import pytron_native
+
+            pytron_native.show_notification(0, title, message, icon)
+            return
+        except (ImportError, AttributeError):
+            pass
         from .linux_ops import system
 
         system.notification(w, title, message, icon)
 
     def open_file_dialog(self, w, title, default_path=None, file_types=None):
+        try:
+            import pytron_native
+
+            res = pytron_native.open_file_dialog(0, title, default_path, file_types)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
         from .linux_ops import system
 
         return system.open_file_dialog(w, title, default_path, file_types)
@@ -149,25 +282,70 @@ class LinuxImplementation(PlatformInterface):
     def save_file_dialog(
         self, w, title, default_path=None, default_name=None, file_types=None
     ):
+        try:
+            import pytron_native
+
+            res = pytron_native.save_file_dialog(
+                0, title, default_path, default_name, file_types
+            )
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
         from .linux_ops import system
 
         return system.save_file_dialog(w, title, default_path, default_name, file_types)
 
     def open_folder_dialog(self, w, title, default_path=None):
+        try:
+            import pytron_native
+
+            res = pytron_native.open_folder_dialog(0, title, default_path)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
         from .linux_ops import system
 
         return system.open_folder_dialog(w, title, default_path)
 
     def set_taskbar_progress(self, w, state="normal", value=0, max_value=100):
-        pass
+        try:
+            import pytron_native
+
+            pytron_native.set_taskbar_progress(
+                w.hwnd if hasattr(w, "hwnd") else 0, state, value, max_value
+            )
+        except (ImportError, AttributeError):
+            pass
 
     def set_window_icon(self, w, icon_path):
-        pass
+        try:
+            import pytron_native
+
+            pytron_native.set_window_icon(
+                w.hwnd if hasattr(w, "hwnd") else 0, icon_path
+            )
+        except (ImportError, AttributeError):
+            pass
 
     def set_app_id(self, app_id):
-        pass
+        try:
+            import pytron_native
+
+            pytron_native.set_app_id(app_id)
+        except (ImportError, AttributeError):
+            pass
 
     def set_launch_on_boot(self, app_name, exe_path, enable=True):
+        try:
+            import pytron_native
+
+            res = pytron_native.set_launch_on_boot(app_name, exe_path, enable)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
         from .linux_ops import system
 
         return system.set_launch_on_boot(app_name, exe_path, enable)
@@ -178,11 +356,27 @@ class LinuxImplementation(PlatformInterface):
         return system.register_protocol(scheme)
 
     def get_clipboard_text(self):
+        try:
+            import pytron_native
+
+            res = pytron_native.get_clipboard_text()
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
         from .linux_ops import system
 
         return system.get_clipboard_text()
 
     def set_clipboard_text(self, text):
+        try:
+            import pytron_native
+
+            res = pytron_native.set_clipboard_text(text)
+            if res is not None:
+                return res
+        except (ImportError, AttributeError):
+            pass
         from .linux_ops import system
 
         return system.set_clipboard_text(text)

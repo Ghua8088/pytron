@@ -8,6 +8,13 @@ class DialogComponent(WebviewComponent):
 
     def open_file(self, *args, **kwargs) -> List[str]:
         """Opens a native file selection dialog."""
+        # 1. Prioritize Platform Implementation (pytron_native / System Hooks)
+        if self.webview._platform and self.webview.hwnd:
+            return self.webview._platform.open_file_dialog(
+                self.webview.hwnd, *args, **kwargs
+            )
+
+        # 2. Fallback to Engine Bridge (Renderer-specific dialogs)
         if hasattr(self.native, "dialog_open_file"):
             title = kwargs.get("title") or (args[0] if args else "Open File")
             default_path = kwargs.get("default_path") or (
@@ -26,14 +33,17 @@ class DialogComponent(WebviewComponent):
                 filters_str = ";".join(parts)
             return self.native.dialog_open_file(title, default_path, filters_str)
 
-        if self.webview._platform and self.webview.hwnd:
-            return self.webview._platform.open_file_dialog(
-                self.webview.hwnd, *args, **kwargs
-            )
         return []
 
     def save_file(self, *args, **kwargs) -> Optional[str]:
         """Opens a native file save dialog."""
+        # 1. Prioritize Platform Implementation
+        if self.webview._platform and self.webview.hwnd:
+            return self.webview._platform.save_file_dialog(
+                self.webview.hwnd, *args, **kwargs
+            )
+
+        # 2. Fallback to Engine Bridge
         if hasattr(self.native, "dialog_save_file"):
             title = kwargs.get("title", "Save File")
             default_path = kwargs.get("default_path")
@@ -50,23 +60,22 @@ class DialogComponent(WebviewComponent):
                 title, default_path, default_name, filters_str
             )
 
-        if self.webview._platform and self.webview.hwnd:
-            return self.webview._platform.save_file_dialog(
-                self.webview.hwnd, *args, **kwargs
-            )
         return None
 
     def open_folder(self, *args, **kwargs) -> Optional[str]:
         """Opens a native folder selection dialog."""
+        # 1. Prioritize Platform Implementation
+        if self.webview._platform and self.webview.hwnd:
+            return self.webview._platform.open_folder_dialog(
+                self.webview.hwnd, *args, **kwargs
+            )
+
+        # 2. Fallback to Engine Bridge
         if hasattr(self.native, "dialog_open_folder"):
             title = kwargs.get("title", "Select Folder")
             default_path = kwargs.get("default_path")
             return self.native.dialog_open_folder(title, default_path)
 
-        if self.webview._platform and self.webview.hwnd:
-            return self.webview._platform.open_folder_dialog(
-                self.webview.hwnd, *args, **kwargs
-            )
         return None
 
     def message_box(self, *args, **kwargs) -> int:
@@ -81,6 +90,14 @@ class DialogComponent(WebviewComponent):
         self, state: str = "normal", value: int = 0, max_value: int = 100
     ):
         """Updates the application icon progress bar in the system taskbar."""
+        # 1. Prioritize Platform Implementation (Centralized pytron_native hook)
+        if self.webview._platform and self.webview.hwnd:
+            self.webview._platform.set_taskbar_progress(
+                self.webview.hwnd, state, value, max_value
+            )
+            return
+
+        # 2. Fallback to Engine Bridge (if the shell implements its own taskbar logic)
         if hasattr(self.native, "set_taskbar_progress"):
             s_map = {
                 "normal": 2,
@@ -91,12 +108,6 @@ class DialogComponent(WebviewComponent):
             }
             s_code = s_map.get(state, 0)
             self.native.set_taskbar_progress(s_code, int(value), int(max_value))
-            return
-
-        if self.webview._platform and self.webview.hwnd:
-            self.webview._platform.set_taskbar_progress(
-                self.webview.hwnd, state, value, max_value
-            )
 
     def notification(self, title: str, message: str, icon: Optional[str] = None):
         """Displays a system tray notification."""
