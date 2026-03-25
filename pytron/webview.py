@@ -5,7 +5,7 @@ import threading
 import asyncio
 import pathlib
 import logging
-from typing import Callable, Optional, Any, TYPE_CHECKING
+from typing import Callable, Optional, Any, TYPE_CHECKING, Dict
 
 if TYPE_CHECKING:
     from concurrent.futures import ThreadPoolExecutor
@@ -66,12 +66,15 @@ class Webview:
         self._app_root: Optional[pathlib.Path] = None
         self._running: bool = False
         self._start_url: Optional[str] = None
+        self._bound_functions: Dict[str, Callable] = {}
 
         self._setup_core_infra()
         self._setup_components()
 
         # 2. Native Engine (Optional for Subclasses)
-        if config.get("engine", "native") == "native":
+        # We only auto-initialize if we are the base Webview and engine is native
+        # Subclasses like ChromeWebView/ServoWebView handle their own initialization
+        if type(self) is Webview and config.get("engine", "native") == "native":
             self._init_native_engine(config)
             self._setup_native_window(config)
             self._ipc_comp.init_core_bindings()
@@ -222,6 +225,16 @@ class Webview:
             window.pytron = window.pytron || {{}};
             window.pytron.is_ready = true;
             window.pytron.id = "{self.id}";
+
+            // Optimized Event Bus Unpacker
+            window.addEventListener('pytron:batch', (e) => {{
+                const batch = e.detail;
+                if (Array.isArray(batch)) {{
+                    batch.forEach(([name, data]) => {{
+                        window.dispatchEvent(new CustomEvent(name, {{ detail: data }}));
+                    }});
+                }}
+            }});
         }})();
         """
         self.eval(init_js)
@@ -283,8 +296,6 @@ class Webview:
         secure: bool = False,
     ):
         self._ipc_comp.bind(name, func, run_in_thread, secure)
-        if self.native and hasattr(self.native, "bind"):
-            self.native.bind(name, None, None)
 
     def expose(self, entity):
         if callable(entity) and not isinstance(entity, type):
@@ -400,6 +411,20 @@ class Webview:
             self._platform.show(self.hwnd)
             return
         self.native.show()
+
+    def set_icon(self, icon_path):
+        if self._platform and self.hwnd:
+            self._platform.set_window_icon(self.hwnd, icon_path)
+            return
+        if hasattr(self.native, "set_icon"):
+            self.native.set_icon(icon_path)
+
+    def set_menu(self, menu_bar):
+        if self._platform and self.hwnd:
+            self._platform.set_menu(self.hwnd, menu_bar)
+            return
+        if hasattr(self.native, "set_menu"):
+            self.native.set_menu(menu_bar)
 
     def minimize(self):
         if self._platform and self.hwnd:

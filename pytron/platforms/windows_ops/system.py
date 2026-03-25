@@ -293,15 +293,39 @@ def _prepare_ofn(w, title, default_path, file_types, file_buffer_size=1024):
 
 
 def open_file_dialog(w, title, default_path=None, file_types=None):
-    if pytron_native:
+    native_bridge = _get_native_bridge()
+    if native_bridge:
+        hwnd = get_hwnd(w)
+        print(f"[Pytron] Debug: Calling open_file_dialog. HWND={hwnd}")
         try:
-            res = pytron_native.open_file_dialog(
-                get_hwnd(w), title, default_path, str(file_types)
-            )
+            res = native_bridge.open_file_dialog(hwnd, title, default_path, file_types)
+            print(f"[Pytron] Debug: Parented dialog result: {res}")
             if res:
                 return res
-        except Exception:
-            pass
+            # Fallback for suspected parenting issues in multi-process (Chrome)
+            if hwnd != 0:
+                print(
+                    f"[Pytron] Debug: Parented dialog returned None. Retrying WITHOUT parent..."
+                )
+                res = native_bridge.open_file_dialog(0, title, default_path, file_types)
+                print(f"[Pytron] Debug: Parentless dialog result: {res}")
+                if res:
+                    return res
+        except Exception as e:
+            print(
+                f"[Pytron] Debug: Parented dialog error: {e}. Retrying WITHOUT parent..."
+            )
+            # Final attempt without parent
+            try:
+                if hwnd != 0:
+                    res = native_bridge.open_file_dialog(
+                        0, title, default_path, file_types
+                    )
+                    print(f"[Pytron] Debug: Error-fallback dialog result: {res}")
+                    return res
+            except Exception as ex:
+                print(f"[Pytron] Debug: Final fallback failed: {ex}")
+                pass
 
     ofn, buff = _prepare_ofn(w, title, default_path, file_types)
     ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR
@@ -312,15 +336,41 @@ def open_file_dialog(w, title, default_path=None, file_types=None):
 
 
 def save_file_dialog(w, title, default_path=None, default_name=None, file_types=None):
-    if pytron_native:
+    native_bridge = _get_native_bridge()
+    if native_bridge:
+        hwnd = get_hwnd(w)
+        print(f"[Pytron] Debug: Calling save_file_dialog. HWND={hwnd}")
         try:
-            res = pytron_native.save_file_dialog(
-                get_hwnd(w), title, default_path, default_name, str(file_types)
+            res = native_bridge.save_file_dialog(
+                hwnd, title, default_path, default_name, file_types
             )
+            print(f"[Pytron] Debug: Parented save result: {res}")
             if res:
                 return res
-        except Exception:
-            pass
+            if hwnd != 0:
+                print(
+                    f"[Pytron] Debug: Parented save returned None. Retrying WITHOUT parent..."
+                )
+                res = native_bridge.save_file_dialog(
+                    0, title, default_path, default_name, file_types
+                )
+                print(f"[Pytron] Debug: Parentless save result: {res}")
+                if res:
+                    return res
+        except Exception as e:
+            print(
+                f"[Pytron] Debug: Parented save error: {e}. Retrying WITHOUT parent..."
+            )
+            try:
+                if hwnd != 0:
+                    res = native_bridge.save_file_dialog(
+                        0, title, default_path, default_name, file_types
+                    )
+                    print(f"[Pytron] Debug: Error-fallback save result: {res}")
+                    return res
+            except Exception as ex:
+                print(f"[Pytron] Debug: Final save fallback failed: {ex}")
+                pass
 
     path = default_path
     if default_name:
@@ -338,13 +388,35 @@ def save_file_dialog(w, title, default_path=None, default_name=None, file_types=
 
 
 def open_folder_dialog(w, title, default_path=None):
-    if pytron_native:
+    native_bridge = _get_native_bridge()
+    if native_bridge:
+        hwnd = get_hwnd(w)
+        print(f"[Pytron] Debug: Calling open_folder_dialog. HWND={hwnd}")
         try:
-            res = pytron_native.open_folder_dialog(get_hwnd(w), title, default_path)
+            res = native_bridge.open_folder_dialog(hwnd, title, default_path)
+            print(f"[Pytron] Debug: Parented folder result: {res}")
             if res:
                 return res
-        except Exception:
-            pass
+            if hwnd != 0:
+                print(
+                    f"[Pytron] Debug: Parented folder returned None. Retrying WITHOUT parent..."
+                )
+                res = native_bridge.open_folder_dialog(0, title, default_path)
+                print(f"[Pytron] Debug: Parentless folder result: {res}")
+                if res:
+                    return res
+        except Exception as e:
+            print(
+                f"[Pytron] Debug: Parented folder error: {e}. Retrying WITHOUT parent..."
+            )
+            try:
+                if hwnd != 0:
+                    res = native_bridge.open_folder_dialog(0, title, default_path)
+                    print(f"[Pytron] Debug: Error-fallback folder result: {res}")
+                    return res
+            except Exception as ex:
+                print(f"[Pytron] Debug: Final folder fallback failed: {ex}")
+                pass
 
     bif = BROWSEINFOW()
     bif.hwndOwner = get_hwnd(w)

@@ -460,3 +460,4 @@ pub fn set_launch_on_boot(app_name: String, exe_path: String, enable: bool) -> P
         }
     }
 }
+

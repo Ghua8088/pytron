@@ -473,3 +473,19 @@ def set_border_color(w, color_hex):
         )
     except Exception:
         pass
+
+
+def set_window_curvature(w, preference=DWMWCP_ROUND):
+    hwnd = get_hwnd(w)
+    if not hwnd:
+        return
+    try:
+        dwmapi = ctypes.windll.dwmapi
+        dwmapi.DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            ctypes.byref(ctypes.c_int(preference)),
+            4,
+        )
+    except Exception:
+        pass

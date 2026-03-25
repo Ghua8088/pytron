@@ -103,6 +103,11 @@ class NativeComponent(AppComponent):
             return self.windows[0].dialog_open_folder(title, default_path)
         return None
 
+    # --- Aliases for Backward Compatibility ---
+    open_file_dialog = dialog_open_file
+    save_file_dialog = dialog_save_file
+    open_folder_dialog = dialog_open_folder
+
     def system_notification(self, title: Optional[str] = None, message: str = ""):
         """Sends a system-level (tray/toast) notification via the OS."""
         if not title:
@@ -155,21 +160,84 @@ class NativeComponent(AppComponent):
     def get_system_info(self):
         """Returns hardware and OS information."""
         if self.windows:
-            return self.windows[0]._platform.get_system_info()
-
-        # Fallback if no window
-        import os
-
-        arch = "unknown"
-        if sys.platform == "win32":
-            arch = os.environ.get("PROCESSOR_ARCHITECTURE", "unknown")
-        else:
             try:
-                arch = os.uname().machine
-            except:
+                return self.windows[0]._platform.get_system_info()
+            except Exception:
                 pass
 
-        return {"os": sys.platform, "arch": arch}
+        # Fallback for headless mode or before windows are created
+        try:
+            sys_plat = sys.platform
+            impl = None
+            if sys_plat == "win32":
+                from ..platforms.windows import WindowsImplementation
+
+                impl = WindowsImplementation()
+            elif sys_plat == "linux":
+                from ..platforms.linux import LinuxImplementation
+
+                impl = LinuxImplementation()
+            elif sys_plat == "darwin":
+                from ..platforms.darwin import DarwinImplementation
+
+                impl = DarwinImplementation()
+
+            if impl and hasattr(impl, "get_system_info"):
+                return impl.get_system_info()
+        except Exception:
+            pass
+
+        # Ultimate generic fallback
+        try:
+            import platform
+
+            arch = platform.machine()
+        except ImportError:
+            arch = "unknown"
+
+        return {
+            "os": sys.platform,
+            "arch": arch,
+            "cpu_count": os.cpu_count(),
+        }
+
+    def set_window_curvature(self, preference=None):
+        """Forces rounded or square corners on Windows 11."""
+        if self.windows:
+            for window in self.windows:
+                try:
+                    if hasattr(window._platform, "set_window_curvature"):
+                        window._platform.set_window_curvature(window, preference)
+                except Exception:
+                    pass
+        return True
+
+    def set_border_color(self, color_hex: str):
+        """Sets the window border color on supported platforms."""
+        if self.windows:
+            for window in self.windows:
+                try:
+                    window.set_border_color(color_hex)
+                except Exception:
+                    pass
+        return True
+
+    def set_background_material(self, material: str = "mica"):
+        """
+        Sets the window background material (Windows 11).
+        Options: 'mica', 'acrylic', 'tabbed', 'none'
+        """
+        if self.windows:
+            for window in self.windows:
+                try:
+                    # Chrome Engine (Electron) supports this via set_background_material
+                    if hasattr(window, "adapter"):
+                        window.adapter.send(
+                            {"action": "set_background_material", "material": material}
+                        )
+                except Exception:
+                    pass
+        return True
 
     def store_set(self, key: str, value):
         """Persists a value to the app's local storage."""

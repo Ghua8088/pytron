@@ -10,8 +10,15 @@ class DialogComponent(WebviewComponent):
         """Opens a native file selection dialog."""
         # 1. Prioritize Platform Implementation (pytron_native / System Hooks)
         if self.webview._platform and self.webview.hwnd:
+            title = kwargs.get("title") or (args[0] if args else "Open File")
+            default_path = kwargs.get("default_path") or (
+                args[1] if len(args) > 1 else None
+            )
+            file_types = kwargs.get("file_types") or (
+                args[2] if len(args) > 2 else None
+            )
             return self.webview._platform.open_file_dialog(
-                self.webview.hwnd, *args, **kwargs
+                self.webview.hwnd, title, default_path, file_types
             )
 
         # 2. Fallback to Engine Bridge (Renderer-specific dialogs)
@@ -39,8 +46,12 @@ class DialogComponent(WebviewComponent):
         """Opens a native file save dialog."""
         # 1. Prioritize Platform Implementation
         if self.webview._platform and self.webview.hwnd:
+            title = kwargs.get("title", "Save File")
+            default_path = kwargs.get("default_path")
+            default_name = kwargs.get("default_name")
+            file_types = kwargs.get("file_types")
             return self.webview._platform.save_file_dialog(
-                self.webview.hwnd, *args, **kwargs
+                self.webview.hwnd, title, default_path, default_name, file_types
             )
 
         # 2. Fallback to Engine Bridge
@@ -66,8 +77,10 @@ class DialogComponent(WebviewComponent):
         """Opens a native folder selection dialog."""
         # 1. Prioritize Platform Implementation
         if self.webview._platform and self.webview.hwnd:
+            title = kwargs.get("title", "Select Folder")
+            default_path = kwargs.get("default_path")
             return self.webview._platform.open_folder_dialog(
-                self.webview.hwnd, *args, **kwargs
+                self.webview.hwnd, title, default_path
             )
 
         # 2. Fallback to Engine Bridge

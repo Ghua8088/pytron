@@ -242,6 +242,20 @@ class ServoWebView(Webview):
         self.bridge = ServoBridge(self.adapter)
         self.native = self.bridge  # For facade compatibility
 
+        # Initialize Platform Implementation
+        if sys.platform == "win32":
+            from ...platforms import WindowsImplementation
+
+            self._platform = WindowsImplementation()
+        elif sys.platform == "darwin":
+            from ...platforms import MacOSImplementation
+
+            self._platform = MacOSImplementation()
+        elif sys.platform.startswith("linux"):
+            from ...platforms import LinuxImplementation
+
+            self._platform = LinuxImplementation()
+
         # Connect the engine to the adapter so it can send events
         if self.bridge.engine:
             self.adapter.engine = self.bridge.engine
@@ -425,45 +439,13 @@ class ServoWebView(Webview):
                 args = inner_payload
                 seq = None
 
-            if event in self._bound_functions:
-                func = self._bound_functions[event]
-
-                def _respond(status, result):
-                    safe_obj = pytron_serialize(result, None)
-                    serialized_json = json.dumps(safe_obj)
-                    if seq:
-                        self.bridge.webview_return(
-                            self.w, seq.encode("utf-8"), status, serialized_json
-                        )
-
-                def _runner():
-                    try:
-                        res = func(*args) if isinstance(args, list) else func(args)
-                        _respond(0, res)
-                    except Exception as e:
-                        self.logger.error(f"ServoNative IPC Error in {event}: {e}")
-                        _respond(1, str(e))
-
-                async def _async_runner():
-                    try:
-                        res = func(*args) if isinstance(args, list) else func(args)
-                        if inspect.iscoroutine(res):
-                            res = await res
-                        _respond(0, res)
-                    except Exception as e:
-                        self.logger.error(
-                            f"ServoNative Async IPC Error in {event}: {e}"
-                        )
-                        _respond(1, str(e))
-
-                if inspect.iscoroutinefunction(func):
-                    asyncio.run_coroutine_threadsafe(_async_runner(), self.loop)
-                else:
-                    self.thread_pool.submit(_runner)
-
-    def bind(self, name, func, run_in_thread=True, secure=False):
-        self._bound_functions[name] = func
-        self.bridge.webview_bind(self.w, name.encode("utf-8"), None, None)
+            if hasattr(self.bridge, "_callbacks") and event in self.bridge._callbacks:
+                func = self.bridge._callbacks[event]
+                try:
+                    # Delegate directly to the IPCComponent wrapper
+                    func(seq, args)
+                except Exception as e:
+                    self.logger.error(f"Servo IPC Callback Error in {event}: {e}")
 
     # --- Feature Overrides (Compatibility Layer) ---
 
@@ -491,7 +473,7 @@ class ServoWebView(Webview):
         self.bridge.adapter.send({"action": "unserve_data", "key": key})
 
     def set_icon(self, icon_path):
-        self.bridge.webview_set_icon(self.w, icon_path)
+        self.bridge.set_icon(icon_path)
 
     def minimize(self):
         self.bridge.adapter.send({"action": "minimize"})
@@ -502,29 +484,32 @@ class ServoWebView(Webview):
     def restore(self):
         self.bridge.adapter.send({"action": "restore"})
 
+    def toggle_maximize(self):
+        self.bridge.adapter.send({"action": "toggle_maximize"})
+
     def unmaximize(self):
         self.bridge.adapter.send({"action": "unmaximize"})
 
     def show(self):
-        self.bridge.webview_show(self.w)
+        self.bridge.show()
 
     def hide(self):
-        self.bridge.webview_hide(self.w)
+        self.bridge.hide()
 
     def close(self, force=False):
-        self.bridge.webview_destroy(self.w)
+        self.bridge.terminate()
 
     def set_title(self, title):
-        self.bridge.webview_set_title(self.w, title.encode("utf-8"))
+        self.bridge.set_title(title)
 
     def set_size(self, w, h):
-        self.bridge.webview_set_size(self.w, w, h, 0)
+        self.bridge.set_size(w, h)
 
     def navigate(self, url):
-        self.bridge.webview_navigate(self.w, url.encode("utf-8"))
+        self.bridge.navigate(url)
 
     def eval(self, js):
-        self.bridge.webview_eval(self.w, js)
+        self.bridge.eval(js)
 
     def reload(self):
         self.eval("location.reload()")
@@ -533,13 +518,13 @@ class ServoWebView(Webview):
         self.bridge.adapter.send({"action": "toggle_maximize"})
 
     def set_fullscreen(self, enable):
-        self.bridge.webview_set_fullscreen(self.w, enable)
+        self.bridge.set_fullscreen(enable)
 
     def set_resizable(self, enable):
-        self.bridge.webview_set_resizable(self.w, enable)
+        self.bridge.set_resizable(enable)
 
     def set_always_on_top(self, enable):
-        self.bridge.webview_set_always_on_top(self.w, enable)
+        self.bridge.set_always_on_top(enable)
 
     def make_frameless(self):
         self.bridge.adapter.send({"action": "set_frameless", "frameless": True})
@@ -573,7 +558,7 @@ class ServoWebView(Webview):
                 exts = pat.replace("*.", "").replace(";", ",")
                 parts.append(f"{name}:{exts}")
             filters_str = ";".join(parts)
-        return self.bridge.webview_dialog_open_file(title, default_path, filters_str)
+        return self.bridge.dialog_open_file(title, default_path, filters_str)
 
     def dialog_save_file(self, *args, **kwargs):
         title = kwargs.get("title", "Save File")
@@ -587,14 +572,14 @@ class ServoWebView(Webview):
                 exts = pat.replace("*.", "").replace(";", ",")
                 parts.append(f"{name}:{exts}")
             filters_str = ";".join(parts)
-        return self.bridge.webview_dialog_save_file(
+        return self.bridge.dialog_save_file(
             title, default_path, default_name, filters_str
         )
 
     def dialog_open_folder(self, *args, **kwargs):
         title = kwargs.get("title", "Select Folder")
         default_path = kwargs.get("default_path")
-        return self.bridge.webview_dialog_open_folder(title, default_path)
+        return self.bridge.dialog_open_folder(title, default_path)
 
     def set_taskbar_progress(self, state="normal", value=0, max_value=100):
         if self._platform and self.hwnd:
@@ -631,7 +616,7 @@ class ServoWebView(Webview):
 
         try:
             # Delegate to bridge which handles both .pyd and subprocess
-            self.bridge.webview_run(self.w)
+            self.bridge.run()
         except KeyboardInterrupt:
             self.close()
         finally:

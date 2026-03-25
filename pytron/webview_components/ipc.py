@@ -5,6 +5,7 @@ import logging
 from typing import Any, Callable
 from .base import WebviewComponent
 from ..serializer import pytron_serialize
+from ..utils import com_thread_initializer
 
 
 class IPCComponent(WebviewComponent):
@@ -29,10 +30,17 @@ class IPCComponent(WebviewComponent):
         is_async = inspect.iscoroutinefunction(python_func)
         self._bound_functions[name] = python_func
 
-        # The Wrapper that Rust calls: (seq, args_json, ptr)
-        def _native_callback(seq, req, arg_ptr):
+        # The Wrapper that Rust/Mojo calls: (seq, args_json, ptr) or (seq, args_list)
+        def _native_callback(seq, req=None, arg_ptr=None, *extra):
             try:
-                args = json.loads(req) if req else []
+                if isinstance(req, (list, dict)):
+                    # Chrome/Servo Path: req is already a list of decoded Python objects
+                    args = req
+                elif req is not None:
+                    # Native Path: req is a JSON string
+                    args = json.loads(req)
+                else:
+                    args = []
             except Exception:
                 args = []
 
@@ -52,6 +60,7 @@ class IPCComponent(WebviewComponent):
 
             # Runner Logic
             def _runner():
+                com_thread_initializer()
                 try:
                     res = python_func(*args)
                     _respond(0, _serialize_result(res))
@@ -184,6 +193,7 @@ class IPCComponent(WebviewComponent):
         self.bind("dialog_open_file", wv.dialog_open_file, run_in_thread=True)
         self.bind("dialog_save_file", wv.dialog_save_file, run_in_thread=True)
         self.bind("dialog_open_folder", wv.dialog_open_folder, run_in_thread=True)
+        self.bind("open_folder", wv.dialog_open_folder, run_in_thread=True)
         self.bind("message_box", wv.message_box, run_in_thread=True)
         self.bind("system_notification", wv.system_notification, run_in_thread=True)
         self.bind("toast", wv.toast, run_in_thread=True)

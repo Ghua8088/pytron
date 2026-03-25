@@ -2953,6 +2953,7 @@ dependencies = [
  "mime_guess",
  "notify-rust",
  "pyo3",
+ "raw-window-handle 0.6.2",
  "rfd",
  "serde",
  "serde_json",

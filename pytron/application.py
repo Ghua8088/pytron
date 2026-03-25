@@ -62,6 +62,9 @@ class App:
         self.shortcut_manager = ShortcutManager()
         self._on_file_drop_callback: Optional[Callable] = None
         self.app_root: str = ""
+        from collections import defaultdict
+
+        self._event_listeners: Dict[str, List[Callable]] = defaultdict(list)
 
         # Explicit Attribute Declarations for IDE Support
         self.config: dict = {}
@@ -158,6 +161,12 @@ class App:
 
         # Load Plugins
         self._plugin_comp.discover_and_load()
+
+        # Build Optimized Dispatcher (Buffered)
+        from collections import deque
+
+        self._dispatch_buffer = deque()
+        self.loop.create_task(self._flush_events_task())
 
         # AUTO-CODEGEN: Generate TypeScript definitions in debug mode (After plugins are loaded)
         if self.config.get("debug", False):
@@ -278,6 +287,11 @@ class App:
         """Opens a native folder selection dialog."""
         return self._native_comp.dialog_open_folder(title, default_path)
 
+    # --- Aliases for Backward Compatibility ---
+    open_file_dialog = dialog_open_file
+    save_file_dialog = dialog_save_file
+    open_folder_dialog = dialog_open_folder
+
     def system_notification(self, title: str = None, message: str = ""):
         """Sends a system-level notification via the OS."""
         return self._native_comp.system_notification(title, message)
@@ -297,6 +311,25 @@ class App:
     def get_system_info(self) -> dict:
         """Returns hardware and OS information."""
         return self._native_comp.get_system_info()
+
+    def set_window_curvature(self, preference: Any = None):
+        """Forces rounded or square corners on Windows 11."""
+        return self._native_comp.set_window_curvature(preference)
+
+    def set_border_color(self, color_hex: str):
+        """Sets the window border color on supported platforms."""
+        return self._native_comp.set_border_color(color_hex)
+
+    def set_background_material(self, material: str = "mica"):
+        """
+        Sets the window background material (Windows 11).
+        Options: 'mica', 'acrylic', 'tabbed', 'none'
+        """
+        return self._native_comp.set_background_material(material)
+
+    def set_mica_effect(self, enable: bool = True):
+        """Helper to enable/disable Mica effect on Windows 11."""
+        return self.set_background_material("mica" if enable else "none")
 
     # --- Shell Component Forwarding ---
     def open_external(self, url: str):
@@ -446,6 +479,24 @@ class App:
 
     def _register_core_apis(self):
         """Automatically exposes built-in system APIs to the frontend."""
+
+        # --- Event Bus Bridge ---
+        def _handle_frontend_event(name, data=None):
+            if name in self._event_listeners:
+                for cb in self._event_listeners[name]:
+                    try:
+                        if inspect.iscoroutinefunction(cb):
+                            asyncio.run_coroutine_threadsafe(cb(data), self.loop)
+                        else:
+                            self.thread_pool.submit(cb, data)
+                    except Exception as e:
+                        self.logger.error(f"Event Bus Error ({name}): {e}")
+            return True
+
+        self.expose(
+            _handle_frontend_event, name="__pytron_event__", run_in_thread=False
+        )
+
         # Shell APIs
         self.expose(self.open_external, name="shell_open_external")
         self.expose(self.show_item_in_folder, name="shell_show_item_in_folder")
@@ -456,6 +507,12 @@ class App:
 
         # System Info
         self.expose(self.get_system_info, name="system_get_info")
+
+        # Aesthetic APIs
+        self.expose(self.set_window_curvature, name="window_set_curvature")
+        self.expose(self.set_border_color, name="window_set_border_color")
+        self.expose(self.set_background_material, name="window_set_background_material")
+        self.expose(self.set_mica_effect, name="window_set_mica_effect")
 
         # Store APIs
         self.expose(self.store_set, name="store_set")
@@ -524,27 +581,72 @@ class App:
     def dispatch(self, event_name: str, payload: Any = None):
         """
         Dispatches an event to the frontend Event Bus in ALL active windows.
-        Usage: app.dispatch('navigate', {'route': '/settings'})
+        Uses a high-performance buffer for batching.
         """
-        # We iterate over windows and call their individual dispatch method
-        # This ensures they use the strictly defined event bus protocol we implemented in Webview
-        for window in self.windows:
-            if hasattr(window, "dispatch"):
-                window.dispatch(event_name, payload)
+        self._dispatch_buffer.append((event_name, payload))
         return True
 
-    @property
-    def plugin_statuses(self) -> List[dict]:
-        """Returns the status of all plugins."""
-        if not hasattr(self, "_plugin_comp"):
-            return []
-        return self._plugin_comp.plugin_statuses
+    async def _flush_events_task(self):
+        """Background task to flush the event buffer periodically (Low latency batching)."""
+        while True:
+            try:
+                if self._dispatch_buffer:
+                    # Collect current batch
+                    batch = []
+                    while self._dispatch_buffer:
+                        batch.append(self._dispatch_buffer.popleft())
 
-    @plugin_statuses.setter
-    def plugin_statuses(self, value: List[dict]):
-        """Allows setting the plugin statuses (delegates to component)."""
-        if hasattr(self, "_plugin_comp"):
-            self._plugin_comp.plugin_statuses = value
+                    if batch:
+                        # Optimization: If many events, send as a single 'pytron:batch' event
+                        # If only one, send normally to keep legacy compatibility
+                        if len(batch) > 1:
+                            for window in self.windows:
+                                if hasattr(window, "dispatch"):
+                                    window.dispatch("pytron:batch", batch)
+                        else:
+                            name, data = batch[0]
+                            for window in self.windows:
+                                if hasattr(window, "dispatch"):
+                                    window.dispatch(name, data)
+
+                # Dynamic sleep: 16ms (60fps target) or 32ms (low power)
+                await asyncio.sleep(0.016)
+            except Exception as e:
+                if self.logger:
+                    self.logger.error(f"Event Flush Error: {e}")
+                await asyncio.sleep(1)
+
+    def post(self, event_name: str, payload: Any = None):
+        """
+        Alias for dispatch.
+        Dispatches an event to the frontend Event Bus.
+        Usage: app.post('user-logged-in', {'user': 'raghu'})
+        """
+        return self.dispatch(event_name, payload)
+
+    def listen(self, event_name: str, func: Optional[Callable] = None):
+        """
+        Registers a backend listener for events coming from the frontend (pytron.emit).
+        Can be used as a decorator: @app.listen('my-event')
+        """
+        if func is None:
+
+            def decorator(f):
+                self.listen(event_name, f)
+                return f
+
+            return decorator
+
+        self._event_listeners[event_name].append(func)
+        return func
+
+    def unlisten(self, event_name: str, func: Optional[Callable]):
+        """Removes a backend event listener."""
+        if event_name in self._event_listeners:
+            try:
+                self._event_listeners[event_name].remove(func)
+            except ValueError:
+                pass
 
     def toggle_inspector(self):
         """

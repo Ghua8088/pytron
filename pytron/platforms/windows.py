@@ -178,3 +178,13 @@ class WindowsImplementation(PlatformInterface):
 
     def set_border_color(self, w, color_hex):
         window.set_border_color(w, color_hex)
+
+    def get_hwnd(self, w):
+        return window.get_hwnd(w)
+
+    def set_window_curvature(self, w, preference=None):
+        from .windows_ops.window import DWMWCP_ROUND
+
+        if preference is None:
+            preference = DWMWCP_ROUND
+        window.set_window_curvature(w, preference)

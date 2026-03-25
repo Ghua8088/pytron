@@ -56,10 +56,15 @@ class ChromeBridge:
                     ),
                     "transparent": self.adapter.config.get("transparent", False),
                     "center": self.adapter.config.get("center", True),
+                    "theme": self.adapter.config.get("theme", "light"),
                 },
             }
         )
         return 1
+
+    def drag(self, w=None):
+        """Initiates window dragging from the renderer."""
+        self.adapter.send({"action": "start_drag"})
 
     def show(self, w=None):
         self.adapter.send({"action": "show"})
@@ -168,6 +173,20 @@ class ChromeWebView(Webview):
         self.adapter = ChromeAdapter(shell_path, config)
         self.bridge = ChromeBridge(self.adapter)
         self.native = self.bridge  # For facade compatibility
+
+        # Initialize Platform Implementation (Required for DialogComponent to use system hooks)
+        if sys.platform == "win32":
+            from ...platforms import WindowsImplementation
+
+            self._platform = WindowsImplementation()
+        elif sys.platform == "darwin":
+            from ...platforms import MacOSImplementation
+
+            self._platform = MacOSImplementation()
+        elif sys.platform.startswith("linux"):
+            from ...platforms import LinuxImplementation
+
+            self._platform = LinuxImplementation()
 
         self.adapter.start()
         self.adapter.bind_raw(self._handle_ipc_message)
@@ -389,8 +408,29 @@ class ChromeWebView(Webview):
             try:
                 self.bridge.real_hwnd = int(hwnd_str)
                 self.logger.info(f"Acquired Electron HWND: {self.bridge.real_hwnd}")
+                # Initial curvature enforcement
+                self._platform.set_window_curvature(self.bridge.real_hwnd)
             except:
                 pass
+            return
+
+        # Curvature Persistence on State Change
+        if (
+            msg_type == "lifecycle"
+            and isinstance(payload, dict)
+            and payload.get("event") in ["unmaximize", "restore"]
+        ):
+            if hasattr(self.bridge, "real_hwnd") and self.bridge.real_hwnd:
+                self.logger.debug(
+                    f"Re-applying Curvature for event: {payload.get('event')}"
+                )
+                try:
+                    import asyncio
+
+                    asyncio.create_task(self._reapply_curvature_delayed())
+                except:
+                    # Fallback for non-async environments
+                    self._platform.set_window_curvature(self.bridge.real_hwnd)
             return
 
         if msg_type == "ipc":
@@ -403,31 +443,22 @@ class ChromeWebView(Webview):
                 args = inner_payload
                 seq = None
 
-            if event in self._bound_functions:
-                func = self._bound_functions[event]
+            if hasattr(self.bridge, "_callbacks") and event in self.bridge._callbacks:
+                func = self.bridge._callbacks[event]
                 try:
-                    result = func(*args) if isinstance(args, list) else func(args)
-
-                    if inspect.iscoroutine(result):
-                        try:
-                            result = asyncio.run(result)
-                        except RuntimeError:
-                            pass
-
-                    safe_obj = pytron_serialize(result, None)
-                    serialized_json = json.dumps(safe_obj)
-
-                    if seq:
-                        self.bridge.return_result(seq, 0, serialized_json)
+                    # Delegate directly to the IPCComponent wrapper
+                    # This handles thread pooling, async, serialization, and results
+                    func(seq, args)
                 except Exception as e:
-                    self.logger.error(f"Mojo IPC Error in {event}: {e}")
-                    if seq:
-                        safe_err = pytron_serialize(str(e), None)
-                        self.bridge.return_result(seq, 1, json.dumps(safe_err))
+                    self.logger.error(f"Mojo IPC Callback Error in {event}: {e}")
 
-    def bind(self, name, func, run_in_thread=True, secure=False):
-        self._bound_functions[name] = func
-        self.bridge.bind(name, None, None)
+    async def _reapply_curvature_delayed(self):
+        """Small delay to ensure Windows has finished state transition."""
+        import asyncio
+
+        await asyncio.sleep(0.1)
+        if hasattr(self.bridge, "real_hwnd") and self.bridge.real_hwnd:
+            self._platform.set_window_curvature(self.bridge.real_hwnd)
 
     # --- Feature Overrides (Compatibility Layer) ---
 
@@ -459,6 +490,16 @@ class ChromeWebView(Webview):
 
     def minimize(self):
         self.adapter.send({"action": "minimize"})
+
+    def maximize(self):
+        self.adapter.send({"action": "maximize"})
+
+    def restore(self):
+        self.adapter.send({"action": "restore"})
+
+    def drag(self):
+        """Initiates window dragging."""
+        self.bridge.drag()
 
     def show(self):
         self.bridge.show()
