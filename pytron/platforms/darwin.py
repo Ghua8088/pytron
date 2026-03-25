@@ -417,3 +417,14 @@ class DarwinImplementation(PlatformInterface):
             return True
         except Exception:
             return False
+
+    def get_system_info(self):
+        import platform
+
+        return {
+            "os": "darwin",
+            "arch": platform.machine(),
+            "cpu_count": os.cpu_count(),
+            "release": platform.mac_ver()[0],
+            "version": platform.version(),
+        }

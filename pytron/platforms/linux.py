@@ -380,3 +380,14 @@ class LinuxImplementation(PlatformInterface):
         from .linux_ops import system
 
         return system.set_clipboard_text(text)
+
+    def get_system_info(self):
+        import platform
+
+        return {
+            "os": "linux",
+            "arch": platform.machine(),
+            "cpu_count": os.cpu_count(),
+            "release": platform.release(),
+            "version": platform.version(),
+        }

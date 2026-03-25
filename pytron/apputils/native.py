@@ -183,7 +183,10 @@ class NativeComponent(AppComponent):
                 impl = DarwinImplementation()
 
             if impl and hasattr(impl, "get_system_info"):
-                return impl.get_system_info()
+                info = impl.get_system_info()
+                if info:
+                    return info
+
         except Exception:
             pass
 

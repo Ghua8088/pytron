@@ -8,6 +8,7 @@ from .state import ReactiveState
 from .router import Router
 from .shortcuts import ShortcutManager
 from .inspector import Inspector
+import inspect
 
 # Component Imports
 from .apputils.codegen import CodegenComponent
