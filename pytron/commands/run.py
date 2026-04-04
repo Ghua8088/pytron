@@ -73,11 +73,25 @@ class PytronFilter(DefaultFilter):
             return False
 
         # 1.5 Ignore database, log, and temp files that constantly change
-        if path_obj.suffix.lower() in {".db", ".sqlite", ".sqlite3", ".sqlite-journal", ".sqlite-shm", ".sqlite-wal", ".log", ".tmp", ".swp", ".pyc"}:
+        if path_obj.suffix.lower() in {
+            ".db",
+            ".sqlite",
+            ".sqlite3",
+            ".sqlite-journal",
+            ".sqlite-shm",
+            ".sqlite-wal",
+            ".log",
+            ".tmp",
+            ".swp",
+            ".pyc",
+        }:
             return False
-        
+
         # 1.6 If it looks like a DB transaction file without an extension, ignore it
-        if any(part.endswith("-journal") or part.endswith("-wal") or part.endswith("-shm") for part in path_obj.parts):
+        if any(
+            part.endswith("-journal") or part.endswith("-wal") or part.endswith("-shm")
+            for part in path_obj.parts
+        ):
             return False
 
         # 2. Frontend specific ignores
