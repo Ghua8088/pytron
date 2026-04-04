@@ -63,8 +63,10 @@ def cleanup_dist(dist_path: Path, preserve_tk: bool = False):
         # 1. PRUNE DIRECTORIES
         dirs_to_remove = []
         for d in dirs:
-            # Remove exact matches OR metadata patterns
-            if d in remove_names or d.endswith((".dist-info", ".egg-info")):
+            # We NO LONGER remove .dist-info or .egg-info folders because they are
+            # critical for modern metadata discovery (entry points) used by
+            # packages like opentelemetry, chromadb, etc.
+            if d in remove_names:
                 dirs_to_remove.append(d)
 
         for d in dirs_to_remove:

@@ -294,7 +294,7 @@ def test_set_bounds_rust_path(hwnd_window):
     mock_os = MagicMock()
     with patch(WIN_OS, mock_os):
         window.set_bounds("w", 10, 20, 800, 600)
-        mock_os.set_bounds.assert_called_with(12345, 10, 20, 800, 600)
+        mock_os.set_bounds.assert_called_with(12345, 10, 20, 800, 600, False, False)
 
 
 # ---------------------------------------------------------------------------

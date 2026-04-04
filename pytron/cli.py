@@ -39,6 +39,7 @@ from .commands.android import cmd_android
 from .commands.engine import cmd_engine
 from .commands.doctor import cmd_doctor
 from .commands.workflow import cmd_workflow
+from .commands.docs import cmd_docs
 from .console import log
 import os
 
@@ -348,6 +349,23 @@ def build_parser() -> argparse.ArgumentParser:
     pe_inst.add_argument("name", choices=["chrome"], help="Name of the engine")
 
     p_eng.set_defaults(func=cmd_engine)
+
+    p_docs = sub.add_parser(
+        "docs", help="Generate automated API documentation", parents=[base_parser]
+    )
+    p_docs.add_argument(
+        "script", nargs="?", help="Path to Python entrypoint (default: app.py)"
+    )
+    p_docs.add_argument(
+        "--output", "-o", default="docs", help="Output directory for documentation"
+    )
+    p_docs.add_argument(
+        "--theme",
+        choices=["vibrant", "minimal", "glass"],
+        default="vibrant",
+        help="Documentation theme",
+    )
+    p_docs.set_defaults(func=cmd_docs)
 
     return parser
 

@@ -145,6 +145,7 @@ class Webview:
             initial_url = (
                 final_url if sys.platform.startswith("linux") else "about:blank"
             )
+            w, h = config.get("dimensions", [800, 600])
             self.native = pytron_native.NativeWebview(
                 debug,
                 initial_url,
@@ -152,6 +153,8 @@ class Webview:
                 bool(config.get("resizable", True)),
                 bool(config.get("frameless", False)),
                 store_instance,
+                float(w),
+                float(h),
             )
         except RuntimeError as e:
             msg = str(e)
@@ -163,18 +166,17 @@ class Webview:
 
     def _setup_native_window(self, config):
         """Applies window settings and platform helpers for native engine."""
-        self.set_title(config.get("title", "Pytron App"))
-        w, h = config.get("dimensions", [800, 600])
-        self.set_size(w, h)
+        self._platform = self._init_platform_helper()
 
-        if config.get("always_on_top", False):
-            self.set_always_on_top(True)
-        if config.get("fullscreen", False):
-            self.set_fullscreen(True)
+        self.set_title(config.get("title", "Pytron App"))
+
+        # Dimensions are now applied natively in NativeWebview::new,
+        # so we don't need to manually call set_size here which could break DPI scaling
+        # using the raw Win32 SetWindowPos fallback.
+        w, h = config.get("dimensions", [800, 600])
+
         if config.get("start_maximized", False):
             self.native.maximize()
-
-        self._platform = self._init_platform_helper()
 
         if (
             sys.platform == "win32"
@@ -251,10 +253,13 @@ class Webview:
         if self.config.get("close_to_tray", False):
             self.set_prevent_close(True)
 
+        if self.config.get("always_on_top", False):
+            self.set_always_on_top(True)
+        if self.config.get("fullscreen", False):
+            self.set_fullscreen(True)
+
         if hasattr(self, "_start_url") and self.config.get("navigate_on_init", True):
             self.navigate(self._start_url)
-            if self.config.get("always_on_top", False):
-                self.set_always_on_top(True)
 
         self._running = True
         try:
@@ -283,6 +288,13 @@ class Webview:
                 return int(res)
             return 0
         return getattr(self, "_hwnd_cache", 0)
+
+    def is_visible(self):
+        if self._platform and self.hwnd:
+            return self._platform.is_visible(self.hwnd)
+        if hasattr(self.native, "is_visible"):
+            return self.native.is_visible()
+        return False
 
     def is_alive(self):
         return getattr(self, "_running", False)
@@ -363,22 +375,40 @@ class Webview:
             self.native.set_title(title)
 
     def set_size(self, w, h):
+        if self.native and hasattr(self.native, "set_size"):
+            self.native.set_size(w, h, 0)
+            return
         if self._platform and self.hwnd:
             self._platform.set_size(self.hwnd, w, h, 0)
             return
-        if self.native:
-            self.native.set_size(w, h, 0)
 
     def set_bounds(self, x, y, width, height):
+        if self.native and hasattr(self.native, "set_bounds"):
+            # Note: native set_bounds on windows now takes more args (no_move, no_size),
+            # but Python signature doesn't expose it here. We map to the minimal version if possible,
+            # or rely on the platform fallback for complex flags.
+            pass
+
         if self._platform and self.hwnd:
             self._platform.set_bounds(
                 self.hwnd, int(x), int(y), int(width), int(height)
             )
             return
-        if hasattr(self.native, "set_bounds"):
-            self.native.set_bounds(int(x), int(y), int(width), int(height))
-        else:
+
+        if self.native and hasattr(self.native, "set_size"):
             self.native.set_size(int(width), int(height), 0)
+
+    def center(self, width=None, height=None):
+        if self._platform and self.hwnd:
+            self._platform.center(self.hwnd, width=width, height=height)
+            return
+        call_native = getattr(self.native, "center", None)
+        if call_native:
+            # Native engine's center now supports (width, height)
+            if width is not None and height is not None:
+                call_native(int(width), int(height))
+            else:
+                call_native()
 
     def eval(self, js):
         self.native.eval(js)
@@ -457,14 +487,10 @@ class Webview:
             self.native.unmaximize()
 
     def set_fullscreen(self, enable):
+        if self._platform and self.hwnd:
+            self._platform.set_fullscreen(self.hwnd, enable)
+            return
         self.native.set_fullscreen(enable)
-
-    def center(self):
-        call_native = getattr(self.native, "center", None)
-        if call_native:
-            call_native()
-        elif self._platform and self.hwnd:
-            self._platform.center(self.hwnd)
 
     def set_always_on_top(self, enable):
         if self._platform and self.hwnd:
@@ -507,6 +533,13 @@ class Webview:
         payload = json.dumps(data)
         js = f"window.dispatchEvent(new CustomEvent('{event}', {{ detail: {payload} }}));"
         self.eval(js)
+
+    def dispatch(self, event_name: str, data: Any = None):
+        """
+        High-performance dispatch alias for emit.
+        Used by the App-level Event Bus batching system.
+        """
+        return self.emit(event_name, data)
 
     def _apply_ui_settings(self):
         js = []

@@ -186,3 +186,72 @@ def test_app_emit_to_all_windows(tmp_path):
         app.emit("evt", {"data": 1})
         win1.emit.assert_called_with("evt", {"data": 1})
         win2.emit.assert_called_with("evt", {"data": 1})
+
+
+def test_app_is_visible_delegation(tmp_path):
+    """Regression test: Ensure app.is_visible delegates to window without loop."""
+    config_file = tmp_path / "settings.json"
+    config_file.touch()
+    with patch(
+        "pytron.apputils.config.ConfigComponent._load_config",
+        side_effect=mock_load_config,
+        autospec=True,
+    ), patch(
+        "pytron.apputils.config.ConfigComponent._setup_identity",
+        return_value=(None, "testapp"),
+        autospec=True,
+    ), patch(
+        "pytron.apputils.config.ConfigComponent._setup_storage"
+    ), patch(
+        "pytron.apputils.config.ConfigComponent._resolve_resources"
+    ), patch(
+        "pytron.application.App._register_core_apis"
+    ), patch(
+        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
+    ), patch(
+        "pytron.application.App.load_plugins"
+    ):
+        app = App(str(config_file))
+        win = MagicMock()
+        # Webview.is_visible is a method
+        win.is_visible.return_value = True
+        app.windows = [win]
+
+        # app.is_visible is now a method
+        assert app.is_visible() is True
+        win.is_visible.assert_called_once()
+
+
+def test_component_recursion_safety(tmp_path):
+    """Regression test: Ensure AppComponent.__getattr__ is safe against loops."""
+    config_file = tmp_path / "settings.json"
+    config_file.touch()
+    with patch(
+        "pytron.apputils.config.ConfigComponent._load_config",
+        side_effect=mock_load_config,
+        autospec=True,
+    ), patch(
+        "pytron.apputils.config.ConfigComponent._setup_identity",
+        return_value=(None, "testapp"),
+        autospec=True,
+    ), patch(
+        "pytron.apputils.config.ConfigComponent._setup_storage"
+    ), patch(
+        "pytron.apputils.config.ConfigComponent._resolve_resources"
+    ), patch(
+        "pytron.application.App._register_core_apis"
+    ), patch(
+        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
+    ), patch(
+        "pytron.application.App.load_plugins"
+    ):
+        app = App(str(config_file))
+        comp = app._window_comp
+
+        # Accessing something really non-existent should raise AttributeError immediately
+        # NOT a RecursionError
+        with pytest.raises(AttributeError) as exc:
+            _ = comp.this_property_definitely_does_not_exist
+
+        assert "Recursion detected" not in str(exc.value)
+        assert "has no attribute" in str(exc.value)

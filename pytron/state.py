@@ -132,21 +132,12 @@ class ReactiveState:
         except Exception as e:
             raise StateError(f"Failed to set state for key '{key}': {e}") from e
 
-        # Python-side propagation (legacy fallback, Iron Bridge handles native)
+        # Optimized Propagation via app.post (Buffered Dispatch)
+        # This batches multiple state updates into a single 'pytron:batch' event
+        # every 16ms, saving massive IPC overhead.
         if app_ref:
             try:
-                # Use a local copy of windows to avoid mutation during iteration
-                windows = getattr(app_ref, "windows", [])
-                for window in list(windows):
-                    try:
-                        # Check if window is still valid and has emit
-                        if window and hasattr(window, "emit"):
-                            window.emit(
-                                "pytron:state-update", {"key": key, "value": safe_val}
-                            )
-                    except Exception:
-                        # Silent skip for dead windows
-                        pass
+                app_ref.post("pytron:state-update", {"key": key, "value": safe_val})
             except Exception as e:
                 log_shield(f"State Propagation Error: {e}")
 

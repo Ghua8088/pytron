@@ -56,6 +56,12 @@ class PytronFilter(DefaultFilter):
             "coverage",
             "env",
             "venv",
+            "data",
+            "db",
+            "storage",
+            "logs",
+            "temp",
+            "tmp",
         }
         super().__init__(**kwargs)
 
@@ -64,6 +70,14 @@ class PytronFilter(DefaultFilter):
 
         # 1. Ignore common heavy or build directories
         if any(part in self.ignore_dirs for part in path_obj.parts):
+            return False
+
+        # 1.5 Ignore database, log, and temp files that constantly change
+        if path_obj.suffix.lower() in {".db", ".sqlite", ".sqlite3", ".sqlite-journal", ".sqlite-shm", ".sqlite-wal", ".log", ".tmp", ".swp", ".pyc"}:
+            return False
+        
+        # 1.6 If it looks like a DB transaction file without an extension, ignore it
+        if any(part.endswith("-journal") or part.endswith("-wal") or part.endswith("-shm") for part in path_obj.parts):
             return False
 
         # 2. Frontend specific ignores

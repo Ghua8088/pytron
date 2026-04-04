@@ -82,7 +82,9 @@ def test_webview_init_success(mock_native, webview_config):
         ANY,  # root_path
         True,  # resizable
         False,  # frameless
-        None,  # store_instance
+        ANY,  # store_instance (Fallback creates a NativeState if None)
+        1024.0,  # initial_width
+        768.0,  # initial_height
     )
     assert wv._start_url.endswith("index.html")
 

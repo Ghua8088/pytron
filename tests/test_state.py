@@ -10,38 +10,21 @@ import pytest
 @pytest.fixture(autouse=True)
 def reset_store():
     import sys
-
-    if hasattr(sys, "_pytron_sovereign_state_store_"):
-        delattr(sys, "_pytron_sovereign_state_store_")
-
     import builtins
-
-    if hasattr(builtins, "_pytron_sovereign_state_store_"):
-        delattr(builtins, "_pytron_sovereign_state_store_")
-
-
-@pytest.fixture(autouse=True)
-def reset_store():
-    import sys
 
     # Clear Sovereign Key
-    if hasattr(sys, "_pytron_sovereign_state_store_"):
-        delattr(sys, "_pytron_sovereign_state_store_")
-    import builtins
-
-    if hasattr(builtins, "_pytron_sovereign_state_store_"):
-        delattr(builtins, "_pytron_sovereign_state_store_")
+    for store in (sys, builtins):
+        if hasattr(store, "_pytron_sovereign_state_store_"):
+            delattr(store, "_pytron_sovereign_state_store_")
 
     # Force Mock Store (Disable Native) for ALL tests in this file
-    # This prevents state persistence across tests caused by Native Singletons
     with unittest.mock.patch("pytron.utils.resolve_native_module", return_value=None):
         yield
 
     # Cleanup after test
-    if hasattr(sys, "_pytron_sovereign_state_store_"):
-        delattr(sys, "_pytron_sovereign_state_store_")
-    if hasattr(builtins, "_pytron_sovereign_state_store_"):
-        delattr(builtins, "_pytron_sovereign_state_store_")
+    for store in (sys, builtins):
+        if hasattr(store, "_pytron_sovereign_state_store_"):
+            delattr(store, "_pytron_sovereign_state_store_")
 
 
 def test_state_init():
@@ -66,7 +49,7 @@ def test_state_update_emits_event():
     assert state._store.get("count") == 1
 
     # Verify emission
-    win1.emit.assert_called_with("pytron:state-update", {"key": "count", "value": 1})
+    app.post.assert_called_with("pytron:state-update", {"key": "count", "value": 1})
 
 
 def test_state_no_emit_if_unchanged():
@@ -77,12 +60,12 @@ def test_state_no_emit_if_unchanged():
 
     state = ReactiveState(app)
     state.count = 1
-    win1.emit.assert_called_with("pytron:state-update", {"key": "count", "value": 1})
-    win1.emit.reset_mock()
+    app.post.assert_called_with("pytron:state-update", {"key": "count", "value": 1})
+    app.post.reset_mock()
 
     # Update with same value
     state.count = 1
-    win1.emit.assert_not_called()
+    app.post.assert_not_called()
 
 
 def test_state_bulk_update():
@@ -109,7 +92,7 @@ def test_state_bulk_update():
     # The current implementation of `update` in state.py simply calls store.update,
     # it bypasses the __setattr__ logic that triggers emit.
     # So 'emit' should NOT be called.
-    win1.emit.assert_not_called()
+    app.post.assert_not_called()
 
 
 def test_state_thread_safety():

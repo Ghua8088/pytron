@@ -44,7 +44,7 @@ static TAO_INIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::
 #[pymethods]
 impl NativeWebview {
     #[new]
-    pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool, store: NativeState) -> PyResult<Self> {
+    pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool, store: NativeState, initial_width: f64, initial_height: f64) -> PyResult<Self> {
     
         setup_panic_hook();
 
@@ -96,9 +96,18 @@ impl NativeWebview {
             // GdkWindow handle) before wry tries to embed WebKit into it.
             .with_visible(cfg!(target_os = "linux"))
             .with_resizable(resizable)
-            .with_decorations(!frameless)
-            .build(&event_loop)
+            .with_decorations(!frameless);
+            
+        // --- PREVENT AUTO-SNAP TO (0,0) ON WINDOWS ---
+        #[cfg(target_os = "windows")]
+        let window = window.with_position(tao::dpi::LogicalPosition::new(-10000, -10000));
+        
+        let window = window.build(&event_loop)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to create window: {}", e)))?;
+
+        // FIX: Re-apply dimensions immediately after build while the window is still hidden/off-screen
+        // but before the WebView is embedded. This ensures Wry embeds into a correctly sized container.
+        window.set_inner_size(tao::dpi::LogicalSize::new(initial_width, initial_height));
 
         // Linux: workarounds for VMs and realization timing.
         #[cfg(target_os = "linux")]
@@ -403,7 +412,9 @@ impl NativeWebview {
                                 UserEvent::SetTitle(t) => { state.window.set_title(&t); }
                                 UserEvent::SetSize(w, h, _) => { state.window.set_inner_size(tao::dpi::LogicalSize::new(w, h)); }
                                 UserEvent::SetBounds(x, y, w, h) => {
-                                    state.window.set_outer_position(tao::dpi::LogicalPosition::new(x, y));
+                                    if x != -1 && y != -1 {
+                                        state.window.set_outer_position(tao::dpi::LogicalPosition::new(x, y));
+                                    }
                                     state.window.set_inner_size(tao::dpi::LogicalSize::new(w, h));
                                 }
                                 
@@ -458,11 +469,20 @@ impl NativeWebview {
                                     else { state.window.set_fullscreen(None); }
                                 }
                                 UserEvent::CenterWindow => {
-                                     if let Some(monitor) = state.window.current_monitor() {
+                                     let monitor = state.window.current_monitor().or_else(|| state.window.primary_monitor());
+                                     if let Some(monitor) = monitor {
                                          let screen_size = monitor.size();
-                                         let window_size = state.window.inner_size();
-                                         let x = (screen_size.width - window_size.width) / 2;
-                                         let y = (screen_size.height - window_size.height) / 2;
+                                         let monitor_pos = monitor.position();
+                                         let mut window_size = state.window.outer_size();
+                                         
+                                         // Fallback if window size isn't realized yet (common for start_hidden: true)
+                                         if window_size.width == 0 || window_size.height == 0 {
+                                             window_size = tao::dpi::PhysicalSize::new(800, 600);
+                                         }
+                                         
+                                         let x = monitor_pos.x + (screen_size.width as i32 - window_size.width as i32) / 2;
+                                         let y = monitor_pos.y + (screen_size.height as i32 - window_size.height as i32) / 2;
+                                         
                                          state.window.set_outer_position(tao::dpi::PhysicalPosition::new(x, y));
                                      }
                                 }

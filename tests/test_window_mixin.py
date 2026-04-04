@@ -16,6 +16,13 @@ class MockApp(WindowComponent):
         self.app_root = os.getcwd()
         self.storage_path = os.path.join(os.getcwd(), "storage")
         self.shortcuts = {}
+
+        # Make thread_pool.submit execute the task synchronously for tests
+        self.thread_pool = MagicMock()
+        self.thread_pool.submit.side_effect = lambda f, *args, **kwargs: f(
+            *args, **kwargs
+        )
+
         self.shortcut_manager = MagicMock()
         self.tray = None
         self._on_exit_callbacks = []

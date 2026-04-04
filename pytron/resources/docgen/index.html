@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pytron API Documentation</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono&display=swap"
+        rel="stylesheet">
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Markdown Rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Code Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <style>
+        :root {
+            --bg: #0b0f1a;
+            --sidebar-bg: #111827;
+            --accent: #8b5cf6;
+            --accent-glow: rgba(139, 92, 246, 0.4);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --glass-bg: rgba(17, 24, 39, 0.8);
+            --border: rgba(51, 65, 85, 0.4);
+            --card-bg: #1e293b;
+            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --grid-color: rgba(139, 92, 246, 0.03);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            background-image:
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+        }
+
+        /* --- Sidebar --- */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 300px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            padding: 2rem;
+            overflow-y: auto;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+        }
+
+        .logo-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 3rem;
+            text-align: center;
+        }
+
+        .logo-icon-wrapper {
+            width: 64px;
+            height: 64px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-icon {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px;
+            border: 1px solid var(--border);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .logo-fallback {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #8b5cf6, #0ea5e9);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .logo-text {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .app-ver-badge {
+            font-size: 0.7rem;
+            background: rgba(139, 92, 246, 0.2);
+            color: var(--accent);
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-family: 'JetBrains Mono', monospace;
+            border: 1px solid var(--accent);
+        }
+
+        .nav-section {
+            margin-bottom: 2.5rem;
+        }
+
+        .nav-title {
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            padding-left: 0.5rem;
+            border-left: 2px solid var(--accent);
+        }
+
+        .nav-link {
+            display: block;
+            padding: 0.6rem 0.75rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 2px;
+        }
+
+        .nav-link:hover {
+            background-color: rgba(139, 92, 246, 0.1);
+            color: var(--text-primary);
+            padding-left: 1rem;
+        }
+
+        .nav-link.active {
+            background-color: var(--accent);
+            color: white;
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        /* --- Main Content --- */
+        .main-content {
+            margin-left: 300px;
+            padding: 4rem 6rem;
+            max-width: 1400px;
+            min-height: 100vh;
+        }
+
+        .search-container {
+            margin-bottom: 4rem;
+            position: relative;
+            max-width: 600px;
+        }
+
+        .search-input {
+            width: 100%;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 0.8rem 1.5rem 0.8rem 3rem;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(8px);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-glow);
+            background: rgba(30, 41, 59, 0.8);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            pointer-events: none;
+        }
+
+        /* --- API Cards --- */
+        .api-section {
+            margin-bottom: 5rem;
+        }
+
+        .section-header {
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .card {
+            background-color: var(--glass-bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 2.5rem;
+            margin-bottom: 2.5rem;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent);
+            opacity: 0.4;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 1.5rem;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-async {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .badge-exposed {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-system {
+            background: rgba(148, 163, 184, 0.15);
+            color: #cbd5e1;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        .method-signature {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.25rem;
+            color: #fff;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .method-name {
+            color: var(--accent);
+        }
+
+        .method-bracket {
+            color: #94a3b8;
+        }
+
+        .description {
+            color: var(--text-secondary);
+            margin-bottom: 2.5rem;
+            font-size: 1rem;
+            max-width: 800px;
+        }
+
+        /* --- Tables --- */
+        .table-container {
+            margin-bottom: 2rem;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        th {
+            text-align: left;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 1.2rem 1rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.9rem;
+        }
+
+        .type-tag {
+            font-family: 'JetBrains Mono', monospace;
+            color: #f472b6;
+            background: rgba(244, 114, 182, 0.1);
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+
+        /* --- Code Snippets --- */
+        .snippet-container {
+            position: relative;
+            margin-top: 2rem;
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 10;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+            backdrop-filter: blur(4px);
+        }
+
+        .copy-btn:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        pre[class*="language-"] {
+            margin: 0 !important;
+            padding: 1.5rem !important;
+            border-radius: 0 !important;
+            background: #0d1117 !important;
+            font-size: 0.9rem !important;
+        }
+
+        /* --- Mobile --- */
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 80px;
+                padding: 1rem 0.5rem;
+                align-items: center;
+            }
+
+            .logo-text,
+            .nav-title,
+            .nav-link span {
+                display: none;
+            }
+
+            .main-content {
+                margin-left: 80px;
+                padding: 3rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sidebar">
+        <div class="logo-container">
+            <div class="logo-icon-wrapper" id="logo-anchor">
+                <!-- Icon injected here -->
+            </div>
+            <div class="logo-text" id="sidebar-title">Pytron</div>
+            <div class="app-ver-badge" id="sidebar-version">v1.0.0</div>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-title">General</div>
+            <a href="#intro" class="nav-link active"><i data-lucide="home" size="16"></i> <span>Overview</span></a>
+        </div>
+
+        <div id="nav-exposed" class="nav-section">
+            <div class="nav-title">Exposed APIs</div>
+            <!-- Dynamic Links -->
+        </div>
+
+        <div id="nav-models" class="nav-section">
+            <div class="nav-title">Data Models</div>
+            <!-- Dynamic Links -->
+        </div>
+
+        <div id="nav-system" class="nav-section">
+            <div class="nav-title">System Hooks</div>
+            <!-- Dynamic Links -->
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="search-container">
+            <i data-lucide="search" class="search-icon"></i>
+            <input type="text" class="search-input" placeholder="Search functions, models, or types..."
+                id="global-search">
+        </div>
+
+        <div id="intro" class="api-section">
+            <h1 style="font-size: 3.5rem; margin-bottom: 0.5rem; font-family: 'Outfit';" id="hero-title">API Reference
+            </h1>
+            <p id="hero-version" class="description"
+                style="font-size: 1.1rem; color: var(--accent); font-family: 'JetBrains Mono';">v1.0.0</p>
+
+            <div class="card"
+                style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(14, 165, 233, 0.05)); border-color: rgba(139, 92, 246, 0.2);">
+                <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">Hand-Crafted for Developers</h3>
+                <p class="description">Welcome to the official API specification. The functions and models documented
+                    below are automatically exposed to your frontend environment via the <code>pytron</code> bridge.</p>
+                <div class="snippet-container">
+                    <pre class="language-javascript"><code>import pytron from 'pytron-client';
+
+// Ensure backend connection
+await pytron.waitForBackend();
+
+// Access the APIs documented below
+const result = await pytron.yourFunction();</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div id="api-list" class="api-list">
+            <h2 class="section-header">Exposed Functions</h2>
+            <!-- Dynamic Cards -->
+        </div>
+
+        <div id="model-list" class="api-list">
+            <h2 class="section-header">Data Models</h2>
+            <!-- Dynamic Cards -->
+        </div>
+
+        <div id="system-list" class="api-list">
+            <h2 class="section-header">System Level APIs</h2>
+            <!-- Dynamic Cards -->
+        </div>
+    </div>
+
+    <script id="metadata-loader">
+        //---METADATA---
+        // Fallback for dev if injection fails
+        if (!window.metadata) {
+            window.metadata = { title: "Error", version: "0.0.0", exposed_functions: [], models: [], system_apis: [] };
+        }
+
+        async function init() {
+            try {
+                renderHeader();
+                renderNav();
+                renderFunctions();
+                renderModels();
+                renderSystemApis();
+                lucide.createIcons();
+                Prism.highlightAll();
+
+                // Hide empty sections
+                if (window.metadata.exposed_functions.length === 0) document.getElementById('api-list').style.display = 'none';
+                if (window.metadata.models.length === 0) document.getElementById('model-list').style.display = 'none';
+                if (window.metadata.system_apis.length === 0) document.getElementById('system-list').style.display = 'none';
+
+            } catch (e) {
+                console.error("Initialization failed", e);
+            }
+        }
+
+        function renderHeader() {
+            const meta = window.metadata;
+            document.getElementById('sidebar-title').innerText = meta.title;
+            document.getElementById('sidebar-version').innerText = `v${meta.version}`;
+            document.getElementById('hero-title').innerText = `${meta.title} API Specification`;
+            document.getElementById('hero-version').innerText = `Release v${meta.version} (Pytron ${meta.pytron_version})`;
+            document.title = `${meta.title} | API Documentation`;
+            if (meta.accent_color) {
+                document.documentElement.style.setProperty('--accent', meta.accent_color);
+            }
+
+            if (meta.accent_glow) {
+                document.documentElement.style.setProperty('--accent-glow', meta.accent_glow);
+            }
+            const logoAnchor = document.getElementById('logo-anchor');
+            if (meta.icon_path) {
+                logoAnchor.innerHTML = `<img src="${meta.icon_path}" class="logo-icon" alt="App Logo">`;
+            } else {
+                logoAnchor.innerHTML = `<div class="logo-fallback"><i data-lucide="zap" size="32"></i></div>`;
+            }
+        }
+        function renderNav() {
+            const meta = window.metadata;
+            const navExposed = document.getElementById('nav-exposed');
+            const navModels = document.getElementById('nav-models');
+            const navSystem = document.getElementById('nav-system');
+
+            meta.exposed_functions.forEach(f => {
+                navExposed.innerHTML += `<a href="#exposed-${f.name}" class="nav-link"><i data-lucide="code" size="14"></i> <span>${f.name}</span></a>`;
+            });
+
+            meta.models.forEach(m => {
+                navModels.innerHTML += `<a href="#model-${m.name}" class="nav-link"><i data-lucide="box" size="14"></i> <span>${m.name}</span></a>`;
+            });
+
+            meta.system_apis.forEach(s => {
+                navSystem.innerHTML += `<a href="#system-${s.name}" class="nav-link"><i data-lucide="cpu" size="14"></i> <span>${s.name}</span></a>`;
+            });
+        }
+
+        function renderFunctions() {
+            const container = document.getElementById('api-list');
+            window.metadata.exposed_functions.forEach(f => {
+                container.innerHTML += createFuncCard(f, 'exposed');
+            });
+        }
+
+        function renderModels() {
+            const container = document.getElementById('model-list');
+            window.metadata.models.forEach(m => {
+                container.innerHTML += createModelCard(m);
+            });
+        }
+
+        function renderSystemApis() {
+            const container = document.getElementById('system-list');
+            window.metadata.system_apis.forEach(s => {
+                container.innerHTML += createFuncCard(s, 'system');
+            });
+        }
+
+        function createFuncCard(f, type) {
+            const badgeClass = f.is_async ? 'badge-async' : 'badge-exposed';
+            const badgeText = f.is_async ? 'Async' : 'Sync';
+
+            const paramsList = f.parameters.map(p => `<span class="method-name">${p.name}</span>`).join('<span class="method-bracket">, </span>');
+            const signature = `<span class="method-bracket">pytron.</span><span class="method-name">${f.name}</span><span class="method-bracket">(</span>${paramsList}<span class="method-bracket">)</span>`;
+
+            let paramsTable = '';
+            if (f.parameters.length > 0) {
+                paramsTable = `
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Default</th></tr></thead>
+                            <tbody>
+                                ${f.parameters.map(p => `
+                                    <tr>
+                                        <td><strong>${p.name}</strong>${p.required ? '<span style="color:#ef4444">*</span>' : ''}</td>
+                                        <td><span class="type-tag">${p.type}</span></td>
+                                        <td><code>${p.default || '-'}</code></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="card" id="${type}-${f.name}">
+                    <span class="badge ${type === 'system' ? 'badge-system' : badgeClass}">${type === 'system' ? 'System API' : badgeText}</span>
+                    <h2 class="method-signature">${signature}</h2>
+                    <div class="description">${marked.parse(f.description || '_No description available._')}</div>
+                    
+                    ${paramsTable}
+
+                    <div class="nav-title" style="margin-bottom: 0.5rem; border:none; font-size: 0.65rem;">Returns</div>
+                    <p style="margin-bottom: 1.5rem;"><span class="type-tag">${f.return_type}</span></p>
+
+                    <div class="snippet-container">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy Snippet</button>
+                        <pre class="language-javascript"><code>const result = await pytron.${f.name}(${f.parameters.map(p => p.required ? p.name : (p.default || 'null')).join(', ')});</code></pre>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createModelCard(m) {
+            return `
+                <div class="card" id="model-${m.name}">
+                    <span class="badge" style="background:rgba(236, 72, 153, 0.15); color:#f472b6; border: 1px solid rgba(236,72,153,0.3);">Model</span>
+                    <h2 style="margin-bottom: 1rem; font-family: 'JetBrains Mono'; font-size: 1.5rem; color: #fff;">${m.name}</h2>
+                    <div class="description">${marked.parse(m.description || '_Schema definition model._')}</div>
+                    
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                ${m.fields.map(f => `
+                                    <tr>
+                                        <td><strong>${f.name}</strong></td>
+                                        <td><span class="type-tag">${f.type}</span></td>
+                                        <td>${f.description || '-'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function copyCode(btn) {
+            const code = btn.nextElementSibling.innerText;
+            navigator.clipboard.writeText(code);
+            const original = btn.innerText;
+            btn.innerText = 'Copied!';
+            setTimeout(() => btn.innerText = original, 2000);
+        }
+
+        // Search logic
+        document.getElementById('global-search').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const cards = document.querySelectorAll('.card');
+            cards.forEach(card => {
+                const text = card.innerText.toLowerCase();
+                card.style.display = text.includes(term) ? 'block' : 'none';
+            });
+        });
+
+        // Simple link highlighting
+        window.addEventListener('hashchange', () => {
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            const active = document.querySelector(`.nav-link[href="${window.location.hash}"]`);
+            if (active) active.classList.add('active');
+        });
+
+        init();
+    </script>
+</body>
+
+</html>

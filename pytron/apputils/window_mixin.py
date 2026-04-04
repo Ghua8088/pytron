@@ -62,8 +62,21 @@ class WindowComponent(AppComponent):
 
         if target_url:
             window.navigate(target_url)
-        if window_config.get("center", True):
+
+        do_center = window_config.get("center", True)
+
+        # Function to center after window is shown/realized
+        def _deferred_center():
+            import time
+
+            time.sleep(0.3)  # Increased delay for more robust realization
             window.center()
+
+        if do_center:
+            if window_config.get("start_hidden"):
+                window.center()
+            else:
+                self.thread_pool.submit(_deferred_center)
 
         icon = window_config.get("icon")
         if icon:
@@ -289,7 +302,6 @@ class WindowComponent(AppComponent):
                 except Exception as e:
                     self.logger.debug(f"Failed to show window {window}: {e}")
 
-    @property
     def is_visible(self):
         """Returns True if the primary window is visible."""
         if self.windows:
@@ -312,3 +324,23 @@ class WindowComponent(AppComponent):
         """Attaches a MenuBar to the primary window."""
         if self.windows:
             self.windows[0].set_menu(menu_bar)
+
+    def center(self):
+        """Centers the primary window on screen."""
+        if self.windows:
+            self.windows[0].center()
+
+    def minimize(self):
+        """Minimizes the primary window."""
+        if self.windows:
+            self.windows[0].minimize()
+
+    def maximize(self):
+        """Maximizes the primary window."""
+        if self.windows:
+            self.windows[0].maximize()
+
+    def restore(self):
+        """Restores the primary window from minimized/maximized state."""
+        if self.windows:
+            self.windows[0].restore()

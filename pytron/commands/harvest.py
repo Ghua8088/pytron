@@ -68,9 +68,24 @@ def generate_nuclear_hooks(
             except Exception:
                 continue
 
+        packages = []
+        try:
+            top_level = dist.read_text("top_level.txt")
+            if top_level:
+                packages = [p.strip() for p in top_level.splitlines() if p.strip()]
+        except Exception:
+            pass
+
+        # Determine if this dist should be whitelisted based on Name or provided Packages
         if wl is not None:
-            # If whitelist is provided, skip if not in it
-            if name.lower() not in wl:
+            should_include = name.lower() in wl
+            if not should_include:
+                # Check if any of its packages are in the whitelist
+                for p in packages:
+                    if p.lower() in wl:
+                        should_include = True
+                        break
+            if not should_include:
                 continue
 
         if name.lower() in bl:
@@ -78,22 +93,27 @@ def generate_nuclear_hooks(
 
         safe_name = name.replace("-", "_")
 
-        func = "collect_all" if collect_all_mode else "collect_submodules"
+        # Robust templates: use BOTH project name and detected packages
+        targets = [name] + [p for p in packages if p != name]
 
-        if collect_all_mode:
-            body = f"binaries, hiddenimports, datas = collect_all('{name}')"
-        else:
-            body = f"hiddenimports = collect_submodules('{name}')\n    binaries, datas = [], []"
+        body_lines = []
+        for target in targets:
+            body_lines.append(f"""
+    hiddenimports += collect_submodules('{target}')
+    datas += collect_data_files('{target}')
+    binaries += collect_dynamic_libs('{target}')""")
 
         hook_content = f"""
 # Auto-generated nuclear hook for {name}
-from PyInstaller.utils.hooks import {func}
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files, collect_dynamic_libs, copy_metadata
 
 try:
-    {body}
+    hiddenimports, datas, binaries = [], [], []
+    datas += copy_metadata('{name}')
+    {''.join(body_lines)}
 except Exception:
-    # Fallback on any error to keep build moving
-    binaries, hiddenimports, datas = [], [], []
+    # Use empty defaults on error to keep build moving
+    pass
 """
 
         hook_file = output_dir / f"hook-{safe_name}.py"

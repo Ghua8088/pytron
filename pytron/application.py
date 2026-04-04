@@ -19,6 +19,7 @@ from .apputils.extras import ExtrasComponent
 from .apputils.shell import ShellComponent
 from .apputils.plugins import PluginComponent
 from .apputils.reporter import CrashReporter
+from .apputils.docgen import DocgenComponent
 
 
 class App:
@@ -32,6 +33,7 @@ class App:
         self._shell_comp = ShellComponent(self)
         self._plugin_comp = PluginComponent(self)
         self._crash_comp = CrashReporter(self)
+        self._docgen_comp = DocgenComponent(self)
 
         from .utils import com_thread_initializer
 
@@ -240,10 +242,25 @@ class App:
         """Sets the menu bar for the primary window."""
         return self._window_comp.set_menubar(menu_bar)
 
-    @property
     def is_visible(self) -> bool:
         """Returns True if the primary window is visible."""
-        return self._window_comp.is_visible
+        return self._window_comp.is_visible()
+
+    def center(self):
+        """Centers the primary window on screen."""
+        return self._window_comp.center()
+
+    def minimize(self):
+        """Minimizes the primary window."""
+        return self._window_comp.minimize()
+
+    def maximize(self):
+        """Maximizes the primary window."""
+        return self._window_comp.maximize()
+
+    def restore(self):
+        """Restores the primary window from minimized/maximized state."""
+        return self._window_comp.restore()
 
     # --- Extras Component Forwarding ---
     def load_plugin(self, manifest_path: str):
@@ -361,13 +378,19 @@ class App:
             return "https://pytron.localhost"
         return "pytron://localhost"
 
-    def on_exit(self, func):
+    def generate_docs(self, output_dir: str = "docs"):
+        """
+        Generates automated API documentation for the project.
+        """
+        return self._docgen_comp.build_docs(output_dir)
+
+    def on_exit(self, callback: Callable):
         """
         Register a function to run when the application is exiting.
         Can be used as a decorator: @app.on_exit
         """
-        self._on_exit_callbacks.append(func)
-        return func
+        self._on_exit_callbacks.append(callback)
+        return callback
 
     # Expose function to all windows
     def expose(self, func=None, name=None, secure=False, run_in_thread=True):
@@ -467,16 +490,16 @@ class App:
         """
         return self.router.route(pattern)
 
-    def on_file_drop(self, func):
-        """
-        Decorator to register a handler for file drop events.
+    def on_file_drop(self, callback: Callable):
+        """Register a callback for file drop events."""
+        self._on_file_drop_callback = callback
 
-        @app.on_file_drop
-        def handle_drop(window, files):
-            print(f"Dropped files on window {window.id}: {files}")
+    def register_model(self, model_cls: Any):
         """
-        self._on_file_drop_callback = func
-        return func
+        Registers a Pydantic model to be included in the API documentation.
+        """
+        if hasattr(model_cls, "__name__"):
+            self._pydantic_models[model_cls.__name__] = model_cls
 
     def _register_core_apis(self):
         """Automatically exposes built-in system APIs to the frontend."""
@@ -524,7 +547,11 @@ class App:
         self.expose(self.quit, name="app_quit", run_in_thread=False)
         self.expose(self.show, name="app_show", run_in_thread=False)
         self.expose(self.hide, name="app_hide", run_in_thread=False)
-        self.expose(lambda: self.is_visible, name="app_is_visible", run_in_thread=False)
+        self.expose(self.is_visible, name="app_is_visible", run_in_thread=False)
+        self.expose(self.center, name="app_center", run_in_thread=False)
+        self.expose(self.minimize, name="app_minimize", run_in_thread=False)
+        self.expose(self.maximize, name="app_maximize", run_in_thread=False)
+        self.expose(self.restore, name="app_restore", run_in_thread=False)
 
         # Event Bus
         self.expose(self.publish, name="app_publish")
@@ -602,13 +629,19 @@ class App:
                         # If only one, send normally to keep legacy compatibility
                         if len(batch) > 1:
                             for window in self.windows:
+                                # High Performance Dispatch (Batching)
                                 if hasattr(window, "dispatch"):
                                     window.dispatch("pytron:batch", batch)
+                                elif hasattr(window, "emit"):
+                                    window.emit("pytron:batch", batch)
                         else:
                             name, data = batch[0]
                             for window in self.windows:
+                                # Standard Dispatch
                                 if hasattr(window, "dispatch"):
                                     window.dispatch(name, data)
+                                elif hasattr(window, "emit"):
+                                    window.emit(name, data)
 
                 # Dynamic sleep: 16ms (60fps target) or 32ms (low power)
                 await asyncio.sleep(0.016)

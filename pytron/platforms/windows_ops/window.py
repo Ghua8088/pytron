@@ -240,20 +240,23 @@ def set_title(w, title):
     user32.SetWindowTextW(hwnd, title)
 
 
-def set_bounds(w, x, y, width, height):
-    if pytron_native:
-        try:
-            return pytron_native.set_bounds(
-                get_hwnd(w), int(x), int(y), int(width), int(height)
-            )
-        except Exception:
-            pass
+def set_bounds(w, x, y, width, height, no_move=False):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    user32.SetWindowPos(
-        hwnd, 0, int(x), int(y), int(width), int(height), SWP_NOZORDER | SWP_NOACTIVATE
-    )
+
+    if pytron_native:
+        try:
+            return pytron_native.set_bounds(
+                hwnd, int(x), int(y), int(width), int(height), no_move, False
+            )
+        except Exception:
+            pass
+
+    flags = SWP_NOZORDER | SWP_NOACTIVATE
+    if no_move or (x == -1 and y == -1):
+        flags |= SWP_NOMOVE
+    user32.SetWindowPos(hwnd, 0, int(x), int(y), int(width), int(height), flags)
 
 
 def close(w):
@@ -387,25 +390,52 @@ def show(w):
     user32.SetForegroundWindow(hwnd)
 
 
-def center(w):
+def center(w, width=None, height=None):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    if pytron_native:
-        try:
-            return pytron_native.center(hwnd)
-        except Exception:
-            pass
+
+    # Use Python-native implementation for centering (more stable for multi-monitor)
     rect = ctypes.wintypes.RECT()
     user32.GetWindowRect(hwnd, ctypes.byref(rect))
-    width = rect.right - rect.left
-    height = rect.bottom - rect.top
-    SM_CXSCREEN, SM_CYSCREEN = 0, 1
-    screen_width = user32.GetSystemMetrics(SM_CXSCREEN)
-    screen_height = user32.GetSystemMetrics(SM_CYSCREEN)
-    x = (screen_width - width) // 2
-    y = (screen_height - height) // 2
-    user32.SetWindowPos(hwnd, 0, x, y, 0, 0, 0x0001)
+
+    current_width = rect.right - rect.left
+    current_height = rect.bottom - rect.top
+
+    if width is None:
+        width = current_width
+    if height is None:
+        height = current_height
+
+    # Fallback for hidden windows with 0x0 size at startup
+    if width <= 0 or height <= 0:
+        width, height = 800, 600
+
+    # Multi-monitor aware centering
+    # MONITOR_DEFAULTTONEAREST = 2
+    hmon = user32.MonitorFromWindow(hwnd, 2)
+
+    # Re-use MONITORINFO from constants or local structure
+    mi = MONITORINFO()
+    mi.cbSize = ctypes.sizeof(MONITORINFO)
+    if user32.GetMonitorInfoW(hmon, ctypes.byref(mi)):
+        # rcWork excludes taskbar
+        r = mi.rcWork
+        screen_width = r.right - r.left
+        screen_height = r.bottom - r.top
+        x = r.left + (screen_width - width) // 2
+        y = r.top + (screen_height - height) // 2
+    else:
+        # Fallback to primary monitor
+        screen_width = user32.GetSystemMetrics(0)  # SM_CXSCREEN
+        screen_height = user32.GetSystemMetrics(1)  # SM_CYSCREEN
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+
+    # SWP_NOZORDER (0x0004) | SWP_NOACTIVATE (0x0010)
+    # We remove SWP_NOSIZE if we actually want to resize the window during centering
+    flags = 0x0014  # SWP_NOZORDER | SWP_NOACTIVATE
+    user32.SetWindowPos(hwnd, 0, x, y, int(width), int(height), flags)
 
 
 _wnd_procs = {}

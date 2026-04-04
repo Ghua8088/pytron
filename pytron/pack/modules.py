@@ -520,6 +520,10 @@ class HookModule(BuildModule):
                                 "scipy",
                                 "torch",
                                 "cv2",
+                                "opentelemetry",
+                                "chromadb",
+                                "google",
+                                "onnxruntime",
                             ]:
                                 flag = f"--collect-all={root}"
                                 if flag not in context.extra_args:
@@ -548,6 +552,32 @@ class HookModule(BuildModule):
                         whitelist = list(new_whitelist)
                 except Exception:
                     pass
+
+            # --- CRYSTAL AUGMENTATION ---
+            # If Crystal is active, we MUST ensure anything it saw is on the whitelist
+            # otherwise it won't get a nuclear hook!
+            if crystal_active and "manifest" in locals() and manifest:
+                live_modules = manifest.get("modules", [])
+                seen_roots = {m.split(".")[0] for m in live_modules}
+
+                # Filter out obvious stdlib or tiny stuff to keep whitelist manageable
+                # but ensure complex ones are there.
+                if whitelist is None:
+                    whitelist = []
+
+                # Convert whitelist to set for easy update
+                wl_set = set(whitelist)
+                for root in seen_roots:
+                    # Ignore stdlib (heuristic: if it's in sys.builtin_module_names)
+                    if root in sys.builtin_module_names:
+                        continue
+                    wl_set.add(root)
+
+                whitelist = list(wl_set)
+                log(
+                    f"Crystal augmented whitelist to {len(whitelist)} distributions",
+                    style="dim",
+                )
 
         generate_nuclear_hooks(
             temp_hooks_dir,

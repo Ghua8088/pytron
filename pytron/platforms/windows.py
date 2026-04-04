@@ -64,26 +64,12 @@ class WindowsImplementation(PlatformInterface):
         window.set_title(w, title)
 
     def set_size(self, w, width, height, hints=0):
-        window.set_bounds(w, -1, -1, width, height)
+        window.set_bounds(w, -1, -1, width, height, no_move=True)
 
     def maximize(self, w):
         window.maximize(w)
 
     def restore(self, w) -> None:
-        window.restore(w)
-
-    def set_title(self, w, title):
-        window.set_title(w, title)
-
-    def set_size(self, w, width, height, hints=0):
-        window.set_bounds(
-            w, -1, -1, width, height
-        )  # -1 for x,y often means IGNORE in our helper or we need a specific flag
-
-    def maximize(self, w):
-        window.maximize(w)
-
-    def restore(self, w):
         window.restore(w)
 
     def message_box(self, w, title, message, style=0):
@@ -128,6 +114,9 @@ class WindowsImplementation(PlatformInterface):
     def show(self, w):
         window.show(w)
 
+    def center(self, w, width=None, height=None):
+        window.center(w, width=width, height=height)
+
     def set_window_icon(self, w, icon_path):
         system.set_window_icon(w, icon_path)
 
@@ -157,9 +146,6 @@ class WindowsImplementation(PlatformInterface):
 
     def set_app_id(self, app_id):
         system.set_app_id(app_id)
-
-    def center(self, w):
-        window.center(w)
 
     def set_launch_on_boot(self, app_name, exe_path, enable=True):
         return system.set_launch_on_boot(app_name, exe_path, enable)

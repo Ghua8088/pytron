@@ -4,7 +4,8 @@ use std::sync::{LazyLock, Mutex};
 use windows::Win32::Foundation::{HANDLE, HWND, LPARAM, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_BORDER_COLOR, DwmSetWindowAttribute};
 use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromWindow,
+    GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTOPRIMARY, MONITORINFO,
+    MonitorFromWindow,
 };
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoInitialize};
 use windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
@@ -128,18 +129,22 @@ pub fn minimize(hwnd_val: usize) -> PyResult<()> {
 }
 
 #[pyfunction]
-pub fn set_bounds(hwnd_val: usize, x: i32, y: i32, width: i32, height: i32) -> PyResult<()> {
+pub fn set_bounds(hwnd_val: usize, x: i32, y: i32, width: i32, height: i32, no_move: Option<bool>, no_size: Option<bool>) -> PyResult<()> {
     let hwnd = HWND(hwnd_val as isize);
     unsafe {
-        let _ = SetWindowPos(
-            hwnd,
-            HWND::default(),
-            x,
-            y,
-            width,
-            height,
-            SWP_NOZORDER | SWP_NOACTIVATE,
-        );
+        let mut flags = SWP_NOZORDER | SWP_NOACTIVATE;
+        
+        // Manual override or auto-detection for -1 coordinates
+        if no_move.unwrap_or(false) || (x == -1 && y == -1) {
+            flags |= SWP_NOMOVE;
+        }
+        
+        // Manual override for size preservation
+        if no_size.unwrap_or(false) || (width == -1 && height == -1) {
+            flags |= SWP_NOSIZE;
+        }
+
+        let _ = SetWindowPos(hwnd, HWND::default(), x, y, width, height, flags);
     }
     Ok(())
 }
@@ -230,16 +235,48 @@ pub fn show(hwnd_val: usize) -> PyResult<()> {
 }
 
 #[pyfunction]
-pub fn center(hwnd_val: usize) -> PyResult<()> {
+pub fn center(hwnd_val: usize, width: Option<i32>, height: Option<i32>) -> PyResult<()> {
     let hwnd = HWND(hwnd_val as isize);
     unsafe {
         let mut rect = RECT::default();
         if GetWindowRect(hwnd, &mut rect).is_ok() {
-            let width = rect.right - rect.left;
-            let height = rect.bottom - rect.top;
-            let x = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
-            let y = (GetSystemMetrics(SM_CYSCREEN) - height) / 2;
-            let _ = SetWindowPos(hwnd, HWND::default(), x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+            let current_width = rect.right - rect.left;
+            let current_height = rect.bottom - rect.top;
+
+            let mut target_width = width.unwrap_or(current_width);
+            let mut target_height = height.unwrap_or(current_height);
+
+            // Fallback for hidden windows with 0x0 size at startup
+            if target_width <= 0 { target_width = 800; }
+            if target_height <= 0 { target_height = 600; }
+
+            // Multi-monitor aware centering (MONITOR_DEFAULTTONEAREST = 2)
+            let monitor = MonitorFromWindow(
+                hwnd,
+                windows::Win32::Graphics::Gdi::MONITOR_DEFAULTTONEAREST,
+            );
+            let mut info = MONITORINFO {
+                cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                ..Default::default()
+            };
+
+            if GetMonitorInfoW(monitor, &mut info).as_bool() {
+                let r = info.rcWork;
+                let screen_width = r.right - r.left;
+                let screen_height = r.bottom - r.top;
+                let x = r.left + (screen_width - target_width) / 2;
+                let y = r.top + (screen_height - target_height) / 2;
+
+                let flags = SWP_NOZORDER | SWP_NOACTIVATE;
+                let _ = SetWindowPos(hwnd, HWND::default(), x, y, target_width, target_height, flags);
+            } else {
+                // Fallback to primary monitor
+                let x = (GetSystemMetrics(SM_CXSCREEN) - target_width) / 2;
+                let y = (GetSystemMetrics(SM_CYSCREEN) - target_height) / 2;
+                
+                let flags = SWP_NOZORDER | SWP_NOACTIVATE;
+                let _ = SetWindowPos(hwnd, HWND::default(), x, y, target_width, target_height, flags);
+            }
         }
     }
     Ok(())

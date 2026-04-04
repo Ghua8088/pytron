@@ -314,13 +314,8 @@ function handlePythonCommand(cmd) {
                 } catch (e) { log(`prevent_close error: ${e.message}`); }
                 break;
             case 'start_drag':
-                if (mainWindow) {
-                    // Electron doesn't have a direct 'start drag' API like WebView2,
-                    // but we can simulate it if the user isn't using -webkit-app-region: drag.
-                    // However, the best practice in Electron is to use the CSS property.
-                    // We'll focus the window and log it for now.
-                    try { mainWindow.focus(); } catch (e) { }
-                }
+                // Best-effort: focus the window — real drag requires renderer cooperation
+                try { if (mainWindow) mainWindow.focus(); } catch (e) { }
                 break;
             case 'set_progress':
                 // command.value: 0.0 to 1.0.  -1 to remove.
@@ -442,31 +437,9 @@ async function createWindow(options = {}) {
     // Robust Frameless with Snapping (Windows-first logic)
     if (options.frameless) {
         config.frame = false;
-
-        if (process.platform === 'win32') {
-            config.titleBarStyle = 'hidden';
-            config.titleBarOverlay = {
-                color: '#00000000', // Transparent background
-                symbolColor: '#00000000', // Hidden icons
-                height: 1 // Tiny height to allow clicking HTML behind most of the button area
-            };
-
-            // Modern Curvature (Windows 11)
-            // If the user wants 'modern', we use mica. If they strictly want 'transparent', we keep it.
-            // But usually, rounded corners + snapping > raw transparency.
-            if (options.transparent) {
-                config.transparent = false; // Mica requires non-transparent window
-                config.backgroundMaterial = 'mica';
-            }
-        } else if (process.platform === 'darwin') {
-            config.titleBarStyle = 'hiddenInset';
-            if (options.transparent) {
-                config.vibrancy = 'under-window';
-                config.visualEffectState = 'active';
-            }
-        } else {
-            config.titleBarStyle = 'hidden';
-        }
+        // On macOS/Windows, 'hidden' allows the OS to still handle snapping/resize margins 
+        // while the titlebar stays invisible.
+        config.titleBarStyle = 'hidden';
     }
 
     config.show = false; // Always start false, show on ready
@@ -551,14 +524,9 @@ async function createWindow(options = {}) {
                 sendToPython('lifecycle', 'close');
                 return;
             }
-        } catch (ex) { }
+        } catch (ex) {}
         sendToPython('lifecycle', 'close');
     });
-
-    mainWindow.on('maximize', () => sendToPython('lifecycle', 'maximize'));
-    mainWindow.on('unmaximize', () => sendToPython('lifecycle', 'unmaximize'));
-    mainWindow.on('minimize', () => sendToPython('lifecycle', 'minimize'));
-    mainWindow.on('restore', () => sendToPython('lifecycle', 'restore'));
 
     // Prevent HTML <title> from overriding the Window Title
     mainWindow.on('page-title-updated', (e) => {
@@ -604,7 +572,7 @@ if (!gotTheLock) {
         const handler = (request) => {
             const url = request.url;
             let cleanPath = '';
-
+            
             // Find the 'app/' marker to isolate the virtual path
             if (url.includes('/app/')) {
                 cleanPath = url.split('/app/')[1];
@@ -615,7 +583,7 @@ if (!gotTheLock) {
                 cleanPath = url.replace('pytron://', '').split('?')[0];
                 if (cleanPath.startsWith('/')) cleanPath = cleanPath.substring(1);
             }
-
+            
             // Strip query strings
             const urlPath = cleanPath.split('?')[0];
 

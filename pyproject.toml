@@ -97,7 +97,8 @@ pytron = [
     "platforms/android/shell/gradlew.bat",
     "platforms/android/shell/settings.gradle",
     "platforms/android/shell/app/src/main/jnilibs/arm64-v8a/*",
-    "pack/secure_loader/bin/*"
+    "pack/secure_loader/bin/*",
+    "resources/docgen/*"
 ]
 
 [tool.setuptools.exclude-package-data]

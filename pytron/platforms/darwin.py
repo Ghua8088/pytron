@@ -209,6 +209,15 @@ class DarwinImplementation(PlatformInterface):
             except (ImportError, AttributeError):
                 pass
 
+    def minimize(self, w):
+        pass
+
+    def maximize(self, w):
+        pass
+
+    def restore(self, w):
+        pass
+
     def is_alive(self, w):
         return self.is_visible(w)
 
