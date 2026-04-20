@@ -10,8 +10,7 @@ def test_virtual_root_scan(tmp_path):
     source_dir.mkdir()
 
     file1 = source_dir / "api.py"
-    file1.write_text(
-        """
+    file1.write_text("""
 from pytron import App
 app = App()
 
@@ -22,15 +21,12 @@ def user_get():
 @app.expose(name="login")
 def auth_login():
     return "login"
-"""
-    )
+""")
 
     file2 = source_dir / "utils.py"
-    file2.write_text(
-        """
+    file2.write_text("""
 def helper(): pass
-"""
-    )
+""")
 
     generator = VirtualRootGenerator(source_dir)
     generator.scan()

@@ -98,12 +98,10 @@ def generate_nuclear_hooks(
 
         body_lines = []
         for target in targets:
-            body_lines.append(
-                f"""
+            body_lines.append(f"""
     hiddenimports += collect_submodules('{target}')
     datas += collect_data_files('{target}')
-    binaries += collect_dynamic_libs('{target}')"""
-            )
+    binaries += collect_dynamic_libs('{target}')""")
 
         hook_content = f"""
 # Auto-generated nuclear hook for {name}
