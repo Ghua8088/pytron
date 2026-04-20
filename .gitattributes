@@ -1,8 +1,6 @@
-*.c linguist-vendored
-*.h linguist-vendored
-*.so linguist-vendored
-
-# If you have a specific folder for the Android build/dist, ignore the whole thing
-dist/* linguist-vendored
-build/* linguist-vendored
-python-for-android/* linguist-vendored
+* text=auto eol=lf
+*.py text eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
