@@ -21,17 +21,17 @@ def mock_app(tmp_path):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-    with patch("pytron.apputils.config.ConfigComponent._load_config"), patch(
-        "pytron.apputils.config.ConfigComponent._setup_identity",
-        return_value=(None, "test"),
-    ), patch("pytron.apputils.config.ConfigComponent._setup_storage"), patch(
-        "pytron.apputils.config.ConfigComponent._resolve_resources"
-    ), patch(
-        "pytron.application.App.load_plugins"
-    ), patch(
-        "pytron.apputils.native.NativeComponent.set_start_on_boot"
-    ), patch(
-        "asyncio.get_event_loop", return_value=loop
+    with (
+        patch("pytron.apputils.config.ConfigComponent._load_config"),
+        patch(
+            "pytron.apputils.config.ConfigComponent._setup_identity",
+            return_value=(None, "test"),
+        ),
+        patch("pytron.apputils.config.ConfigComponent._setup_storage"),
+        patch("pytron.apputils.config.ConfigComponent._resolve_resources"),
+        patch("pytron.application.App.load_plugins"),
+        patch("pytron.apputils.native.NativeComponent.set_start_on_boot"),
+        patch("asyncio.get_event_loop", return_value=loop),
     ):
         app = App(str(config_file))
         return app

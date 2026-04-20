@@ -49,9 +49,11 @@ class TestDarwinImplementation:
     def test_register_protocol(self, mock_run):
         impl = DarwinImplementation()
         # On Mac it mostly calls lsregister if bundled
-        with patch("sys.frozen", True, create=True), patch(
-            "sys.executable", "/Applications/MyApp.app/Contents/MacOS/MyApp"
-        ), patch("os.path.exists", return_value=True):
+        with (
+            patch("sys.frozen", True, create=True),
+            patch("sys.executable", "/Applications/MyApp.app/Contents/MacOS/MyApp"),
+            patch("os.path.exists", return_value=True),
+        ):
             impl.register_protocol("pytron")
 
         # Check if lsregister was called

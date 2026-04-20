@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 class TestPytronFilter:
     def test_filter_ignores_common_dirs(self, tmp_path):
-        f = PytronFilter()
+        f = PytronFilter(project_root=tmp_path)
         # Should ignore .git
         assert f(1, str(tmp_path / ".git" / "config")) is False
         # Should ignore __pycache__
@@ -19,7 +19,7 @@ class TestPytronFilter:
     def test_filter_ignores_frontend_src(self, tmp_path):
         frontend = tmp_path / "frontend"
         frontend.mkdir()
-        f = PytronFilter(frontend_dir=frontend)
+        f = PytronFilter(project_root=tmp_path, frontend_dir=frontend)
 
         # Should ignore frontend/src
         assert f(change=1, path=str(frontend / "src" / "App.jsx")) is False

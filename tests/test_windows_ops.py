@@ -64,9 +64,11 @@ def test_window_minimize_rust_path(hwnd_window):
 
 
 def test_window_minimize_noop_when_no_hwnd():
-    with patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0), patch(
-        WIN_OS, None
-    ), patch.object(window.user32, "ShowWindow") as mock_show:
+    with (
+        patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0),
+        patch(WIN_OS, None),
+        patch.object(window.user32, "ShowWindow") as mock_show,
+    ):
         window.minimize("w")
         mock_show.assert_not_called()
 
@@ -128,17 +130,20 @@ def test_window_close_rust_path(hwnd_window):
 def test_window_close_rust_fallback(hwnd_window):
     mock_os = MagicMock()
     mock_os.close.side_effect = RuntimeError("fail")
-    with patch(WIN_OS, mock_os), patch.object(
-        window.user32, "PostMessageW"
-    ) as mock_post:
+    with (
+        patch(WIN_OS, mock_os),
+        patch.object(window.user32, "PostMessageW") as mock_post,
+    ):
         window.close("w")
         mock_post.assert_called_with(12345, constants.WM_CLOSE, 0, 0)
 
 
 def test_window_close_noop_when_no_hwnd():
-    with patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0), patch(
-        WIN_OS, None
-    ), patch.object(window.user32, "PostMessageW") as mock_post:
+    with (
+        patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0),
+        patch(WIN_OS, None),
+        patch.object(window.user32, "PostMessageW") as mock_post,
+    ):
         window.close("w")
         mock_post.assert_not_called()
 
@@ -149,8 +154,9 @@ def test_window_close_noop_when_no_hwnd():
 
 
 def test_window_show_ctypes(hwnd_window, no_pytron_native_window):
-    with patch.object(window.user32, "ShowWindow") as mock_sw, patch.object(
-        window.user32, "SetForegroundWindow"
+    with (
+        patch.object(window.user32, "ShowWindow") as mock_sw,
+        patch.object(window.user32, "SetForegroundWindow"),
     ):
         window.show("w")
         mock_sw.assert_called_with(12345, constants.SW_SHOW)
@@ -208,9 +214,11 @@ def test_set_always_on_top_rust_path(hwnd_window):
 
 
 def test_set_always_on_top_noop_when_no_hwnd():
-    with patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0), patch(
-        WIN_OS, None
-    ), patch.object(window.user32, "SetWindowPos") as mock_swp:
+    with (
+        patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0),
+        patch(WIN_OS, None),
+        patch.object(window.user32, "SetWindowPos") as mock_swp,
+    ):
         window.set_always_on_top("w", True)
         mock_swp.assert_not_called()
 
@@ -223,29 +231,27 @@ def test_set_always_on_top_noop_when_no_hwnd():
 def test_set_fullscreen_enable_calls_setwindowlongw(
     hwnd_window, no_pytron_native_window
 ):
-    with patch.object(window.user32, "GetWindowRect"), patch.object(
-        window.user32, "GetWindowLongW", return_value=0
-    ), patch.object(window.user32, "SetWindowLongW") as mock_swl, patch.object(
-        window.user32, "MonitorFromWindow"
-    ), patch.object(
-        window.user32, "GetMonitorInfoW"
-    ), patch.object(
-        window.user32, "SetWindowPos"
+    with (
+        patch.object(window.user32, "GetWindowRect"),
+        patch.object(window.user32, "GetWindowLongW", return_value=0),
+        patch.object(window.user32, "SetWindowLongW") as mock_swl,
+        patch.object(window.user32, "MonitorFromWindow"),
+        patch.object(window.user32, "GetMonitorInfoW"),
+        patch.object(window.user32, "SetWindowPos"),
     ):
         window.set_fullscreen("w", True)
         assert mock_swl.called
 
 
 def test_set_fullscreen_enable_calls_setwindowpos(hwnd_window, no_pytron_native_window):
-    with patch.object(window.user32, "GetWindowRect"), patch.object(
-        window.user32, "GetWindowLongW", return_value=0
-    ), patch.object(window.user32, "SetWindowLongW"), patch.object(
-        window.user32, "MonitorFromWindow"
-    ), patch.object(
-        window.user32, "GetMonitorInfoW"
-    ), patch.object(
-        window.user32, "SetWindowPos"
-    ) as mock_swp:
+    with (
+        patch.object(window.user32, "GetWindowRect"),
+        patch.object(window.user32, "GetWindowLongW", return_value=0),
+        patch.object(window.user32, "SetWindowLongW"),
+        patch.object(window.user32, "MonitorFromWindow"),
+        patch.object(window.user32, "GetMonitorInfoW"),
+        patch.object(window.user32, "SetWindowPos") as mock_swp,
+    ):
         window.set_fullscreen("w", True)
         assert mock_swp.called
 
@@ -256,9 +262,10 @@ def test_set_fullscreen_disable_restores_style(hwnd_window, no_pytron_native_win
 
     _fullscreen_storage[12345] = {"style": 0xCF0000, "rect": (0, 0, 1920, 1080)}
 
-    with patch.object(window.user32, "SetWindowLongW") as mock_swl, patch.object(
-        window.user32, "SetWindowPos"
-    ) as mock_swp:
+    with (
+        patch.object(window.user32, "SetWindowLongW") as mock_swl,
+        patch.object(window.user32, "SetWindowPos") as mock_swp,
+    ):
         window.set_fullscreen("w", False)
         assert mock_swl.called
         assert mock_swp.called
@@ -273,9 +280,11 @@ def test_set_fullscreen_rust_path(hwnd_window):
 
 
 def test_set_fullscreen_noop_when_no_hwnd():
-    with patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0), patch(
-        WIN_OS, None
-    ), patch.object(window.user32, "SetWindowLongW") as mock_swl:
+    with (
+        patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0),
+        patch(WIN_OS, None),
+        patch.object(window.user32, "SetWindowLongW") as mock_swl,
+    ):
         window.set_fullscreen("w", True)
         mock_swl.assert_not_called()
 
@@ -312,12 +321,12 @@ def test_set_bounds_rust_path(hwnd_window):
 
 
 def test_make_frameless_strips_caption(hwnd_window, no_pytron_native_window):
-    with patch.object(
-        window.user32, "GetWindowLongW", return_value=0xCF0000
-    ) as mock_gwl, patch.object(
-        window.user32, "SetWindowLongW"
-    ) as mock_swl, patch.object(
-        window.user32, "SetWindowPos"
+    with (
+        patch.object(
+            window.user32, "GetWindowLongW", return_value=0xCF0000
+        ) as mock_gwl,
+        patch.object(window.user32, "SetWindowLongW") as mock_swl,
+        patch.object(window.user32, "SetWindowPos"),
     ):
         window.make_frameless("w")
         mock_swl.assert_called()
@@ -331,9 +340,11 @@ def test_make_frameless_strips_caption(hwnd_window, no_pytron_native_window):
 
 
 def test_center_calls_setwindowpos(hwnd_window, no_pytron_native_window):
-    with patch.object(window.user32, "GetWindowRect"), patch.object(
-        window.user32, "GetSystemMetrics", return_value=1920
-    ), patch.object(window.user32, "SetWindowPos") as mock_swp:
+    with (
+        patch.object(window.user32, "GetWindowRect"),
+        patch.object(window.user32, "GetSystemMetrics", return_value=1920),
+        patch.object(window.user32, "SetWindowPos") as mock_swp,
+    ):
         window.center("w")
         assert mock_swp.called
 
@@ -344,9 +355,10 @@ def test_center_calls_setwindowpos(hwnd_window, no_pytron_native_window):
 
 
 def test_start_drag_ctypes(hwnd_window, no_pytron_native_window):
-    with patch.object(window.user32, "ReleaseCapture") as mock_rc, patch.object(
-        window.user32, "SendMessageW"
-    ) as mock_sm:
+    with (
+        patch.object(window.user32, "ReleaseCapture") as mock_rc,
+        patch.object(window.user32, "SendMessageW") as mock_sm,
+    ):
         window.start_drag("w")
         mock_rc.assert_called_once()
         mock_sm.assert_called_with(
@@ -370,8 +382,9 @@ def test_is_visible_false(hwnd_window, no_pytron_native_window):
 
 
 def test_is_visible_returns_false_without_hwnd():
-    with patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0), patch(
-        WIN_OS, None
+    with (
+        patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0),
+        patch(WIN_OS, None),
     ):
         assert window.is_visible("w") is False
 
@@ -412,12 +425,12 @@ def test_message_box_different_styles(hwnd_system, no_pytron_native_system):
 def test_system_notification_ctypes_calls_shell_notify(
     hwnd_system, no_pytron_native_system
 ):
-    with patch.object(
-        system.shell32, "Shell_NotifyIconW", return_value=1
-    ) as mock_notify, patch.object(
-        system.user32, "LoadImageW", return_value=999
-    ), patch.object(
-        system.user32, "LoadIconW", return_value=888
+    with (
+        patch.object(
+            system.shell32, "Shell_NotifyIconW", return_value=1
+        ) as mock_notify,
+        patch.object(system.user32, "LoadImageW", return_value=999),
+        patch.object(system.user32, "LoadIconW", return_value=888),
     ):
         system.notification("w", "Title", "Message")
         assert mock_notify.call_count >= 1  # NIM_ADD + NIM_SETVERSION + NIM_MODIFY
@@ -433,21 +446,23 @@ def test_system_notification_rust_path(hwnd_system):
 def test_system_notification_rust_fallback_to_ctypes(hwnd_system):
     mock_os = MagicMock()
     mock_os.show_notification.side_effect = RuntimeError("fail")
-    with patch(SYS_OS, mock_os), patch.object(
-        system.shell32, "Shell_NotifyIconW", return_value=1
-    ) as mock_notify, patch.object(
-        system.user32, "LoadImageW", return_value=0
-    ), patch.object(
-        system.user32, "LoadIconW", return_value=888
+    with (
+        patch(SYS_OS, mock_os),
+        patch.object(
+            system.shell32, "Shell_NotifyIconW", return_value=1
+        ) as mock_notify,
+        patch.object(system.user32, "LoadImageW", return_value=0),
+        patch.object(system.user32, "LoadIconW", return_value=888),
     ):
         system.notification("w", "Title", "Msg")
         assert mock_notify.call_count >= 1
 
 
 def test_system_notification_noop_when_no_hwnd(no_pytron_native_system):
-    with patch(
-        "pytron.platforms.windows_ops.system.get_hwnd", return_value=0
-    ), patch.object(system.shell32, "Shell_NotifyIconW") as mock_notify:
+    with (
+        patch("pytron.platforms.windows_ops.system.get_hwnd", return_value=0),
+        patch.object(system.shell32, "Shell_NotifyIconW") as mock_notify,
+    ):
         system.notification("w", "Title", "Msg")
         mock_notify.assert_not_called()
 
@@ -476,9 +491,10 @@ def test_set_window_icon_ctypes_sends_wm_seticon(hwnd_system, no_pytron_native_s
     with tempfile.NamedTemporaryFile(suffix=".ico", delete=False) as f:
         ico_path = f.name
     try:
-        with patch.object(
-            system.user32, "LoadImageW", return_value=999
-        ) as mock_li, patch.object(system.user32, "SendMessageW") as mock_sm:
+        with (
+            patch.object(system.user32, "LoadImageW", return_value=999) as mock_li,
+            patch.object(system.user32, "SendMessageW") as mock_sm,
+        ):
             system.set_window_icon("w", ico_path)
             assert mock_sm.called
     finally:
@@ -554,9 +570,12 @@ def test_save_file_dialog_default_path_and_name_combined(
 def test_save_file_dialog_rust_exception_falls_through(hwnd_system):
     mock_os = MagicMock()
     mock_os.save_file_dialog.side_effect = RuntimeError("fail")
-    with patch(SYS_OS, mock_os), patch.object(
-        system.comdlg32, "GetSaveFileNameW", return_value=False
-    ) as mock_gsf:
+    with (
+        patch(SYS_OS, mock_os),
+        patch.object(
+            system.comdlg32, "GetSaveFileNameW", return_value=False
+        ) as mock_gsf,
+    ):
         result = system.save_file_dialog("w", "Save")
         assert result is None
         mock_gsf.assert_called_once()
@@ -596,12 +615,10 @@ def test_open_folder_dialog_ctypes_returns_path_from_pidl(
         buff.value = "C:\\folder"
         return True
 
-    with patch.object(
-        system.shell32, "SHBrowseForFolderW", return_value=fake_pidl
-    ), patch.object(
-        system.shell32, "SHGetPathFromIDListW", side_effect=fake_get_path
-    ), patch.object(
-        system.shell32, "ILFree"
+    with (
+        patch.object(system.shell32, "SHBrowseForFolderW", return_value=fake_pidl),
+        patch.object(system.shell32, "SHGetPathFromIDListW", side_effect=fake_get_path),
+        patch.object(system.shell32, "ILFree"),
     ):
         result = system.open_folder_dialog("w", "Pick")
         assert result == "C:\\folder"
@@ -614,12 +631,10 @@ def test_open_folder_dialog_ctypes_returns_none_when_path_fails(
 
     fake_pidl = ctypes.c_void_p(99)
 
-    with patch.object(
-        system.shell32, "SHBrowseForFolderW", return_value=fake_pidl
-    ), patch.object(
-        system.shell32, "SHGetPathFromIDListW", return_value=False
-    ), patch.object(
-        system.shell32, "ILFree"
+    with (
+        patch.object(system.shell32, "SHBrowseForFolderW", return_value=fake_pidl),
+        patch.object(system.shell32, "SHGetPathFromIDListW", return_value=False),
+        patch.object(system.shell32, "ILFree"),
     ):
         result = system.open_folder_dialog("w", "Pick")
         assert result is None
@@ -628,8 +643,9 @@ def test_open_folder_dialog_ctypes_returns_none_when_path_fails(
 def test_open_folder_dialog_rust_exception_falls_through(hwnd_system):
     mock_os = MagicMock()
     mock_os.open_folder_dialog.side_effect = RuntimeError("fail")
-    with patch(SYS_OS, mock_os), patch.object(
-        system.shell32, "SHBrowseForFolderW", return_value=None
+    with (
+        patch(SYS_OS, mock_os),
+        patch.object(system.shell32, "SHBrowseForFolderW", return_value=None),
     ):
         result = system.open_folder_dialog("w", "Pick")
         assert result is None
@@ -702,9 +718,11 @@ def test_set_launch_on_boot_enable_via_winreg():
     mock_winreg.KEY_QUERY_VALUE = 0x0001
     mock_winreg.REG_SZ = 1
 
-    with patch(SYS_OS, None), patch.dict(
-        _sys.modules, {"pytron.dependencies": mock_dep}
-    ), patch("pytron.platforms.windows_ops.system.winreg", mock_winreg):
+    with (
+        patch(SYS_OS, None),
+        patch.dict(_sys.modules, {"pytron.dependencies": mock_dep}),
+        patch("pytron.platforms.windows_ops.system.winreg", mock_winreg),
+    ):
         result = system.set_launch_on_boot("MyApp", "C:\\app.exe", enable=True)
     assert result is True
     mock_winreg.OpenKey.assert_called_once()
@@ -725,9 +743,11 @@ def test_set_launch_on_boot_disable_via_winreg():
     mock_winreg.KEY_SET_VALUE = 0x0002
     mock_winreg.KEY_QUERY_VALUE = 0x0001
 
-    with patch(SYS_OS, None), patch.dict(
-        _sys.modules, {"pytron.dependencies": mock_dep}
-    ), patch("pytron.platforms.windows_ops.system.winreg", mock_winreg):
+    with (
+        patch(SYS_OS, None),
+        patch.dict(_sys.modules, {"pytron.dependencies": mock_dep}),
+        patch("pytron.platforms.windows_ops.system.winreg", mock_winreg),
+    ):
         result = system.set_launch_on_boot("MyApp", "C:\\app.exe", enable=False)
     assert result is True
 
@@ -747,9 +767,11 @@ def test_set_launch_on_boot_disable_tolerates_file_not_found():
     mock_winreg.KEY_SET_VALUE = 0x0002
     mock_winreg.KEY_QUERY_VALUE = 0x0001
 
-    with patch(SYS_OS, None), patch.dict(
-        _sys.modules, {"pytron.dependencies": mock_dep}
-    ), patch("pytron.platforms.windows_ops.system.winreg", mock_winreg):
+    with (
+        patch(SYS_OS, None),
+        patch.dict(_sys.modules, {"pytron.dependencies": mock_dep}),
+        patch("pytron.platforms.windows_ops.system.winreg", mock_winreg),
+    ):
         # FileNotFoundError on delete should not propagate
         result = system.set_launch_on_boot("MyApp", "C:\\app.exe", enable=False)
     assert result is True
@@ -761,9 +783,11 @@ def test_set_launch_on_boot_returns_false_when_no_winreg():
     mock_dep = MagicMock()
     mock_dep.pytron_native = None
 
-    with patch(SYS_OS, None), patch.dict(
-        _sys.modules, {"pytron.dependencies": mock_dep}
-    ), patch("pytron.platforms.windows_ops.system.winreg", None):
+    with (
+        patch(SYS_OS, None),
+        patch.dict(_sys.modules, {"pytron.dependencies": mock_dep}),
+        patch("pytron.platforms.windows_ops.system.winreg", None),
+    ):
         result = system.set_launch_on_boot("MyApp", "C:\\app.exe")
     assert result is False
 
@@ -781,9 +805,12 @@ def test_set_app_id_rust_path():
 
 
 def test_set_app_id_ctypes_fallback():
-    with patch(SYS_OS, None), patch.object(
-        system.shell32, "SetCurrentProcessExplicitAppUserModelID"
-    ) as mock_fn:
+    with (
+        patch(SYS_OS, None),
+        patch.object(
+            system.shell32, "SetCurrentProcessExplicitAppUserModelID"
+        ) as mock_fn,
+    ):
         system.set_app_id("com.example.myapp")
         mock_fn.assert_called_with("com.example.myapp")
 
@@ -791,9 +818,12 @@ def test_set_app_id_ctypes_fallback():
 def test_set_app_id_rust_exception_falls_through_to_ctypes():
     mock_os = MagicMock()
     mock_os.set_app_id.side_effect = RuntimeError("err")
-    with patch(SYS_OS, mock_os), patch.object(
-        system.shell32, "SetCurrentProcessExplicitAppUserModelID"
-    ) as mock_fn:
+    with (
+        patch(SYS_OS, mock_os),
+        patch.object(
+            system.shell32, "SetCurrentProcessExplicitAppUserModelID"
+        ) as mock_fn,
+    ):
         system.set_app_id("com.example.myapp")
         mock_fn.assert_called_with("com.example.myapp")
 
@@ -857,8 +887,10 @@ def test_set_clipboard_text_falls_back_without_pytron_native():
     mock_kernel32.GlobalAlloc.return_value = 123
     mock_kernel32.GlobalLock.return_value = ctypes.addressof(buffer)
 
-    with patch(SYS_OS, None), patch.object(system, "user32", mock_user32), patch.object(
-        system, "kernel32", mock_kernel32
+    with (
+        patch(SYS_OS, None),
+        patch.object(system, "user32", mock_user32),
+        patch.object(system, "kernel32", mock_kernel32),
     ):
         result = system.set_clipboard_text("hello")
         assert result is True
@@ -875,9 +907,11 @@ def test_set_clipboard_text_falls_back_on_native_exception():
     mock_kernel32.GlobalAlloc.return_value = 123
     mock_kernel32.GlobalLock.return_value = ctypes.addressof(buffer)
 
-    with patch(SYS_OS, mock_os), patch.object(
-        system, "user32", mock_user32
-    ), patch.object(system, "kernel32", mock_kernel32):
+    with (
+        patch(SYS_OS, mock_os),
+        patch.object(system, "user32", mock_user32),
+        patch.object(system, "kernel32", mock_kernel32),
+    ):
         result = system.set_clipboard_text("hello")
         assert result is True
 
@@ -988,12 +1022,10 @@ def test_toast_silences_exceptions():
 def test_set_utility_window_enable_sets_toolwindow(
     hwnd_window, no_pytron_native_window
 ):
-    with patch.object(
-        window.user32, "GetWindowLongW", return_value=0
-    ) as mock_gwl, patch.object(
-        window.user32, "SetWindowLongW"
-    ) as mock_swl, patch.object(
-        window.user32, "SetWindowPos"
+    with (
+        patch.object(window.user32, "GetWindowLongW", return_value=0) as mock_gwl,
+        patch.object(window.user32, "SetWindowLongW") as mock_swl,
+        patch.object(window.user32, "SetWindowPos"),
     ):
         window.set_utility_window("w", True)
         new_style = mock_swl.call_args[0][2]
@@ -1004,9 +1036,11 @@ def test_set_utility_window_enable_sets_toolwindow(
 def test_set_utility_window_disable_sets_appwindow(
     hwnd_window, no_pytron_native_window
 ):
-    with patch.object(window.user32, "GetWindowLongW", return_value=0), patch.object(
-        window.user32, "SetWindowLongW"
-    ) as mock_swl, patch.object(window.user32, "SetWindowPos"):
+    with (
+        patch.object(window.user32, "GetWindowLongW", return_value=0),
+        patch.object(window.user32, "SetWindowLongW") as mock_swl,
+        patch.object(window.user32, "SetWindowPos"),
+    ):
         window.set_utility_window("w", False)
         new_style = mock_swl.call_args[0][2]
         assert new_style & constants.WS_EX_APPWINDOW
@@ -1021,17 +1055,21 @@ def test_set_utility_window_rust_path(hwnd_window):
 
 
 def test_set_utility_window_noop_when_no_hwnd():
-    with patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0), patch(
-        WIN_OS, None
-    ), patch.object(window.user32, "SetWindowLongW") as mock_swl:
+    with (
+        patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0),
+        patch(WIN_OS, None),
+        patch.object(window.user32, "SetWindowLongW") as mock_swl,
+    ):
         window.set_utility_window("w", True)
         mock_swl.assert_not_called()
 
 
 def test_set_utility_window_calls_setwindowpos(hwnd_window, no_pytron_native_window):
-    with patch.object(window.user32, "GetWindowLongW", return_value=0), patch.object(
-        window.user32, "SetWindowLongW"
-    ), patch.object(window.user32, "SetWindowPos") as mock_swp:
+    with (
+        patch.object(window.user32, "GetWindowLongW", return_value=0),
+        patch.object(window.user32, "SetWindowLongW"),
+        patch.object(window.user32, "SetWindowPos") as mock_swp,
+    ):
         window.set_utility_window("w", True)
         mock_swp.assert_called_once()
         flags = mock_swp.call_args[0][6]
@@ -1084,8 +1122,9 @@ def test_set_border_color_ctypes_fallback_on_rust_failure(hwnd_window):
 
 
 def test_set_border_color_noop_when_no_hwnd():
-    with patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0), patch(
-        WIN_OS, None
+    with (
+        patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0),
+        patch(WIN_OS, None),
     ):
         # Should not raise
         window.set_border_color("w", "#FF0000")

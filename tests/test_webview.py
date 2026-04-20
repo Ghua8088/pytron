@@ -184,12 +184,12 @@ def test_webview_windows_specific(webview_config):
 
     cfg = {**webview_config, "hide_from_taskbar": True}
 
-    with patch("pytron.webview.pytron_native", native_mod), patch(
-        "threading.Thread"
-    ), patch("sys.platform", "win32"), patch(
-        "pytron.platforms.windows.WindowsImplementation"
-    ) as mock_win, patch.object(
-        Webview, "hwnd", new_callable=PropertyMock, return_value=12345
+    with (
+        patch("pytron.webview.pytron_native", native_mod),
+        patch("threading.Thread"),
+        patch("sys.platform", "win32"),
+        patch("pytron.platforms.windows.WindowsImplementation") as mock_win,
+        patch.object(Webview, "hwnd", new_callable=PropertyMock, return_value=12345),
     ):
         wv = Webview(cfg)
         mock_win.return_value.set_utility_window.assert_called_with(12345, True)

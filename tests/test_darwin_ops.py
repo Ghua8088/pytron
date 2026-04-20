@@ -8,11 +8,10 @@ pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="macOS only tes
 
 @pytest.fixture(autouse=True)
 def mock_libs():
-    with patch(
-        "pytron.platforms.darwin_ops.libs.objc", MagicMock()
-    ) as mock_objc, patch(
-        "pytron.platforms.darwin_ops.libs.cocoa", MagicMock()
-    ) as mock_cocoa:
+    with (
+        patch("pytron.platforms.darwin_ops.libs.objc", MagicMock()) as mock_objc,
+        patch("pytron.platforms.darwin_ops.libs.cocoa", MagicMock()) as mock_cocoa,
+    ):
         yield mock_objc, mock_cocoa
 
 

@@ -29,23 +29,21 @@ def mock_load_config(self, *args, **kwargs):
 def test_app_init_minimal(tmp_path):
     config_file = tmp_path / "settings.json"
     config_file.touch()
-    with patch(
-        "pytron.apputils.config.ConfigComponent._load_config",
-        side_effect=mock_load_config,
-        autospec=True,
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_identity",
-        return_value=(None, "testapp"),
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_storage"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._resolve_resources"
-    ), patch(
-        "pytron.application.App._register_core_apis"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
-    ), patch(
-        "pytron.application.App.load_plugins"
+    with (
+        patch(
+            "pytron.apputils.config.ConfigComponent._load_config",
+            side_effect=mock_load_config,
+            autospec=True,
+        ),
+        patch(
+            "pytron.apputils.config.ConfigComponent._setup_identity",
+            return_value=(None, "testapp"),
+        ),
+        patch("pytron.apputils.config.ConfigComponent._setup_storage"),
+        patch("pytron.apputils.config.ConfigComponent._resolve_resources"),
+        patch("pytron.application.App._register_core_apis"),
+        patch("pytron.apputils.config.ConfigComponent._setup_key_value_store"),
+        patch("pytron.application.App.load_plugins"),
     ):
         app = App(str(config_file))
         assert app.config["title"] == "TestApp"
@@ -61,23 +59,21 @@ def test_app_init_missing_config():
 def test_app_create_window(mock_webview, tmp_path):
     config_file = tmp_path / "settings.json"
     config_file.touch()
-    with patch(
-        "pytron.apputils.config.ConfigComponent._load_config",
-        side_effect=mock_load_config,
-        autospec=True,
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_identity",
-        return_value=(None, "testapp"),
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_storage"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._resolve_resources"
-    ), patch(
-        "pytron.application.App._register_core_apis"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
-    ), patch(
-        "pytron.application.App.load_plugins"
+    with (
+        patch(
+            "pytron.apputils.config.ConfigComponent._load_config",
+            side_effect=mock_load_config,
+            autospec=True,
+        ),
+        patch(
+            "pytron.apputils.config.ConfigComponent._setup_identity",
+            return_value=(None, "testapp"),
+        ),
+        patch("pytron.apputils.config.ConfigComponent._setup_storage"),
+        patch("pytron.apputils.config.ConfigComponent._resolve_resources"),
+        patch("pytron.application.App._register_core_apis"),
+        patch("pytron.apputils.config.ConfigComponent._setup_key_value_store"),
+        patch("pytron.application.App.load_plugins"),
     ):
         app = App(str(config_file))
         app.app_root = tmp_path
@@ -98,23 +94,21 @@ def test_app_create_window(mock_webview, tmp_path):
 def test_app_run_starts_windows(mock_webview, tmp_path):
     config_file = tmp_path / "settings.json"
     config_file.touch()
-    with patch(
-        "pytron.apputils.config.ConfigComponent._load_config",
-        side_effect=mock_load_config,
-        autospec=True,
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_identity",
-        return_value=(None, "testapp"),
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_storage"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._resolve_resources"
-    ), patch(
-        "pytron.application.App._register_core_apis"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
-    ), patch(
-        "pytron.application.App.load_plugins"
+    with (
+        patch(
+            "pytron.apputils.config.ConfigComponent._load_config",
+            side_effect=mock_load_config,
+            autospec=True,
+        ),
+        patch(
+            "pytron.apputils.config.ConfigComponent._setup_identity",
+            return_value=(None, "testapp"),
+        ),
+        patch("pytron.apputils.config.ConfigComponent._setup_storage"),
+        patch("pytron.apputils.config.ConfigComponent._resolve_resources"),
+        patch("pytron.application.App._register_core_apis"),
+        patch("pytron.apputils.config.ConfigComponent._setup_key_value_store"),
+        patch("pytron.application.App.load_plugins"),
     ):
         app = App(str(config_file))
         win = app.create_window()
@@ -129,21 +123,20 @@ def test_app_path_resolution(tmp_path):
     # Testing the actual _resolve_resources in ConfigComponent
     config_file = tmp_path / "settings.json"
     config_file.touch()
-    with patch(
-        "pytron.apputils.config.ConfigComponent._load_config",
-        side_effect=mock_load_config,
-        autospec=True,
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_identity",
-        return_value=(None, "testapp"),
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_storage"
-    ), patch(
-        "pytron.application.App._register_core_apis"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
-    ), patch(
-        "pytron.application.App.load_plugins"
+    with (
+        patch(
+            "pytron.apputils.config.ConfigComponent._load_config",
+            side_effect=mock_load_config,
+            autospec=True,
+        ),
+        patch(
+            "pytron.apputils.config.ConfigComponent._setup_identity",
+            return_value=(None, "testapp"),
+        ),
+        patch("pytron.apputils.config.ConfigComponent._setup_storage"),
+        patch("pytron.application.App._register_core_apis"),
+        patch("pytron.apputils.config.ConfigComponent._setup_key_value_store"),
+        patch("pytron.application.App.load_plugins"),
     ):
         app = App(str(config_file))
         app.app_root = tmp_path
@@ -160,23 +153,21 @@ def test_app_path_resolution(tmp_path):
 def test_app_emit_to_all_windows(tmp_path):
     config_file = tmp_path / "settings.json"
     config_file.touch()
-    with patch(
-        "pytron.apputils.config.ConfigComponent._load_config",
-        side_effect=mock_load_config,
-        autospec=True,
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_identity",
-        return_value=(None, "testapp"),
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_storage"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._resolve_resources"
-    ), patch(
-        "pytron.application.App._register_core_apis"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
-    ), patch(
-        "pytron.application.App.load_plugins"
+    with (
+        patch(
+            "pytron.apputils.config.ConfigComponent._load_config",
+            side_effect=mock_load_config,
+            autospec=True,
+        ),
+        patch(
+            "pytron.apputils.config.ConfigComponent._setup_identity",
+            return_value=(None, "testapp"),
+        ),
+        patch("pytron.apputils.config.ConfigComponent._setup_storage"),
+        patch("pytron.apputils.config.ConfigComponent._resolve_resources"),
+        patch("pytron.application.App._register_core_apis"),
+        patch("pytron.apputils.config.ConfigComponent._setup_key_value_store"),
+        patch("pytron.application.App.load_plugins"),
     ):
         app = App(str(config_file))
         win1 = MagicMock()
@@ -192,24 +183,22 @@ def test_app_is_visible_delegation(tmp_path):
     """Regression test: Ensure app.is_visible delegates to window without loop."""
     config_file = tmp_path / "settings.json"
     config_file.touch()
-    with patch(
-        "pytron.apputils.config.ConfigComponent._load_config",
-        side_effect=mock_load_config,
-        autospec=True,
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_identity",
-        return_value=(None, "testapp"),
-        autospec=True,
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_storage"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._resolve_resources"
-    ), patch(
-        "pytron.application.App._register_core_apis"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
-    ), patch(
-        "pytron.application.App.load_plugins"
+    with (
+        patch(
+            "pytron.apputils.config.ConfigComponent._load_config",
+            side_effect=mock_load_config,
+            autospec=True,
+        ),
+        patch(
+            "pytron.apputils.config.ConfigComponent._setup_identity",
+            return_value=(None, "testapp"),
+            autospec=True,
+        ),
+        patch("pytron.apputils.config.ConfigComponent._setup_storage"),
+        patch("pytron.apputils.config.ConfigComponent._resolve_resources"),
+        patch("pytron.application.App._register_core_apis"),
+        patch("pytron.apputils.config.ConfigComponent._setup_key_value_store"),
+        patch("pytron.application.App.load_plugins"),
     ):
         app = App(str(config_file))
         win = MagicMock()
@@ -226,24 +215,22 @@ def test_component_recursion_safety(tmp_path):
     """Regression test: Ensure AppComponent.__getattr__ is safe against loops."""
     config_file = tmp_path / "settings.json"
     config_file.touch()
-    with patch(
-        "pytron.apputils.config.ConfigComponent._load_config",
-        side_effect=mock_load_config,
-        autospec=True,
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_identity",
-        return_value=(None, "testapp"),
-        autospec=True,
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_storage"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._resolve_resources"
-    ), patch(
-        "pytron.application.App._register_core_apis"
-    ), patch(
-        "pytron.apputils.config.ConfigComponent._setup_key_value_store"
-    ), patch(
-        "pytron.application.App.load_plugins"
+    with (
+        patch(
+            "pytron.apputils.config.ConfigComponent._load_config",
+            side_effect=mock_load_config,
+            autospec=True,
+        ),
+        patch(
+            "pytron.apputils.config.ConfigComponent._setup_identity",
+            return_value=(None, "testapp"),
+            autospec=True,
+        ),
+        patch("pytron.apputils.config.ConfigComponent._setup_storage"),
+        patch("pytron.apputils.config.ConfigComponent._resolve_resources"),
+        patch("pytron.application.App._register_core_apis"),
+        patch("pytron.apputils.config.ConfigComponent._setup_key_value_store"),
+        patch("pytron.application.App.load_plugins"),
     ):
         app = App(str(config_file))
         comp = app._window_comp

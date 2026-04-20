@@ -43,7 +43,8 @@ except ImportError:
 
 
 class PytronFilter(DefaultFilter):
-    def __init__(self, frontend_dir: Path = None, **kwargs):
+    def __init__(self, project_root: Path = None, frontend_dir: Path = None, **kwargs):
+        self.project_root = (project_root or Path.cwd()).resolve()
         self.frontend_dir = frontend_dir.resolve() if frontend_dir else None
         self.ignore_dirs = {
             ".git",
@@ -68,8 +69,15 @@ class PytronFilter(DefaultFilter):
     def __call__(self, change, path):
         path_obj = Path(path).resolve()
 
+        # 0. Get parts relative to project root to avoid ignoring system dirs like /tmp
+        try:
+            rel_parts = path_obj.relative_to(self.project_root).parts
+        except ValueError:
+            # If outside project root, fall back to whole path parts (conservative)
+            rel_parts = path_obj.parts
+
         # 1. Ignore common heavy or build directories
-        if any(part in self.ignore_dirs for part in path_obj.parts):
+        if any(part in self.ignore_dirs for part in rel_parts):
             return False
 
         # 1.5 Ignore database, log, and temp files that constantly change
@@ -130,7 +138,7 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
         return 1
 
     frontend_dir = locate_frontend_dir(Path("."))
-    watcher_filter = PytronFilter(frontend_dir=frontend_dir)
+    watcher_filter = PytronFilter(project_root=Path.cwd(), frontend_dir=frontend_dir)
 
     npm_proc = None
     dev_server_url = None

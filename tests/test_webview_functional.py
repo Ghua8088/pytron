@@ -39,10 +39,11 @@ def test_chrome_webview_init_no_attribute_error():
     Ensure ChromeWebView initialization doesn't trigger bridge calls before it's ready.
     Validates that self.bridge is set before any methods (like set_title) that use it are called.
     """
-    with patch("pytron.engines.chrome.engine.ChromeAdapter"), patch(
-        "pytron.engines.chrome.engine.ChromeBridge"
-    ) as MockBridge, patch("pytron.webview.pytron_native", MagicMock()), patch(
-        "threading.Thread"
+    with (
+        patch("pytron.engines.chrome.engine.ChromeAdapter"),
+        patch("pytron.engines.chrome.engine.ChromeBridge") as MockBridge,
+        patch("pytron.webview.pytron_native", MagicMock()),
+        patch("threading.Thread"),
     ):
         config = {"engine": "chrome", "title": "Test"}
         wv = ChromeWebView(config)
@@ -55,14 +56,13 @@ def test_servo_webview_init_no_attribute_error():
     """
     Ensure ServoWebView initialization doesn't trigger attribute errors if bridge is accessed early.
     """
-    with patch("pytron.engines.servo.engine.ServoAdapter"), patch(
-        "pytron.engines.servo.engine.ServoBridge"
-    ) as MockBridge, patch("pytron.engines.servo.forge.ServoForge"), patch(
-        "pytron.webview.pytron_native", MagicMock()
-    ), patch(
-        "threading.Thread"
-    ), patch(
-        "os.path.exists", return_value=True
+    with (
+        patch("pytron.engines.servo.engine.ServoAdapter"),
+        patch("pytron.engines.servo.engine.ServoBridge") as MockBridge,
+        patch("pytron.engines.servo.forge.ServoForge"),
+        patch("pytron.webview.pytron_native", MagicMock()),
+        patch("threading.Thread"),
+        patch("os.path.exists", return_value=True),
     ):
         config = {"engine": "servo", "title": "Test", "engine_path": "/mock/servo"}
         wv = ServoWebView(config)
@@ -74,14 +74,13 @@ def test_servo_bridge_methods_unified():
     """
     Verify ServoWebView uses unified bridge method names (no webview_ prefix).
     """
-    with patch("pytron.engines.servo.engine.ServoAdapter"), patch(
-        "pytron.engines.servo.engine.ServoBridge"
-    ) as MockBridge, patch("pytron.engines.servo.forge.ServoForge"), patch(
-        "pytron.webview.pytron_native", MagicMock()
-    ), patch(
-        "threading.Thread"
-    ), patch(
-        "os.path.exists", return_value=True
+    with (
+        patch("pytron.engines.servo.engine.ServoAdapter"),
+        patch("pytron.engines.servo.engine.ServoBridge") as MockBridge,
+        patch("pytron.engines.servo.forge.ServoForge"),
+        patch("pytron.webview.pytron_native", MagicMock()),
+        patch("threading.Thread"),
+        patch("os.path.exists", return_value=True),
     ):
         wv = ServoWebView({"engine": "servo", "engine_path": "/mock/servo"})
         MockBridge.return_value.reset_mock()

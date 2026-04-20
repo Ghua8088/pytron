@@ -9,13 +9,12 @@ pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Linux only test
 @pytest.fixture(autouse=True)
 def mock_libs():
     # Mock the libs module attributes
-    with patch("pytron.platforms.linux_ops.libs.gtk", MagicMock()) as mock_gtk, patch(
-        "pytron.platforms.linux_ops.libs.webkit", MagicMock()
-    ) as mock_webkit, patch(
-        "pytron.platforms.linux_ops.libs.glib", MagicMock()
-    ) as mock_glib, patch(
-        "pytron.platforms.linux_ops.libs.gio", MagicMock()
-    ) as mock_gio:
+    with (
+        patch("pytron.platforms.linux_ops.libs.gtk", MagicMock()) as mock_gtk,
+        patch("pytron.platforms.linux_ops.libs.webkit", MagicMock()) as mock_webkit,
+        patch("pytron.platforms.linux_ops.libs.glib", MagicMock()) as mock_glib,
+        patch("pytron.platforms.linux_ops.libs.gio", MagicMock()) as mock_gio,
+    ):
         yield mock_gtk, mock_webkit, mock_glib, mock_gio
 
 

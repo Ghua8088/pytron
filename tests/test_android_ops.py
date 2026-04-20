@@ -160,10 +160,14 @@ def test_sync_android_project_basic(tmp_path, mock_console_sync, mock_log_sync):
     # Actually, let's let it copy small files in tmp_path, it's fine.
     # But we need to mock pytron package copy because it looks for installed package.
 
-    with patch(
-        "pytron.platforms.android.ops.sync.importlib.metadata.packages_distributions",
-        return_value={},
-    ), patch("shutil.copytree") as mock_copytree, patch("shutil.copy2") as mock_copy2:
+    with (
+        patch(
+            "pytron.platforms.android.ops.sync.importlib.metadata.packages_distributions",
+            return_value={},
+        ),
+        patch("shutil.copytree") as mock_copytree,
+        patch("shutil.copy2") as mock_copy2,
+    ):
 
         # Mock pytron location detection to avoid looking for system packages
         with patch(

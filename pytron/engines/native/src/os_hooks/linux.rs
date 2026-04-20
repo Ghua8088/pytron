@@ -1,44 +1,72 @@
 use pyo3::prelude::*;
+use pyo3::PyObject;
 use rfd::FileDialog;
 use arboard::Clipboard;
 use notify_rust::Notification;
 
 #[pyfunction]
-pub fn message_box(_hwnd_val: usize, title: String, message: String, _style: u32) -> PyResult<u32> {
-    // RFD doesn't have a dedicated message_box yet in 0.14 standardly for "OK" only, 
-    // but we can use a basic confirmation or just log for now if we want to be exact.
-    // However, RFD is great for Yes/No. 
+pub fn message_box(
+    _py: Python<'_>,
+    _hwnd_val: usize,
+    title: String,
+    message: String,
+    _level: String,
+) -> PyResult<i32> {
     println!("[Linux] Message Box: {} - {}", title, message);
     Ok(1) // IDOK
 }
 
 #[pyfunction]
-#[pyo3(signature = (_hwnd_val, title, _default_path=None, _file_types=None))]
-pub fn open_file_dialog(_hwnd_val: usize, title: String, _default_path: Option<String>, _file_types: Option<String>) -> PyResult<Option<String>> {
-    let file = FileDialog::new()
-        .set_title(&title)
-        .pick_file();
-    
+#[pyo3(signature = (hwnd_val, title, default_path=None, _file_types=None))]
+pub fn open_file_dialog(
+    _py: Python<'_>,
+    hwnd_val: usize,
+    title: String,
+    default_path: Option<String>,
+    _file_types: Option<PyObject>,
+) -> PyResult<Option<String>> {
+    let mut dialog = FileDialog::new().set_title(&title);
+    if let Some(path) = default_path {
+        dialog = dialog.set_directory(path);
+    }
+    let file = dialog.pick_file();
     Ok(file.map(|p| p.to_string_lossy().to_string()))
 }
 
 #[pyfunction]
-#[pyo3(signature = (_hwnd_val, title, _default_path=None, _default_name=None, _file_types=None))]
-pub fn save_file_dialog(_hwnd_val: usize, title: String, _default_path: Option<String>, _default_name: Option<String>, _file_types: Option<String>) -> PyResult<Option<String>> {
-    let file = FileDialog::new()
-        .set_title(&title)
-        .save_file();
-        
+#[pyo3(signature = (hwnd_val, title, default_path=None, default_name=None, _file_types=None))]
+pub fn save_file_dialog(
+    _py: Python<'_>,
+    hwnd_val: usize,
+    title: String,
+    default_path: Option<String>,
+    default_name: Option<String>,
+    _file_types: Option<PyObject>,
+) -> PyResult<Option<String>> {
+    let mut dialog = FileDialog::new().set_title(&title);
+    if let Some(path) = default_path {
+        dialog = dialog.set_directory(path);
+    }
+    if let Some(name) = default_name {
+        dialog = dialog.set_file_name(name);
+    }
+    let file = dialog.save_file();
     Ok(file.map(|p| p.to_string_lossy().to_string()))
 }
 
 #[pyfunction]
-#[pyo3(signature = (_hwnd_val, title, _default_path=None))]
-pub fn open_folder_dialog(_hwnd_val: usize, title: String, _default_path: Option<String>) -> PyResult<Option<String>> {
-    let folder = FileDialog::new()
-        .set_title(&title)
-        .pick_folder();
-        
+#[pyo3(signature = (hwnd_val, title, default_path=None))]
+pub fn open_folder_dialog(
+    _py: Python<'_>,
+    hwnd_val: usize,
+    title: String,
+    default_path: Option<String>,
+) -> PyResult<Option<String>> {
+    let mut dialog = FileDialog::new().set_title(&title);
+    if let Some(path) = default_path {
+        dialog = dialog.set_directory(path);
+    }
+    let folder = dialog.pick_folder();
     Ok(folder.map(|p| p.to_string_lossy().to_string()))
 }
 
@@ -79,16 +107,32 @@ pub fn show_notification(_hwnd_val: usize, title: String, message: String, _icon
 #[pyfunction] pub fn show(_h: usize) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn hide(_h: usize) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn close(_h: usize) -> PyResult<()> { Ok(()) }
+
 #[pyfunction]
-#[pyo3(signature = (_h, _x, _y, _w, _h2, _no_move=None, _no_size=None))]
-pub fn set_bounds(_h: usize, _x: i32, _y: i32, _w: i32, _h2: i32, _no_move: Option<bool>, _no_size: Option<bool>) -> PyResult<()> { Ok(()) }
+#[pyo3(signature = (hwnd_val, x, y, width, height, no_move=None, no_size=None))]
+pub fn set_bounds(
+    _hwnd_val: usize,
+    _x: i32,
+    _y: i32,
+    _width: i32,
+    _height: i32,
+    _no_move: Option<bool>,
+    _no_size: Option<bool>,
+) -> PyResult<()> {
+    Ok(())
+}
+
 #[pyfunction] pub fn toggle_maximize(_h: usize) -> PyResult<bool> { Ok(false) }
 #[pyfunction] pub fn set_always_on_top(_h: usize, _e: bool) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn start_drag(_h: usize) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn is_visible(_h: usize) -> PyResult<bool> { Ok(true) }
+
 #[pyfunction]
-#[pyo3(signature = (_h, _width=None, _height=None))]
-pub fn center(_h: usize, _width: Option<i32>, _height: Option<i32>) -> PyResult<()> { Ok(()) }
+#[pyo3(signature = (hwnd_val, width=None, height=None))]
+pub fn center(_hwnd_val: usize, _width: Option<i32>, _height: Option<i32>) -> PyResult<()> {
+    Ok(())
+}
+
 #[pyfunction] pub fn set_border_color(_h: usize, _c: u32) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn set_window_icon(_h: usize, _p: String) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn set_fullscreen(_h: usize, _e: bool) -> PyResult<()> { Ok(()) }
@@ -104,23 +148,46 @@ pub fn center(_h: usize, _width: Option<i32>, _height: Option<i32>) -> PyResult<
 #[pyfunction] pub fn get_message() -> PyResult<bool> { Ok(true) }
 #[pyfunction] pub fn init_message_queue() -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn translate_dispatch() -> PyResult<()> { Ok(()) }
-#[pyfunction] pub fn tray_create_window() -> PyResult<usize> { Ok(0) }
-#[pyfunction] pub fn tray_get_message_ex() -> PyResult<bool> { Ok(false) }
-#[pyfunction] pub fn tray_translate_dispatch() -> PyResult<()> { Ok(()) }
-#[pyfunction] #[pyo3(signature = (_h, _t, _i=None))] pub fn tray_add_icon(_h: usize, _t: String, _i: Option<String>) -> PyResult<bool> { Ok(true) }
-#[pyfunction] pub fn tray_remove_icon(_h: usize) -> PyResult<bool> { Ok(true) }
+
+// Tray Stubs
+#[pyfunction] pub fn tray_create_window(_class: String, _title: String) -> PyResult<usize> { Ok(0) }
+#[pyfunction] pub fn tray_get_message_ex(_py: Python<'_>) -> PyResult<Option<(usize, u32, usize, isize, i32)>> { Ok(None) }
+#[pyfunction] pub fn tray_translate_dispatch(_h: usize, _m: u32, _w: usize, _l: isize) -> PyResult<()> { Ok(()) }
+
+#[pyfunction]
+pub fn tray_add_icon(
+    _hwnd_val: usize,
+    _hicon_val: usize,
+    _id: u32,
+    _tip: String,
+    _callback_msg: u32,
+) -> PyResult<bool> {
+    Ok(true)
+}
+
+#[pyfunction] pub fn tray_remove_icon(_h: usize, _id: u32) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn tray_destroy_window(_h: usize) -> PyResult<()> { Ok(()) }
-#[pyfunction] pub fn tray_post_message(_h: usize, _m: u32) -> PyResult<()> { Ok(()) }
-#[pyfunction] pub fn tray_load_icon(_p: String) -> PyResult<usize> { Ok(0) }
+#[pyfunction] pub fn tray_post_message(_h: usize, _m: u32, _w: usize, _l: isize) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn tray_load_icon(_p: String, _w: i32, _h2: i32) -> PyResult<usize> { Ok(0) }
 #[pyfunction] pub fn tray_load_default_icon() -> PyResult<usize> { Ok(0) }
 #[pyfunction] pub fn tray_destroy_icon(_h: usize) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn tray_create_popup_menu() -> PyResult<usize> { Ok(0) }
-#[pyfunction] pub fn tray_append_menu_item(_h: usize, _id: usize, _t: String) -> PyResult<bool> { Ok(true) }
-#[pyfunction] pub fn tray_append_separator(_h: usize) -> PyResult<bool> { Ok(true) }
-#[pyfunction] pub fn tray_track_popup_menu(_wh: usize, _mh: usize) -> PyResult<()> { Ok(()) }
-#[pyfunction] pub fn tray_get_cursor_pos() -> PyResult<(i32, i32)> { Ok((0,0)) }
-#[pyfunction] #[pyo3(signature = (_t, _i=None))] pub fn tray_v2_create(_t: String, _i: Option<String>) -> PyResult<usize> { Ok(0) }
-#[pyfunction] pub fn tray_v2_poll_event(_h: usize) -> PyResult<Option<String>> { Ok(None) }
-#[pyfunction] pub fn tray_v2_interrupt(_h: usize) -> PyResult<()> { Ok(()) }
-#[pyfunction] pub fn tray_v2_destroy(_h: usize) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn tray_append_menu_item(_h: usize, _f: u32, _id: u32, _l: String) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn tray_append_separator(_h: usize) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn tray_track_popup_menu(_py: Python<'_>, _mh: usize, _f: u32, _x: i32, _y: i32, _wh: usize) -> PyResult<u32> { Ok(0) }
+#[pyfunction] pub fn tray_get_cursor_pos() -> PyResult<(i32, i32)> { Ok((0, 0)) }
+
+#[pyfunction]
+#[pyo3(signature = (tooltip, items, icon_path=None))]
+pub fn tray_v2_create(
+    _tooltip: String,
+    _items: Vec<(String, String, bool)>,
+    _icon_path: Option<String>,
+) -> PyResult<()> {
+    Ok(())
+}
+
+#[pyfunction] pub fn tray_v2_poll_event(_py: Python<'_>) -> PyResult<Option<(String, String)>> { Ok(None) }
+#[pyfunction] pub fn tray_v2_interrupt() -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn tray_v2_destroy() -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn set_console_utf8() -> PyResult<()> { Ok(()) }

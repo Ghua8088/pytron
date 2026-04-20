@@ -21,15 +21,15 @@ async def real_app(tmp_path):
             f,
         )
 
-    with patch(
-        "pytron.apputils.config.ConfigComponent._setup_identity",
-        return_value=(None, "testapp"),
-    ), patch("pytron.apputils.config.ConfigComponent._setup_storage"), patch(
-        "pytron.apputils.config.ConfigComponent._resolve_resources"
-    ), patch(
-        "pytron.application.App.load_plugins"
-    ), patch(
-        "pytron.apputils.native.NativeComponent.set_start_on_boot"
+    with (
+        patch(
+            "pytron.apputils.config.ConfigComponent._setup_identity",
+            return_value=(None, "testapp"),
+        ),
+        patch("pytron.apputils.config.ConfigComponent._setup_storage"),
+        patch("pytron.apputils.config.ConfigComponent._resolve_resources"),
+        patch("pytron.application.App.load_plugins"),
+        patch("pytron.apputils.native.NativeComponent.set_start_on_boot"),
     ):
         app = App(str(config_file))
         # Ensure we are using the same loop as the test
