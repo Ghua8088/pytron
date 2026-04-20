@@ -1,4 +1,5 @@
 import os
+import importlib
 from ..tray import SystemTray
 
 
@@ -30,19 +31,32 @@ class ExtrasComponent(AppComponent):
         if not icon_path:
             return None
 
-        resolved = icon_path
-        if not os.path.isabs(icon_path):
+        # Use the global resource path utility which handles _MEIPASS and frozen environments
+        from ..utils import get_resource_path
+        resolved = get_resource_path(icon_path)
+
+        # If not absolute and doesn't exist, try resolving relative to app_root
+        if not os.path.exists(resolved) and not os.path.isabs(icon_path):
             resolved = os.path.join(self.app_root, icon_path)
 
         # Check if strictly exists
         if os.path.exists(resolved):
             return resolved
 
-        # Fallback to bundled resource
+        # Fallback to bundled resource locations
         for ext in [".ico", ".png", ".icns"]:
-            fallback = os.path.join(self.app_root, "resources", f"app_icon{ext}")
-            if os.path.exists(fallback):
-                return fallback
+            for folder in ["resources", "assets", "static"]:
+                fallback = os.path.join(self.app_root, folder, f"app_icon{ext}")
+                if os.path.exists(fallback):
+                    return fallback
+                
+                # Also check _MEIPASS fallback directly
+                if getattr(importlib.import_module("sys"), "frozen", False):
+                    meipass = getattr(importlib.import_module("sys"), "_MEIPASS", None)
+                    if meipass:
+                        fallback = os.path.join(meipass, folder, f"app_icon{ext}")
+                        if os.path.exists(fallback):
+                            return fallback
 
         return resolved  # Return best guess if fallback fails
 

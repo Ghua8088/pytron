@@ -23,6 +23,9 @@ fn pytron_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_function(wrap_pyfunction!(os_hooks::set_utility_window, m)?)?;
     m.add_function(wrap_pyfunction!(os_hooks::make_frameless, m)?)?;
+    m.add_function(wrap_pyfunction!(os_hooks::maximize, m)?)?;
+    m.add_function(wrap_pyfunction!(os_hooks::restore, m)?)?;
+    m.add_function(wrap_pyfunction!(os_hooks::set_title, m)?)?;
     m.add_function(wrap_pyfunction!(os_hooks::minimize, m)?)?;
     m.add_function(wrap_pyfunction!(os_hooks::set_bounds, m)?)?;
     m.add_function(wrap_pyfunction!(os_hooks::close, m)?)?;

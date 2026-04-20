@@ -209,14 +209,21 @@ function sendToPython(type, payload) {
 function handlePythonCommand(cmd) {
     if (isDebug) log(`Executing: ${cmd.substring(0, 100)}...`);
 
+    let command;
+    try {
+        command = JSON.parse(cmd);
+    } catch (e) {
+        log(`Failed to parse command: ${e.message}`);
+        return;
+    }
+
     if (!isAppReady) {
-        log("Queueing command (App not ready)");
+        log(`Queueing command: ${command.action} (App not ready)`);
         pendingCommands.push(cmd);
         return;
     }
 
     try {
-        const command = JSON.parse(cmd);
         switch (command.action) {
             case 'init':
                 if (command.options && command.options.root) {
@@ -246,12 +253,20 @@ function handlePythonCommand(cmd) {
                 break;
             case 'set_size':
                 if (mainWindow) {
-                    mainWindow.setSize(command.width, command.height);
+                    log(`Resizing to: ${command.width}x${command.height}`);
+                    mainWindow.setSize(parseInt(command.width), parseInt(command.height));
                     mainWindow.show();
+                } else {
+                    log("set_size ignored: mainWindow is NULL");
                 }
                 break;
             case 'center':
-                if (mainWindow) mainWindow.center();
+                if (mainWindow) {
+                    log("Centering window");
+                    mainWindow.center();
+                } else {
+                    log("center ignored: mainWindow is NULL");
+                }
                 break;
             case 'minimize':
                 if (mainWindow) mainWindow.minimize();
@@ -394,10 +409,10 @@ function handlePythonCommand(cmd) {
                 } catch (e) { log(`Debugger Error: ${e.message}`); }
                 break;
         }
-    } catch (e) { log(`Execution Error: ${e.message}`); }
+    } catch (e) { log(`Execution Error in ${command.action}: ${e.message}`); }
 }
 
-async function createWindow(options = {}) {
+function createWindow(options = {}) {
     if (mainWindow) return;
 
     log("Creating BrowserWindow...");

@@ -190,6 +190,7 @@ class ChromeWebView(Webview):
 
         self.adapter.start()
         self.adapter.bind_raw(self._handle_ipc_message)
+        self._pending_geometry = []
 
         # 5. Initialize Window & Bindings
         self.w = self.bridge.create(
@@ -203,6 +204,8 @@ class ChromeWebView(Webview):
 
         w, h = config.get("dimensions", [800, 600])
         self.set_size(w, h)
+        if config.get("center", True):
+            self.center(w, h)
 
         if not config.get("start_hidden", False):
             self.show()
@@ -384,7 +387,9 @@ class ChromeWebView(Webview):
     def hwnd(self):
         """Override to return Electron HWND instead of native engine HWND."""
         if hasattr(self.bridge, "real_hwnd"):
-            return self.bridge.real_hwnd
+            res = self.bridge.real_hwnd
+            if isinstance(res, (int, float)):
+                return int(res)
         return 0
 
     def _handle_ipc_message(self, msg):
@@ -410,8 +415,36 @@ class ChromeWebView(Webview):
                 self.logger.info(f"Acquired Electron HWND: {self.bridge.real_hwnd}")
                 # Initial curvature enforcement
                 self._platform.set_window_curvature(self.bridge.real_hwnd)
-            except:
-                pass
+            except Exception as e:
+                self.logger.error(f"Failed to process window_created: {e}")
+
+            return
+            
+        if msg_type == "lifecycle" and payload == "ready":
+            # Flush pending geometry calls off-thread perfectly in sync with DWM render
+            if hasattr(self, "_pending_geometry") and self._pending_geometry:
+                import threading
+                import time
+                
+                queue = list(self._pending_geometry)
+                self._pending_geometry.clear()
+                
+                def flush_queue(cmds):
+                    # We don't need a huge delay now because 'ready' implies the Chromium 
+                    # backend is already fully surfaced and painted in DWM!
+                    time.sleep(0.01) 
+                    for action, args in cmds:
+                        try:
+                            if action == "center":
+                                self.center(*args)
+                            elif action == "set_size":
+                                self.set_size(*args)
+                            elif action == "set_bounds":
+                                self.set_bounds(*args)
+                        except Exception as flush_err:
+                            self.logger.debug(f"Error flushing {action}: {flush_err}")
+                            
+                threading.Thread(target=flush_queue, args=(queue,), daemon=True).start()
             return
 
         # Curvature Persistence on State Change
@@ -462,8 +495,57 @@ class ChromeWebView(Webview):
 
     # --- Feature Overrides (Compatibility Layer) ---
 
-    def center(self):
-        self.bridge.adapter.send({"action": "center"})
+    def center(self, width=None, height=None):
+        if not hasattr(self, "hwnd") or not self.hwnd:
+            self._pending_geometry.append(("center", (width, height)))
+            return
+
+        if sys.platform == "win32":
+            import ctypes
+            import ctypes.wintypes
+            user32 = ctypes.windll.user32
+            
+            rect = ctypes.wintypes.RECT()
+            user32.GetWindowRect(self.hwnd, ctypes.byref(rect))
+
+            current_width = rect.right - rect.left
+            current_height = rect.bottom - rect.top
+
+            if width is None:
+                width = current_width
+            if height is None:
+                height = current_height
+
+            if width <= 0 or height <= 0:
+                width, height = 800, 600
+
+            hmon = user32.MonitorFromWindow(self.hwnd, 2)
+            
+            class MONITORINFO(ctypes.Structure):
+                _fields_ = [
+                    ("cbSize", ctypes.c_uint),
+                    ("rcMonitor", ctypes.wintypes.RECT),
+                    ("rcWork", ctypes.wintypes.RECT),
+                    ("dwFlags", ctypes.c_uint),
+                ]
+            mi = MONITORINFO()
+            mi.cbSize = ctypes.sizeof(MONITORINFO)
+            
+            if user32.GetMonitorInfoW(hmon, ctypes.byref(mi)):
+                r = mi.rcWork
+                screen_width = r.right - r.left
+                screen_height = r.bottom - r.top
+                x = r.left + (screen_width - width) // 2
+                y = r.top + (screen_height - height) // 2
+            else:
+                screen_width = user32.GetSystemMetrics(0)
+                screen_height = user32.GetSystemMetrics(1)
+                x = (screen_width - width) // 2
+                y = (screen_height - height) // 2
+                
+            self.set_bounds(int(x), int(y), int(width), int(height))
+        else:
+            self.bridge.adapter.send({"action": "center"})
 
     def serve_data(self, key, data, mime="application/octet-stream"):
         """Sends binary data to the Node process for pytron:// serving."""
@@ -514,7 +596,22 @@ class ChromeWebView(Webview):
         self.bridge.set_title(title)
 
     def set_size(self, w, h):
-        self.bridge.set_size(w, h)
+        if not hasattr(self, "hwnd") or not self.hwnd:
+            self._pending_geometry.append(("set_size", (w, h)))
+            return
+            
+        if sys.platform == "win32":
+            import ctypes
+            import ctypes.wintypes
+            user32 = ctypes.windll.user32
+            
+            rect = ctypes.wintypes.RECT()
+            user32.GetWindowRect(self.hwnd, ctypes.byref(rect))
+            
+            # Use current origin, but new size!
+            self.set_bounds(rect.left, rect.top, int(w), int(h))
+        else:
+            self.bridge.set_size(w, h)
 
     def navigate(self, url):
         self.bridge.navigate(url)
@@ -542,18 +639,21 @@ class ChromeWebView(Webview):
             self.logger.debug(f"Failed to set menu: {e}")
 
     def set_bounds(self, x, y, width, height):
-        try:
-            self.adapter.send(
-                {
-                    "action": "set_bounds",
-                    "x": int(x),
-                    "y": int(y),
-                    "width": int(width),
-                    "height": int(height),
-                }
-            )
-        except Exception as e:
-            self.logger.debug(f"set_bounds not supported by shell: {e}")
+        if hasattr(self, "hwnd") and self.hwnd:
+            try:
+                self.adapter.send(
+                    {
+                        "action": "set_bounds",
+                        "x": int(x),
+                        "y": int(y),
+                        "width": int(width),
+                        "height": int(height),
+                    }
+                )
+            except Exception as e:
+                self.logger.debug(f"set_bounds not supported by shell: {e}")
+        else:
+            self._pending_geometry.append(("set_bounds", (x, y, width, height)))
 
     def set_taskbar_progress(self, value, mode="normal"):
         try:

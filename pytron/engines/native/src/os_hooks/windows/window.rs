@@ -20,8 +20,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     ICON_SMALL, IMAGE_ICON, IsWindowVisible, IsZoomed, LR_DEFAULTSIZE, LR_LOADFROMFILE,
     LoadImageW, PostMessageW, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE,
     SW_RESTORE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-    SendMessageW, SetForegroundWindow, SetWindowLongW, SetWindowPos, ShowWindow, WM_CLOSE,
-    WM_NCLBUTTONDOWN, WM_SETICON, WS_CAPTION, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW, WS_THICKFRAME,
+    SendMessageW, SetForegroundWindow, SetWindowLongW, SetWindowPos, SetWindowTextW, ShowWindow,
+    WM_CLOSE, WM_NCLBUTTONDOWN, WM_SETICON, WS_CAPTION, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+    WS_THICKFRAME,
 };
 
 struct FullscreenState {
@@ -124,6 +125,34 @@ pub fn minimize(hwnd_val: usize) -> PyResult<()> {
     let hwnd = HWND(hwnd_val as isize);
     unsafe {
         let _ = ShowWindow(hwnd, SW_MINIMIZE);
+    }
+    Ok(())
+}
+
+#[pyfunction]
+pub fn maximize(hwnd_val: usize) -> PyResult<()> {
+    let hwnd = HWND(hwnd_val as isize);
+    unsafe {
+        let _ = ShowWindow(hwnd, SW_MAXIMIZE);
+    }
+    Ok(())
+}
+
+#[pyfunction]
+pub fn restore(hwnd_val: usize) -> PyResult<()> {
+    let hwnd = HWND(hwnd_val as isize);
+    unsafe {
+        let _ = ShowWindow(hwnd, SW_RESTORE);
+    }
+    Ok(())
+}
+
+#[pyfunction]
+pub fn set_title(hwnd_val: usize, title: String) -> PyResult<()> {
+    let hwnd = HWND(hwnd_val as isize);
+    let title_u16: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe {
+        let _ = SetWindowTextW(hwnd, windows::core::PCWSTR(title_u16.as_ptr()));
     }
     Ok(())
 }

@@ -216,28 +216,43 @@ def minimize(w):
             return pytron_native.minimize(hwnd)
         except Exception:
             pass
-    user32.ShowWindow(hwnd, SW_MINIMIZE)
+    # No fallback — Native Bridge Mandatory
 
 
 def maximize(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    user32.ShowWindow(hwnd, SW_MAXIMIZE)
+    if pytron_native:
+        try:
+            return pytron_native.maximize(hwnd)
+        except Exception:
+            pass
+    # No fallback — Native Bridge Mandatory
 
 
 def restore(w):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    user32.ShowWindow(hwnd, SW_RESTORE)
+    if pytron_native:
+        try:
+            return pytron_native.restore(hwnd)
+        except Exception:
+            pass
+    # No fallback — Native Bridge Mandatory
 
 
 def set_title(w, title):
     hwnd = get_hwnd(w)
     if not hwnd:
         return
-    user32.SetWindowTextW(hwnd, title)
+    if pytron_native:
+        try:
+            return pytron_native.set_title(hwnd, title)
+        except Exception:
+            pass
+    # No fallback — Native Bridge Mandatory
 
 
 def set_bounds(w, x, y, width, height, no_move=False):

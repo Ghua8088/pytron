@@ -5,7 +5,7 @@ import threading
 import logging
 from typing import Callable, List, Optional
 from .exceptions import TrayError
-from .utils import get_resource_path, resolve_native_bridge
+from .utils import get_resource_path, resolve_native_bridge, com_thread_initializer
 
 
 def _get_native_bridge():
@@ -228,6 +228,9 @@ class SystemTray:
         ready_event = threading.Event()
 
         def run_tray_thread():
+            # Initialize COM for the background thread to handle native API calls safely
+            com_thread_initializer()
+            
             native_bridge = _get_native_bridge()
             if native_bridge and hasattr(native_bridge, "tray_v2_create"):
                 # ── RUST PATH v2 (tray-icon crate by Tauri team) ──────────
@@ -241,7 +244,14 @@ class SystemTray:
 
                 icon_path = None
                 if self.icon_path:
-                    icon_path = str(get_resource_path(self.icon_path))
+                    # Resolve path: handle both relative and absolute properly for packaged apps
+                    raw_path = get_resource_path(self.icon_path)
+                    if os.path.exists(raw_path):
+                        # Force absolute and normalized separators (backslashes on Windows)
+                        icon_path = os.path.normpath(os.path.abspath(raw_path))
+                        self.logger.debug(f"[Tray] Resolved icon for Rust: {icon_path}")
+                    else:
+                        self.logger.warning(f"[Tray] Icon path not found: {raw_path}")
 
                 try:
                     native_bridge.tray_v2_create(self.title[:127], items, icon_path)
@@ -263,7 +273,7 @@ class SystemTray:
                                     target=item.callback, daemon=True
                                 ).start()
                 except Exception as e:
-                    self.logger.error(f"[Tray] v2 error: {e}", exc_info=True)
+                    self.logger.error(f"[Tray] v2 error: {e}")
                     ready_event.set()
                 finally:
                     try:

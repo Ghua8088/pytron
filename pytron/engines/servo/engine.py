@@ -404,7 +404,9 @@ class ServoWebView(Webview):
     def hwnd(self):
         """Override to return Electron HWND instead of native engine HWND."""
         if hasattr(self.bridge, "real_hwnd"):
-            return self.bridge.real_hwnd
+            res = self.bridge.real_hwnd
+            if isinstance(res, (int, float)):
+                return int(res)
         return 0
 
     def _handle_ipc_message(self, msg):

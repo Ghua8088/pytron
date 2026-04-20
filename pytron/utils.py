@@ -85,6 +85,16 @@ def resolve_native_module():
 
             # Executable Dir (Nuitka / OneDir)
             exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+            
+            # 1. Check standard 'pytron/dependencies' at root (OneDir)
+            search_paths.append(
+                (
+                    PRIORITY_FROZEN_ROOT,
+                    os.path.join(exe_dir, "pytron", "dependencies"),
+                )
+            )
+
+            # 2. Check within _internal for modern PyInstaller structure
             search_paths.append(
                 (
                     PRIORITY_FROZEN_INTERNAL,
@@ -92,9 +102,9 @@ def resolve_native_module():
                 )
             )
 
-            # Also check direct executable root for flat layouts
+            # 3. Legacy Flat Root Check (Fallback)
             search_paths.append(
-                (PRIORITY_FROZEN_ROOT, os.path.join(exe_dir, "dependencies"))
+                (PRIORITY_FROZEN_ROOT + 5, os.path.join(exe_dir, "dependencies"))
             )
 
         else:
