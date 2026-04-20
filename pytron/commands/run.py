@@ -42,10 +42,17 @@ except ImportError:
     sys.modules.setdefault("watchfiles", shim)
 
 
-class PytronFilter(DefaultFilter):
+class PytronFilter:
+    """
+    A custom filter for watchfiles that ignores common build/temp dirs.
+    Only ignores them if they are subdirectories of the project root.
+    """
+
     def __init__(self, project_root: Path = None, frontend_dir: Path = None, **kwargs):
         self.project_root = (project_root or Path.cwd()).resolve()
         self.frontend_dir = frontend_dir.resolve() if frontend_dir else None
+
+        # Directory names to ignore ONLY if they are within the project
         self.ignore_dirs = {
             ".git",
             "__pycache__",
@@ -64,25 +71,9 @@ class PytronFilter(DefaultFilter):
             "temp",
             "tmp",
         }
-        super().__init__(**kwargs)
 
-    def __call__(self, change, path):
-        path_obj = Path(path).resolve()
-
-        # 0. Get parts relative to project root to avoid ignoring system dirs like /tmp
-        try:
-            rel_parts = path_obj.relative_to(self.project_root).parts
-
-            # 1. Ignore common heavy or build directories ONLY if they are inside project root
-            if any(part in self.ignore_dirs for part in rel_parts):
-                return False
-        except ValueError:
-            # If outside project root (e.g. system files or temp tests),
-            # don't apply project-specific ignore_dirs
-            pass
-
-        # 1.5 Ignore database, log, and temp files that constantly change
-        if path_obj.suffix.lower() in {
+        # Standard file extensions/patterns to always ignore
+        self.ignore_entity_patterns = {
             ".db",
             ".sqlite",
             ".sqlite3",
@@ -93,17 +84,36 @@ class PytronFilter(DefaultFilter):
             ".tmp",
             ".swp",
             ".pyc",
-        }:
+            ".pyo",
+            ".pyd",
+            ".exe",
+            ".dll",
+            ".so",
+            ".dylib",
+        }
+
+    def __call__(self, change, path):
+        path_obj = Path(path).resolve()
+
+        # 1. Check relative parts for ignored directories
+        try:
+            rel_parts = path_obj.relative_to(self.project_root).parts
+            # Ignore common heavy or build directories ONLY if they are inside project root
+            if any(part in self.ignore_dirs for part in rel_parts):
+                return False
+        except ValueError:
+            # File is outside project root, ignore it for live reload
             return False
 
-        # 1.6 If it looks like a DB transaction file without an extension, ignore it
-        if any(
-            part.endswith("-journal") or part.endswith("-wal") or part.endswith("-shm")
-            for part in path_obj.parts
-        ):
+        # 2. Ignore specific database, log, and temp file extensions
+        if path_obj.suffix.lower() in self.ignore_entity_patterns:
             return False
 
-        # 2. Frontend specific ignores
+        # 3. Ignore DB transaction files without extensions
+        if any(part.endswith(("-journal", "-wal", "-shm")) for part in rel_parts):
+            return False
+
+        # 4. Frontend specific ignores (ignore src/assets so HMR handles them)
         if self.frontend_dir:
             try:
                 if (
@@ -111,7 +121,6 @@ class PytronFilter(DefaultFilter):
                     or self.frontend_dir == path_obj
                 ):
                     rel = path_obj.relative_to(self.frontend_dir)
-                    # Ignore source and assets to let HMR handle it
                     if any(
                         str(rel).startswith(p)
                         for p in ["src", "public", "assets", "node_modules"]
@@ -120,8 +129,14 @@ class PytronFilter(DefaultFilter):
             except ValueError:
                 pass
 
-        # 3. Default filter (ignores binary files, etc.)
-        return super().__call__(change, path)
+        # 5. Ignore hidden files (starting with .) inside the project
+        # except for the root itself
+        if any(part.startswith(".") and part != "." for part in rel_parts):
+            # Special case: allow files in . (the project root) even if they start with . (unlikely)
+            # Standard pytron practice is to ignore things like .vscode, .idea, etc.
+            return False
+
+        return True
 
 
 def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int:
