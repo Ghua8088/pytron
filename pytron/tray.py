@@ -230,7 +230,7 @@ class SystemTray:
         def run_tray_thread():
             # Initialize COM for the background thread to handle native API calls safely
             com_thread_initializer()
-            
+
             native_bridge = _get_native_bridge()
             if native_bridge and hasattr(native_bridge, "tray_v2_create"):
                 # ── RUST PATH v2 (tray-icon crate by Tauri team) ──────────

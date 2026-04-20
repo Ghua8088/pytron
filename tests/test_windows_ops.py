@@ -63,8 +63,6 @@ def test_window_minimize_rust_path(hwnd_window):
         mock_os.minimize.assert_called_with(12345)
 
 
-
-
 def test_window_minimize_noop_when_no_hwnd():
     with patch("pytron.platforms.windows_ops.window.get_hwnd", return_value=0), patch(
         WIN_OS, None
@@ -181,8 +179,6 @@ def test_window_hide_rust_path(hwnd_window):
 # ---------------------------------------------------------------------------
 # window.toggle_maximize
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------

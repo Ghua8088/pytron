@@ -419,20 +419,20 @@ class ChromeWebView(Webview):
                 self.logger.error(f"Failed to process window_created: {e}")
 
             return
-            
+
         if msg_type == "lifecycle" and payload == "ready":
             # Flush pending geometry calls off-thread perfectly in sync with DWM render
             if hasattr(self, "_pending_geometry") and self._pending_geometry:
                 import threading
                 import time
-                
+
                 queue = list(self._pending_geometry)
                 self._pending_geometry.clear()
-                
+
                 def flush_queue(cmds):
-                    # We don't need a huge delay now because 'ready' implies the Chromium 
+                    # We don't need a huge delay now because 'ready' implies the Chromium
                     # backend is already fully surfaced and painted in DWM!
-                    time.sleep(0.01) 
+                    time.sleep(0.01)
                     for action, args in cmds:
                         try:
                             if action == "center":
@@ -443,7 +443,7 @@ class ChromeWebView(Webview):
                                 self.set_bounds(*args)
                         except Exception as flush_err:
                             self.logger.debug(f"Error flushing {action}: {flush_err}")
-                            
+
                 threading.Thread(target=flush_queue, args=(queue,), daemon=True).start()
             return
 
@@ -503,8 +503,9 @@ class ChromeWebView(Webview):
         if sys.platform == "win32":
             import ctypes
             import ctypes.wintypes
+
             user32 = ctypes.windll.user32
-            
+
             rect = ctypes.wintypes.RECT()
             user32.GetWindowRect(self.hwnd, ctypes.byref(rect))
 
@@ -520,7 +521,7 @@ class ChromeWebView(Webview):
                 width, height = 800, 600
 
             hmon = user32.MonitorFromWindow(self.hwnd, 2)
-            
+
             class MONITORINFO(ctypes.Structure):
                 _fields_ = [
                     ("cbSize", ctypes.c_uint),
@@ -528,9 +529,10 @@ class ChromeWebView(Webview):
                     ("rcWork", ctypes.wintypes.RECT),
                     ("dwFlags", ctypes.c_uint),
                 ]
+
             mi = MONITORINFO()
             mi.cbSize = ctypes.sizeof(MONITORINFO)
-            
+
             if user32.GetMonitorInfoW(hmon, ctypes.byref(mi)):
                 r = mi.rcWork
                 screen_width = r.right - r.left
@@ -542,7 +544,7 @@ class ChromeWebView(Webview):
                 screen_height = user32.GetSystemMetrics(1)
                 x = (screen_width - width) // 2
                 y = (screen_height - height) // 2
-                
+
             self.set_bounds(int(x), int(y), int(width), int(height))
         else:
             self.bridge.adapter.send({"action": "center"})
@@ -599,15 +601,16 @@ class ChromeWebView(Webview):
         if not hasattr(self, "hwnd") or not self.hwnd:
             self._pending_geometry.append(("set_size", (w, h)))
             return
-            
+
         if sys.platform == "win32":
             import ctypes
             import ctypes.wintypes
+
             user32 = ctypes.windll.user32
-            
+
             rect = ctypes.wintypes.RECT()
             user32.GetWindowRect(self.hwnd, ctypes.byref(rect))
-            
+
             # Use current origin, but new size!
             self.set_bounds(rect.left, rect.top, int(w), int(h))
         else:

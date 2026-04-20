@@ -85,7 +85,7 @@ def resolve_native_module():
 
             # Executable Dir (Nuitka / OneDir)
             exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-            
+
             # 1. Check standard 'pytron/dependencies' at root (OneDir)
             search_paths.append(
                 (

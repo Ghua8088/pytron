@@ -33,6 +33,7 @@ class ExtrasComponent(AppComponent):
 
         # Use the global resource path utility which handles _MEIPASS and frozen environments
         from ..utils import get_resource_path
+
         resolved = get_resource_path(icon_path)
 
         # If not absolute and doesn't exist, try resolving relative to app_root
@@ -49,7 +50,7 @@ class ExtrasComponent(AppComponent):
                 fallback = os.path.join(self.app_root, folder, f"app_icon{ext}")
                 if os.path.exists(fallback):
                     return fallback
-                
+
                 # Also check _MEIPASS fallback directly
                 if getattr(importlib.import_module("sys"), "frozen", False):
                     meipass = getattr(importlib.import_module("sys"), "_MEIPASS", None)

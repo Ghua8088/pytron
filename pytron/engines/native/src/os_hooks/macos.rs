@@ -66,15 +66,22 @@ pub fn show_notification(_hwnd_val: usize, title: String, message: String, _icon
 
 // Stubs for Windows-only features
 #[pyfunction] pub fn minimize(_h: usize) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn maximize(_h: usize) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn restore(_h: usize) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn set_title(_h: usize, _t: String) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn show(_h: usize) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn hide(_h: usize) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn close(_h: usize) -> PyResult<()> { Ok(()) }
-#[pyfunction] pub fn set_bounds(_h: usize, _x: i32, _y: i32, _w: i32, _h2: i32) -> PyResult<()> { Ok(()) }
+#[pyfunction]
+#[pyo3(signature = (_h, _x, _y, _w, _h2, _no_move=None, _no_size=None))]
+pub fn set_bounds(_h: usize, _x: i32, _y: i32, _w: i32, _h2: i32, _no_move: Option<bool>, _no_size: Option<bool>) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn toggle_maximize(_h: usize) -> PyResult<bool> { Ok(false) }
 #[pyfunction] pub fn set_always_on_top(_h: usize, _e: bool) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn start_drag(_h: usize) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn is_visible(_h: usize) -> PyResult<bool> { Ok(true) }
-#[pyfunction] pub fn center(_h: usize) -> PyResult<()> { Ok(()) }
+#[pyfunction]
+#[pyo3(signature = (_h, _width=None, _height=None))]
+pub fn center(_h: usize, _width: Option<i32>, _height: Option<i32>) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn set_border_color(_h: usize, _c: u32) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn set_window_icon(_h: usize, _p: String) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn set_fullscreen(_h: usize, _e: bool) -> PyResult<()> { Ok(()) }
