@@ -72,13 +72,14 @@ class PytronFilter(DefaultFilter):
         # 0. Get parts relative to project root to avoid ignoring system dirs like /tmp
         try:
             rel_parts = path_obj.relative_to(self.project_root).parts
-        except ValueError:
-            # If outside project root, fall back to whole path parts (conservative)
-            rel_parts = path_obj.parts
 
-        # 1. Ignore common heavy or build directories
-        if any(part in self.ignore_dirs for part in rel_parts):
-            return False
+            # 1. Ignore common heavy or build directories ONLY if they are inside project root
+            if any(part in self.ignore_dirs for part in rel_parts):
+                return False
+        except ValueError:
+            # If outside project root (e.g. system files or temp tests),
+            # don't apply project-specific ignore_dirs
+            pass
 
         # 1.5 Ignore database, log, and temp files that constantly change
         if path_obj.suffix.lower() in {

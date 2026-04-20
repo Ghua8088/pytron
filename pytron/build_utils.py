@@ -36,9 +36,10 @@ def get_safe_linker_flags(module_name, build_dir):
 
     elif sys.platform == "darwin":
         # macOS Export List
-        # Note: macOS symbols in the linker often have a leading underscore
-        flags.append("-Clink-arg=-undefined")
-        flags.append("-Clink-arg=dynamic_lookup")
+        # Note: macOS symbols in the linker often have a leading underscore.
+        # We use -undefined dynamic_lookup to allow linking against Python symbols
+        # provided at runtime.
+        flags.append("-Clink-arg=-Wl,-undefined,dynamic_lookup")
         flags.append(f"-Clink-arg=-Wl,-exported_symbol,_PyInit_{module_name}")
 
     return flags
