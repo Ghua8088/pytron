@@ -125,15 +125,5 @@ pytron = [
 ]
 [tool.black]
 line-length = 88
-extend-exclude = '''
-(
-  /(
-      android
-    | frontend/node_modules
-    | env
-    | venv
-    | build
-    | dist
-  )/
-)
-'''
+target-version = ['py310']
+force-exclude = 'android|node_modules|env|venv|build|dist'

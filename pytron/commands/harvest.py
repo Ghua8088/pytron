@@ -1,14 +1,14 @@
 from importlib import metadata as importlib_metadata
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 
 def generate_nuclear_hooks(
     output_dir: Path,
     collect_all_mode: bool = True,
-    blacklist: Iterable[str] | None = None,
-    search_path: list[str] | None = None,
-    whitelist: Iterable[str] | None = None,
+    blacklist: Optional[Iterable[str]] = None,
+    search_path: Optional[list[str]] = None,
+    whitelist: Optional[Iterable[str]] = None,
 ) -> None:
     """
     Scans the current Python environment and writes PyInstaller hook files that
