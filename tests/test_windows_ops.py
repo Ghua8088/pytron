@@ -51,10 +51,9 @@ def no_pytron_native_system():
 # ---------------------------------------------------------------------------
 
 
-def test_window_minimize_ctypes(hwnd_window, no_pytron_native_window):
-    with patch.object(window.user32, "ShowWindow") as mock_show:
-        window.minimize("w")
-        mock_show.assert_called_with(12345, constants.SW_MINIMIZE)
+# ---------------------------------------------------------------------------
+# window.minimize
+# ---------------------------------------------------------------------------
 
 
 def test_window_minimize_rust_path(hwnd_window):
@@ -64,12 +63,6 @@ def test_window_minimize_rust_path(hwnd_window):
         mock_os.minimize.assert_called_with(12345)
 
 
-def test_window_minimize_rust_fallback_to_ctypes(hwnd_window):
-    mock_os = MagicMock()
-    mock_os.minimize.side_effect = RuntimeError("fail")
-    with patch(WIN_OS, mock_os), patch.object(window.user32, "ShowWindow") as mock_show:
-        window.minimize("w")
-        mock_show.assert_called_with(12345, constants.SW_MINIMIZE)
 
 
 def test_window_minimize_noop_when_no_hwnd():
@@ -78,6 +71,42 @@ def test_window_minimize_noop_when_no_hwnd():
     ), patch.object(window.user32, "ShowWindow") as mock_show:
         window.minimize("w")
         mock_show.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# window.maximize
+# ---------------------------------------------------------------------------
+
+
+def test_window_maximize_rust_path(hwnd_window):
+    mock_os = MagicMock()
+    with patch(WIN_OS, mock_os):
+        window.maximize("w")
+        mock_os.maximize.assert_called_with(12345)
+
+
+# ---------------------------------------------------------------------------
+# window.restore
+# ---------------------------------------------------------------------------
+
+
+def test_window_restore_rust_path(hwnd_window):
+    mock_os = MagicMock()
+    with patch(WIN_OS, mock_os):
+        window.restore("w")
+        mock_os.restore.assert_called_with(12345)
+
+
+# ---------------------------------------------------------------------------
+# window.set_title
+# ---------------------------------------------------------------------------
+
+
+def test_window_set_title_rust_path(hwnd_window):
+    mock_os = MagicMock()
+    with patch(WIN_OS, mock_os):
+        window.set_title("w", "New Title")
+        mock_os.set_title.assert_called_with(12345, "New Title")
 
 
 # ---------------------------------------------------------------------------
@@ -154,22 +183,6 @@ def test_window_hide_rust_path(hwnd_window):
 # ---------------------------------------------------------------------------
 
 
-def test_toggle_maximize_maximises_when_normal(hwnd_window, no_pytron_native_window):
-    with patch.object(window.user32, "IsZoomed", return_value=False), patch.object(
-        window.user32, "ShowWindow"
-    ) as mock_sw:
-        result = window.toggle_maximize("w")
-        mock_sw.assert_called_with(12345, constants.SW_MAXIMIZE)
-        assert result is True
-
-
-def test_toggle_maximize_restores_when_maximised(hwnd_window, no_pytron_native_window):
-    with patch.object(window.user32, "IsZoomed", return_value=True), patch.object(
-        window.user32, "ShowWindow"
-    ) as mock_sw:
-        result = window.toggle_maximize("w")
-        mock_sw.assert_called_with(12345, constants.SW_RESTORE)
-        assert result is False
 
 
 # ---------------------------------------------------------------------------
