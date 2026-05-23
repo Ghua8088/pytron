@@ -1,3 +1,5 @@
+#![allow(unused_variables)]
+
 use pyo3::prelude::*;
 use pyo3::PyObject;
 use rfd::FileDialog;
@@ -7,10 +9,10 @@ use notify_rust::Notification;
 #[pyfunction]
 pub fn message_box(
     _py: Python<'_>,
-    _hwnd_val: usize,
+    hwnd_val: usize,
     title: String,
     message: String,
-    _level: String,
+    level: String,
 ) -> PyResult<i32> {
     println!("[macOS] Message Box: {} - {}", title, message);
     Ok(1) // IDOK
@@ -25,7 +27,6 @@ pub fn open_file_dialog(
     default_path: Option<String>,
     _file_types: Option<PyObject>,
 ) -> PyResult<Option<String>> {
-    let _ = hwnd_val;
     let mut dialog = FileDialog::new().set_title(&title);
     if let Some(path) = default_path {
         dialog = dialog.set_directory(path);
@@ -44,7 +45,6 @@ pub fn save_file_dialog(
     default_name: Option<String>,
     _file_types: Option<PyObject>,
 ) -> PyResult<Option<String>> {
-    let _ = hwnd_val;
     let mut dialog = FileDialog::new().set_title(&title);
     if let Some(path) = default_path {
         dialog = dialog.set_directory(path);
@@ -64,7 +64,6 @@ pub fn open_folder_dialog(
     title: String,
     default_path: Option<String>,
 ) -> PyResult<Option<String>> {
-    let _ = hwnd_val;
     let mut dialog = FileDialog::new().set_title(&title);
     if let Some(path) = default_path {
         dialog = dialog.set_directory(path);
@@ -94,7 +93,7 @@ pub fn get_clipboard_text() -> PyResult<Option<String>> {
 
 #[pyfunction]
 #[pyo3(signature = (hwnd_val, title, message, icon_path=None))]
-pub fn show_notification(_hwnd_val: usize, title: String, message: String, _icon_path: Option<String>) -> PyResult<()> {
+pub fn show_notification(hwnd_val: usize, title: String, message: String, icon_path: Option<String>) -> PyResult<()> {
     let _ = Notification::new()
         .summary(&title)
         .body(&message)
@@ -114,13 +113,13 @@ pub fn show_notification(_hwnd_val: usize, title: String, message: String, _icon
 #[pyfunction]
 #[pyo3(signature = (hwnd_val, x, y, width, height, no_move=None, no_size=None))]
 pub fn set_bounds(
-    _hwnd_val: usize,
-    _x: i32,
-    _y: i32,
-    _width: i32,
-    _height: i32,
-    _no_move: Option<bool>,
-    _no_size: Option<bool>,
+    hwnd_val: usize,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    no_move: Option<bool>,
+    no_size: Option<bool>,
 ) -> PyResult<()> {
     Ok(())
 }
@@ -132,7 +131,7 @@ pub fn set_bounds(
 
 #[pyfunction]
 #[pyo3(signature = (hwnd_val, width=None, height=None))]
-pub fn center(_hwnd_val: usize, _width: Option<i32>, _height: Option<i32>) -> PyResult<()> {
+pub fn center(hwnd_val: usize, width: Option<i32>, height: Option<i32>) -> PyResult<()> {
     Ok(())
 }
 
@@ -183,9 +182,9 @@ pub fn tray_add_icon(
 #[pyfunction]
 #[pyo3(signature = (tooltip, items, icon_path=None))]
 pub fn tray_v2_create(
-    _tooltip: String,
-    _items: Vec<(String, String, bool)>,
-    _icon_path: Option<String>,
+    tooltip: String,
+    items: Vec<(String, String, bool)>,
+    icon_path: Option<String>,
 ) -> PyResult<()> {
     Ok(())
 }
