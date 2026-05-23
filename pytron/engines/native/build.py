@@ -107,7 +107,6 @@ def build():
         env["PYO3_PYTHON"] = sys.executable
         print(f"[INFO] macOS: PYO3_PYTHON set to {sys.executable}")
 
-
     try:
         subprocess.check_call(cargo_cmd, cwd=ENGINE_DIR, env=env)
     except subprocess.CalledProcessError:
