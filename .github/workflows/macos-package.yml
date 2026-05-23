@@ -44,6 +44,8 @@ jobs:
           pytron install
           
       - name: Build Native Engine
+        env:
+          PYO3_PYTHON: python3
         run: python pytron/engines/native/build.py
 
       - name: Build and Package

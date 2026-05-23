@@ -88,6 +88,8 @@ jobs:
 
       - name: 🦾 Build Native Engine
         if: steps.filter.outputs.rust_native == 'true' || github.event_name == 'push' || startsWith(github.ref, 'refs/tags/v')
+        env:
+          PYO3_PYTHON: python3
         run: python pytron/engines/native/build.py
 
       - name: 📦 Build Wheel

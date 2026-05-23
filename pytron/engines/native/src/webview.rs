@@ -31,6 +31,7 @@ pub struct NativeWebview {
     state_ptr: Mutex<Option<usize>>, 
     hwnd: usize,
     callbacks: Arc<Mutex<HashMap<String, PyObject>>>,
+    #[allow(dead_code)]
     store: NativeState,
     is_utility: Mutex<bool>,
 }

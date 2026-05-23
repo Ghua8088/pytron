@@ -82,6 +82,8 @@ jobs:
         run: python pytron/pack/secure_loader/build_loader.py || echo "Skipping loader build"
 
       - name: 🦾 Build Native Engine
+        env:
+          PYO3_PYTHON: python3
         run: python pytron/engines/native/build.py
 
       - name: 🧪 Run Tests

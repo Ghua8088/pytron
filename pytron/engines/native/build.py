@@ -97,6 +97,51 @@ def build():
     except Exception as e:
         print(f"[WARNING] Could not apply symbol shield: {e}")
 
+    # --- macOS: inject Python lib so the linker can resolve _Py* symbols ---
+    # Raw `cargo rustc` does not ask the Python interpreter where its dylib
+    # lives the way `maturin` does. We do it manually here.
+    if sys.platform == "darwin" and not is_android:
+        try:
+            import sysconfig
+            py_exec = sys.executable
+            # Tell pyo3's build script which Python to use
+            env["PYO3_PYTHON"] = py_exec
+
+            # Locate the Python library directory and dylib
+            ldlibdir = sysconfig.get_config_var("LIBDIR") or ""
+            ldlib = sysconfig.get_config_var("LDLIBRARY") or ""
+            multiarch = sysconfig.get_config_var("MULTIARCH") or ""
+
+            # Also check the framework path (standard macOS CPython installs)
+            framework_prefix = sysconfig.get_config_var("PYTHONFRAMEWORKPREFIX") or ""
+            framework_dir = os.path.join(framework_prefix, "lib") if framework_prefix else ""
+
+            # Build a list of candidate library search directories
+            lib_dirs = [d for d in [ldlibdir, framework_dir] if d and os.path.isdir(d)]
+
+            if lib_dirs:
+                rustflags = env.get("RUSTFLAGS", "")
+                for lib_dir in lib_dirs:
+                    rustflags += f" -L {lib_dir}"
+                # Link the Python shared library explicitly
+                if ldlib:
+                    # Strip lib prefix and extension for -l flag
+                    libname = ldlib
+                    if libname.startswith("lib"):
+                        libname = libname[3:]
+                    for ext in [".dylib", ".so", ".a"]:
+                        if libname.endswith(ext):
+                            libname = libname[: -len(ext)]
+                            break
+                    rustflags += f" -l {libname}"
+                env["RUSTFLAGS"] = rustflags.strip()
+                print(f"[INFO] macOS Python lib dirs: {lib_dirs}")
+                print(f"[INFO] RUSTFLAGS set to: {env['RUSTFLAGS']}")
+            else:
+                print(f"[WARNING] Could not locate Python library directory on macOS.")
+        except Exception as e:
+            print(f"[WARNING] macOS Python lib detection failed: {e}")
+
     try:
         subprocess.check_call(cargo_cmd, cwd=ENGINE_DIR, env=env)
     except subprocess.CalledProcessError:
