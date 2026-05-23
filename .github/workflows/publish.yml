@@ -16,10 +16,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ubuntu-20.04 = glibc 2.31, which matches our manylinux_2_31 target tag.
+        # ubuntu-22.04 = glibc 2.35, which matches our manylinux_2_35 target tag.
         # ubuntu-latest is now 24.04 (glibc 2.39) and auditwheel will refuse to retag
-        # a 2.39-compiled wheel as manylinux_2_31.
-        os: [ubuntu-20.04, macos-latest, windows-latest]
+        # a 2.39-compiled wheel as manylinux_2_35.
+        os: [ubuntu-22.04, macos-latest, windows-latest]
 
     steps:
       - name: 🔍 Checkout code
