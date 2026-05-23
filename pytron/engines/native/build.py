@@ -103,6 +103,7 @@ def build():
     if sys.platform == "darwin" and not is_android:
         try:
             import sysconfig
+
             py_exec = sys.executable
             # Tell pyo3's build script which Python to use
             env["PYO3_PYTHON"] = py_exec
@@ -114,7 +115,9 @@ def build():
 
             # Also check the framework path (standard macOS CPython installs)
             framework_prefix = sysconfig.get_config_var("PYTHONFRAMEWORKPREFIX") or ""
-            framework_dir = os.path.join(framework_prefix, "lib") if framework_prefix else ""
+            framework_dir = (
+                os.path.join(framework_prefix, "lib") if framework_prefix else ""
+            )
 
             # Build a list of candidate library search directories
             lib_dirs = [d for d in [ldlibdir, framework_dir] if d and os.path.isdir(d)]

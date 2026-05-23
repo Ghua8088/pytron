@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-wheels:
     name: 🏗️ Build Wheels on ${{ matrix.os }}
@@ -21,6 +24,8 @@ jobs:
     steps:
       - name: 🔍 Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🚪 Check for Rust changes
         id: filter
