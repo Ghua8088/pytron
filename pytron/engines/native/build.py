@@ -97,6 +97,16 @@ def build():
     except Exception as e:
         print(f"[WARNING] Could not apply symbol shield: {e}")
 
+    # --- macOS: tell pyo3's build script which Python interpreter to use ---
+    # Setting PYO3_PYTHON is sufficient. pyo3's `extension-module` feature
+    # automatically emits `-undefined dynamic_lookup` on macOS so all _Py*
+    # symbols resolve at runtime from the embedding interpreter.
+    # Do NOT add manual -l or RUSTFLAGS: macOS framework Python's LDLIBRARY
+    # is a path ("Python.framework/Versions/3.11/Python"), not a valid -l name.
+    if sys.platform == "darwin" and not is_android:
+        env["PYO3_PYTHON"] = sys.executable
+        print(f"[INFO] macOS: PYO3_PYTHON set to {sys.executable}")
+
     try:
         subprocess.check_call(cargo_cmd, cwd=ENGINE_DIR, env=env)
     except subprocess.CalledProcessError:

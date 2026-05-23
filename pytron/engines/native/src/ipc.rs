@@ -15,9 +15,13 @@ use std::os::unix::net::{UnixListener, UnixStream};
 #[cfg(not(target_os = "windows"))]
 use std::io::{Read, Write};
 
+#[cfg(target_os = "windows")]
 const PIPE_ACCESS_DUPLEX: u32 = 0x00000003;
+#[cfg(target_os = "windows")]
 const PIPE_TYPE_BYTE: u32 = 0x00000000;
+#[cfg(target_os = "windows")]
 const PIPE_READMODE_BYTE: u32 = 0x00000000;
+#[cfg(target_os = "windows")]
 const PIPE_WAIT: u32 = 0x00000000;
 
 #[pyclass]

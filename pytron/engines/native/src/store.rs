@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, Once};
+use std::sync::{Arc, Mutex, OnceLock};
 use tao::event_loop::EventLoopProxy;
 use crate::events::UserEvent;
 use crate::utils::SendWrapper;
@@ -9,29 +9,17 @@ use crate::utils::SendWrapper;
 // --- THE STATIC AUTHORITY ---
 // These globals ensure that every NativeState instance in the process
 // shares the exact same underlying storage.
-static mut GLOBAL_DATA: Option<Arc<Mutex<HashMap<String, Py<PyAny>>>>> = None;
-static mut GLOBAL_PROXIES: Option<Arc<Mutex<Vec<SendWrapper<EventLoopProxy<UserEvent>>>>>> = None;
-static INIT: Once = Once::new();
+static GLOBAL_DATA: OnceLock<Arc<Mutex<HashMap<String, Py<PyAny>>>>> = OnceLock::new();
+static GLOBAL_PROXIES: OnceLock<Arc<Mutex<Vec<SendWrapper<EventLoopProxy<UserEvent>>>>>> = OnceLock::new();
 
 fn get_global_data() -> Arc<Mutex<HashMap<String, Py<PyAny>>>> {
-    unsafe {
-        INIT.call_once(|| {
-            GLOBAL_DATA = Some(Arc::new(Mutex::new(HashMap::new())));
-            GLOBAL_PROXIES = Some(Arc::new(Mutex::new(Vec::new())));
-        });
-        GLOBAL_DATA.as_ref().unwrap().clone()
-    }
+    GLOBAL_DATA.get_or_init(|| Arc::new(Mutex::new(HashMap::new()))).clone()
 }
 
 fn get_global_proxies() -> Arc<Mutex<Vec<SendWrapper<EventLoopProxy<UserEvent>>>>> {
-    unsafe {
-        INIT.call_once(|| {
-            GLOBAL_DATA = Some(Arc::new(Mutex::new(HashMap::new())));
-            GLOBAL_PROXIES = Some(Arc::new(Mutex::new(Vec::new())));
-        });
-        GLOBAL_PROXIES.as_ref().unwrap().clone()
-    }
+    GLOBAL_PROXIES.get_or_init(|| Arc::new(Mutex::new(Vec::new()))).clone()
 }
+
 
 #[pyclass]
 #[derive(Clone)]

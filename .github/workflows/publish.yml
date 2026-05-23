@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-wheels:
     name: 🏗️ Build Wheels on ${{ matrix.os }}
@@ -13,14 +16,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ubuntu-22.04 = glibc 2.35, which matches our manylinux_2_35 target tag.
+        # ubuntu-20.04 = glibc 2.31, which matches our manylinux_2_31 target tag.
         # ubuntu-latest is now 24.04 (glibc 2.39) and auditwheel will refuse to retag
-        # a 2.39-compiled wheel as manylinux_2_35.
-        os: [ubuntu-22.04, macos-latest, windows-latest]
+        # a 2.39-compiled wheel as manylinux_2_31.
+        os: [ubuntu-20.04, macos-latest, windows-latest]
 
     steps:
       - name: 🔍 Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🚪 Check for Rust changes
         id: filter
@@ -88,6 +93,8 @@ jobs:
 
       - name: 🦾 Build Native Engine
         if: steps.filter.outputs.rust_native == 'true' || github.event_name == 'push' || startsWith(github.ref, 'refs/tags/v')
+        env:
+          PYO3_PYTHON: python3
         run: python pytron/engines/native/build.py
 
       - name: 📦 Build Wheel
@@ -98,7 +105,7 @@ jobs:
         shell: bash
         run: |
           for whl in dist/*.whl; do
-            new_whl=$(echo "$whl" | sed 's/linux_x86_64/manylinux_2_35_x86_64/g')
+            new_whl=$(echo "$whl" | sed 's/linux_x86_64/manylinux_2_31_x86_64/g')
             mv "$whl" "$new_whl"
           done
 

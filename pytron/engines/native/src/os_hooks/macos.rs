@@ -1,3 +1,5 @@
+#![allow(unused_variables)]
+
 use pyo3::prelude::*;
 use pyo3::PyObject;
 use rfd::FileDialog;
@@ -156,25 +158,25 @@ pub fn center(hwnd_val: usize, width: Option<i32>, height: Option<i32>) -> PyRes
 
 #[pyfunction]
 pub fn tray_add_icon(
-    hwnd_val: usize,
-    hicon_val: usize,
-    id: u32,
-    tip: String,
-    callback_msg: u32,
+    _hwnd_val: usize,
+    _hicon_val: usize,
+    _id: u32,
+    _tip: String,
+    _callback_msg: u32,
 ) -> PyResult<bool> {
     Ok(true)
 }
 
-#[pyfunction] pub fn tray_remove_icon(hwnd_val: usize, id: u32) -> PyResult<()> { Ok(()) }
-#[pyfunction] pub fn tray_destroy_window(hwnd_val: usize) -> PyResult<()> { Ok(()) }
-#[pyfunction] pub fn tray_post_message(hwnd_val: usize, msg: u32, wparam: usize, lparam: isize) -> PyResult<()> { Ok(()) }
-#[pyfunction] pub fn tray_load_icon(path: String, w: i32, h: i32) -> PyResult<usize> { Ok(0) }
+#[pyfunction] pub fn tray_remove_icon(_hwnd_val: usize, _id: u32) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn tray_destroy_window(_hwnd_val: usize) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn tray_post_message(_hwnd_val: usize, _msg: u32, _wparam: usize, _lparam: isize) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn tray_load_icon(_path: String, _w: i32, _h: i32) -> PyResult<usize> { Ok(0) }
 #[pyfunction] pub fn tray_load_default_icon() -> PyResult<usize> { Ok(0) }
-#[pyfunction] pub fn tray_destroy_icon(h: usize) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn tray_destroy_icon(_h: usize) -> PyResult<()> { Ok(()) }
 #[pyfunction] pub fn tray_create_popup_menu() -> PyResult<usize> { Ok(0) }
-#[pyfunction] pub fn tray_append_menu_item(hmenu_val: usize, flags: u32, id: u32, label: String) -> PyResult<()> { Ok(()) }
-#[pyfunction] pub fn tray_append_separator(hmenu_val: usize) -> PyResult<()> { Ok(()) }
-#[pyfunction] pub fn tray_track_popup_menu(_py: Python<'_>, hmenu_val: usize, flags: u32, x: i32, y: i32, hwnd_val: usize) -> PyResult<u32> { Ok(0) }
+#[pyfunction] pub fn tray_append_menu_item(_hmenu_val: usize, _flags: u32, _id: u32, _label: String) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn tray_append_separator(_hmenu_val: usize) -> PyResult<()> { Ok(()) }
+#[pyfunction] pub fn tray_track_popup_menu(_py: Python<'_>, _hmenu_val: usize, _flags: u32, _x: i32, _y: i32, _hwnd_val: usize) -> PyResult<u32> { Ok(0) }
 #[pyfunction] pub fn tray_get_cursor_pos() -> PyResult<(i32, i32)> { Ok((0, 0)) }
 
 #[pyfunction]
