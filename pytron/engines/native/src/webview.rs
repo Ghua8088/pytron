@@ -82,6 +82,10 @@ impl NativeWebview {
             // Force X11 on VMs for better stability/handle support.
             if std::env::var("WINIT_UNIX_BACKEND").is_err() {
                 std::env::set_var("WINIT_UNIX_BACKEND", "x11");
+                // Synchronize GTK backend to match winit to prevent window handle mismatches.
+                if std::env::var("GDK_BACKEND").is_err() {
+                    std::env::set_var("GDK_BACKEND", "x11");
+                }
             }
         }
 
@@ -130,6 +134,14 @@ impl NativeWebview {
         };
         #[cfg(not(target_os = "windows"))]
         let hwnd = 0;
+
+        #[cfg(target_os = "linux")]
+        {
+            use raw_window_handle::HasRawWindowHandle;
+            println!("[PYTRON NATIVE DEBUG] Window created. Raw handle: {:?}", window.raw_window_handle());
+            println!("[PYTRON NATIVE DEBUG] XDG_SESSION_TYPE: {:?}", std::env::var("XDG_SESSION_TYPE").unwrap_or_default());
+            println!("[PYTRON NATIVE DEBUG] WAYLAND_DISPLAY: {:?}", std::env::var("WAYLAND_DISPLAY").unwrap_or_default());
+        }
 
         let root = PathBuf::from(&root_path);
         let callbacks = Arc::new(Mutex::new(HashMap::<String, PyObject>::new()));

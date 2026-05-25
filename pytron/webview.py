@@ -130,6 +130,17 @@ class Webview:
 
         if sys.platform.startswith("linux"):
             self.logger.warning("Linux Native Engine is still experimental.")
+            import os
+
+            session_type = os.environ.get("XDG_SESSION_TYPE", "").lower()
+            if session_type == "wayland":
+                if not os.environ.get("WINIT_UNIX_BACKEND"):
+                    self.logger.info(
+                        "Wayland session detected, forcing WINIT_UNIX_BACKEND=x11 for better native stability."
+                    )
+                    os.environ["WINIT_UNIX_BACKEND"] = "x11"
+                if not os.environ.get("GDK_BACKEND"):
+                    os.environ["GDK_BACKEND"] = "x11"
 
         raw_url = config.get("url", "")
         debug = config.get("debug", False)
@@ -162,6 +173,28 @@ class Webview:
                 raise NativeEngineError(
                     f"Failed to initialize Native WebView: Conflict with existing WebView2 process (0x8007139F). {msg}"
                 ) from e
+
+            if (
+                sys.platform.startswith("linux")
+                and "window handle kind is not supported" in msg.lower()
+            ):
+                import os
+
+                session = os.environ.get("XDG_SESSION_TYPE", "unknown")
+                winit = os.environ.get("WINIT_UNIX_BACKEND", "not set")
+                gdk = os.environ.get("GDK_BACKEND", "not set")
+                raise NativeEngineError(
+                    f"Failed to initialize Native WebView on Linux. This is likely a Wayland/X11 mismatch.\n"
+                    f"Context:\n"
+                    f"  XDG_SESSION_TYPE={session}\n"
+                    f"  WINIT_UNIX_BACKEND={winit}\n"
+                    f"  GDK_BACKEND={gdk}\n"
+                    f"Resolution:\n"
+                    f"  1) Fallback to the Chrome engine by setting the environment variable: PYTRON_ENGINE=chrome\n"
+                    f"  2) Or re-compile Pytron native with Wayland features enabled.\n"
+                    f"Original Error: {msg}"
+                ) from e
+
             raise NativeEngineError(f"Failed to initialize Native WebView: {e}") from e
 
     def _setup_native_window(self, config):
