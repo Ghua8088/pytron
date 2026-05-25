@@ -128,19 +128,29 @@ class Webview:
                 f"Cause: {details}\n"
             )
 
+        orig_wayland = None
+        orig_winit = None
+        orig_gdk = None
+        is_wayland = False
+
         if sys.platform.startswith("linux"):
             self.logger.warning("Linux Native Engine is still experimental.")
             import os
 
             session_type = os.environ.get("XDG_SESSION_TYPE", "").lower()
             if session_type == "wayland":
-                if not os.environ.get("WINIT_UNIX_BACKEND"):
-                    self.logger.info(
-                        "Wayland session detected, forcing WINIT_UNIX_BACKEND=x11 for better native stability."
-                    )
-                    os.environ["WINIT_UNIX_BACKEND"] = "x11"
-                if not os.environ.get("GDK_BACKEND"):
-                    os.environ["GDK_BACKEND"] = "x11"
+                is_wayland = True
+                self.logger.info(
+                    "Wayland session detected. Forcing X11 backend temporarily to initialize native webview."
+                )
+                orig_wayland = os.environ.get("WAYLAND_DISPLAY")
+                orig_winit = os.environ.get("WINIT_UNIX_BACKEND")
+                orig_gdk = os.environ.get("GDK_BACKEND")
+
+                if "WAYLAND_DISPLAY" in os.environ:
+                    del os.environ["WAYLAND_DISPLAY"]
+                os.environ["WINIT_UNIX_BACKEND"] = "x11"
+                os.environ["GDK_BACKEND"] = "x11"
 
         raw_url = config.get("url", "")
         debug = config.get("debug", False)
@@ -196,6 +206,22 @@ class Webview:
                 ) from e
 
             raise NativeEngineError(f"Failed to initialize Native WebView: {e}") from e
+        finally:
+            if is_wayland:
+                import os
+
+                if orig_wayland is not None:
+                    os.environ["WAYLAND_DISPLAY"] = orig_wayland
+                else:
+                    os.environ.pop("WAYLAND_DISPLAY", None)
+                if orig_winit is not None:
+                    os.environ["WINIT_UNIX_BACKEND"] = orig_winit
+                else:
+                    os.environ.pop("WINIT_UNIX_BACKEND", None)
+                if orig_gdk is not None:
+                    os.environ["GDK_BACKEND"] = orig_gdk
+                else:
+                    os.environ.pop("GDK_BACKEND", None)
 
     def _setup_native_window(self, config):
         """Applies window settings and platform helpers for native engine."""

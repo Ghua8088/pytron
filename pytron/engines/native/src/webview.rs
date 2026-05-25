@@ -348,7 +348,20 @@ impl NativeWebview {
         });
 
         let webview = builder.build()
-             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to build WebView: {}", e)))?;
+             .map_err(|e| {
+                 #[cfg(target_os = "linux")]
+                 {
+                     use raw_window_handle::HasRawWindowHandle;
+                     let handle_kind = format!("{:?}", window.raw_window_handle());
+                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                         "Failed to build WebView: {}\nHandle: {}", e, handle_kind
+                     ))
+                 }
+                 #[cfg(not(target_os = "linux"))]
+                 {
+                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to build WebView: {}", e))
+                 }
+             })?;
 
         // Re-hide on Linux after successful build so it stays hidden until explicitly shown
         #[cfg(target_os = "linux")]
