@@ -69,6 +69,9 @@ jobs:
             libayatana-appindicator3-dev \
             libxdo-dev \
             libssl-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libx11-dev \
             patchelf
 
       - name: 🍎 Install macOS Dependencies
