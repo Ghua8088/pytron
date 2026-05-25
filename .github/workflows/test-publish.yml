@@ -15,6 +15,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   build-wheels:
     name: 🏗️ Build Wheels on ${{ matrix.os }}
@@ -31,6 +34,8 @@ jobs:
     steps:
       - name: 🔍 Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🐍 Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -60,6 +65,9 @@ jobs:
             libayatana-appindicator3-dev \
             libxdo-dev \
             libssl-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libx11-dev \
             patchelf
 
       - name: 🍎 Install macOS Dependencies
@@ -82,6 +90,8 @@ jobs:
         run: python pytron/pack/secure_loader/build_loader.py || echo "Skipping loader build"
 
       - name: 🦾 Build Native Engine
+        env:
+          PYO3_PYTHON: python3
         run: python pytron/engines/native/build.py
 
       - name: 🧪 Run Tests

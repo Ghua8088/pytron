@@ -35,11 +35,11 @@ def get_safe_linker_flags(module_name, build_dir):
         flags.append("-Clink-arg=-Wl,--exclude-libs,ALL")
 
     elif sys.platform == "darwin":
-        # macOS Export List
-        # Note: macOS symbols in the linker often have a leading underscore.
-        # We use -undefined dynamic_lookup to allow linking against Python symbols
+        # macOS symbols in the linker often have a leading underscore, but rustc
+        # already generates an exported_symbols_list for cdylib targets, so we must
+        # NOT use -exported_symbol here as it will conflict.
+        # We only need -undefined dynamic_lookup to allow linking against Python symbols
         # provided at runtime.
         flags.append("-Clink-arg=-Wl,-undefined,dynamic_lookup")
-        flags.append(f"-Clink-arg=-Wl,-exported_symbol,_PyInit_{module_name}")
 
     return flags

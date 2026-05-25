@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-wheels:
     name: 🏗️ Build Wheels on ${{ matrix.os }}
@@ -21,6 +24,8 @@ jobs:
     steps:
       - name: 🔍 Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🚪 Check for Rust changes
         id: filter
@@ -64,6 +69,9 @@ jobs:
             libayatana-appindicator3-dev \
             libxdo-dev \
             libssl-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libx11-dev \
             patchelf
 
       - name: 🍎 Install macOS Dependencies
@@ -88,6 +96,8 @@ jobs:
 
       - name: 🦾 Build Native Engine
         if: steps.filter.outputs.rust_native == 'true' || github.event_name == 'push' || startsWith(github.ref, 'refs/tags/v')
+        env:
+          PYO3_PYTHON: python3
         run: python pytron/engines/native/build.py
 
       - name: 📦 Build Wheel
@@ -98,7 +108,7 @@ jobs:
         shell: bash
         run: |
           for whl in dist/*.whl; do
-            new_whl=$(echo "$whl" | sed 's/linux_x86_64/manylinux_2_35_x86_64/g')
+            new_whl=$(echo "$whl" | sed 's/linux_x86_64/manylinux_2_31_x86_64/g')
             mv "$whl" "$new_whl"
           done
 
