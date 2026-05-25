@@ -137,6 +137,10 @@ class Webview:
             self.logger.warning("Linux Native Engine is still experimental.")
             import os
 
+            # Disable DMA-BUF renderer to fix blank/white screen issues in VMs and XWayland
+            if "WEBKIT_DISABLE_DMABUF_RENDERER" not in os.environ:
+                os.environ["WEBKIT_DISABLE_DMABUF_RENDERER"] = "1"
+
             session_type = os.environ.get("XDG_SESSION_TYPE", "").lower()
             if session_type == "wayland":
                 is_wayland = True

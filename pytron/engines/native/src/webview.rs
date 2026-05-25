@@ -121,6 +121,9 @@ impl NativeWebview {
             if std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").is_err() {
                 std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
             }
+            if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
+                std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+            }
             
             // Give the window a moment to get realized on the X server.
             // Pumping the loop directly via glib crate causes symbol collisions with gi.
