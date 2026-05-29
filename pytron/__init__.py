@@ -17,8 +17,12 @@ if sys.platform.startswith("linux"):
     os.environ["NO_AT_BRIDGE"] = "1"
     # PREVENT GIO from loading remote VFS modules
     os.environ["GIO_USE_VFS"] = "local"
+    # Force GDK to skip OpenGL context creation to prevent EGL/DRI3/DRI2 crashes in VMs
+    os.environ["GDK_DEBUG"] = "nogl"
+    os.environ["GDK_GL"] = "software"
     # Essential for VMs (VMware/VirtualBox) to avoid black screens or WebKit crashes.
     os.environ["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
+    os.environ["WEBKIT_DISABLE_DMABUF_RENDERER"] = "1"
     # Ensure we use X11 backend for better stability in virtualized browsers.
     os.environ["WINIT_UNIX_BACKEND"] = "x11"
 
