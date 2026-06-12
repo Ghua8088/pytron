@@ -20,6 +20,9 @@ if sys.platform.startswith("linux"):
     # Force GDK to skip OpenGL context creation to prevent EGL/DRI3/DRI2 crashes in VMs
     os.environ["GDK_DEBUG"] = "nogl"
     os.environ["GDK_GL"] = "software"
+    # Force Mesa driver to bypass buggy GPU layers and use pure software CPU rasterization (llvmpipe)
+    os.environ["LIBGL_ALWAYS_SOFTWARE"] = "1"
+    os.environ["GALLIUM_DRIVER"] = "llvmpipe"
     # Essential for VMs (VMware/VirtualBox) to avoid black screens or WebKit crashes.
     os.environ["WEBKIT_DISABLE_COMPOSITING_MODE"] = "1"
     os.environ["WEBKIT_DISABLE_DMABUF_RENDERER"] = "1"
