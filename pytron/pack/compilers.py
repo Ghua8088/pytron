@@ -113,26 +113,24 @@ def cython_gen_c(script_path: Path, build_dir: Path, python_exe: str):
         log("Cython failed to generate C source.", style="error")
         return None
 
-    # Patch for MSVC/Rust compatibility:
-    # 1. Define _fltused for floating point support
-    # 2. Provide WinMain wrapper to satisfy GUI subsystem requirements while using main()
-    try:
-        with open(c_file, "a") as f:
-            f.write("\n\n/* Pytron Compatibility Hack */\n")
-            f.write("#ifdef _WIN32\n")
-            f.write("#include <windows.h>\n")
-            f.write("extern int main(int argc, char **argv);\n")
-            f.write("int _fltused = 0;\n")
-            f.write(
-                "int WINAPI WinMain(HINSTANCE hI, HINSTANCE hP, LPSTR lp, int nS) {\n"
-            )
-            f.write("    return main(__argc, __argv);\n")
-            f.write("}\n")
-            f.write("#endif\n")
-    except Exception as e:
-        log(f"Warning: Failed to append compatibility patch: {e}", style="warning")
-
     return c_file
+
+
+import json
+
+def clean_library_name(lib_val):
+    if not lib_val:
+        return None
+    name = lib_val
+    if name.startswith("lib"):
+        name = name[3:]
+    parts = name.split(".")
+    cleaned_parts = []
+    for part in parts:
+        if part.lower() in ["so", "a", "dylib", "dll", "lib"]:
+            break
+        cleaned_parts.append(part)
+    return ".".join(cleaned_parts)
 
 
 def compile_c_to_executable(
@@ -142,47 +140,42 @@ def compile_c_to_executable(
     ext = ".exe" if sys.platform == "win32" else ""
     output_bin = build_dir / f"app{ext}"
 
-    # Get Python build constants
-    res_include = subprocess.run(
-        [python_exe, "-c", "import sysconfig; print(sysconfig.get_path('include'))"],
-        capture_output=True,
-        text=True,
+    # Query Python build constants consolidated to a single subprocess call
+    query_code = (
+        "import sys, sysconfig, json; "
+        "info = {"
+        "  'include': sysconfig.get_path('include'),"
+        "  'ver_major': sys.version_info.major,"
+        "  'ver_minor': sys.version_info.minor,"
+        "  'base_prefix': sys.base_prefix,"
+        "  'libdir': sysconfig.get_config_var('LIBDIR'),"
+        "  'libs': sysconfig.get_config_var('LIBS'),"
+        "  'syslibs': sysconfig.get_config_var('SYSLIBS'),"
+        "  'ldlibrary': sysconfig.get_config_var('LDLIBRARY'),"
+        "  'library': sysconfig.get_config_var('LIBRARY'),"
+        "  'ldflags': sysconfig.get_config_var('LDFLAGS'),"
+        "  'localmodlibs': sysconfig.get_config_var('LOCALMODLIBS'),"
+        "  'modlibs': sysconfig.get_config_var('MODLIBS')"
+        "}; "
+        "print(json.dumps(info))"
     )
-    py_include = res_include.stdout.strip()
 
-    res_ver = subprocess.run(
-        [
-            python_exe,
-            "-c",
-            "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    py_ver_str = (
-        res_ver.stdout.strip() or f"{sys.version_info.major}{sys.version_info.minor}"
-    )
+    try:
+        res = subprocess.run([python_exe, "-c", query_code], capture_output=True, text=True, check=True)
+        py_info = json.loads(res.stdout.strip())
+    except Exception as e:
+        log(f"Warning: Failed to consolidate python configuration query: {e}", style="warning")
+        py_info = {}
 
-    res_prefix = subprocess.run(
-        [python_exe, "-c", "import sys; print(sys.base_prefix)"],
-        capture_output=True,
-        text=True,
-    )
-    base_prefix = res_prefix.stdout.strip() or sys.base_prefix
+    py_include = py_info.get("include") or ""
+    py_ver_major = py_info.get("ver_major") or sys.version_info.major
+    py_ver_minor = py_info.get("ver_minor") or sys.version_info.minor
+    base_prefix = py_info.get("base_prefix") or sys.base_prefix
 
     if sys.platform == "win32":
-        py_lib_dir = os.path.join(base_prefix, "libs")
+        py_lib_dir = py_info.get("libdir") or os.path.join(base_prefix, "libs")
     else:
-        res_libdir = subprocess.run(
-            [
-                python_exe,
-                "-c",
-                "import sysconfig; print(sysconfig.get_config_var('LIBDIR') or '')",
-            ],
-            capture_output=True,
-            text=True,
-        )
-        py_lib_dir = res_libdir.stdout.strip() or os.path.join(base_prefix, "lib")
+        py_lib_dir = py_info.get("libdir") or os.path.join(base_prefix, "lib")
 
     if zig_bin:
         # Determine target architecture
@@ -219,38 +212,80 @@ def compile_c_to_executable(
             "-lc",
         ]
 
+        # Determine python library name dynamically
+        py_lib_name = None
+        for key in ["library", "ldlibrary"]:
+            lib_val = py_info.get(key)
+            if lib_val:
+                cleaned = clean_library_name(lib_val)
+                if cleaned:
+                    py_lib_name = cleaned
+                    break
+        if not py_lib_name:
+            if sys.platform == "win32":
+                py_lib_name = f"python{py_ver_major}{py_ver_minor}"
+            else:
+                py_lib_name = f"python{py_ver_major}.{py_ver_minor}"
+
+        # Parse dynamic libraries and directory paths from sysconfig
+        dynamic_libs = []
+        dynamic_lib_dirs = []
+        keys_to_check = ['libs', 'syslibs', 'ldflags', 'localmodlibs', 'modlibs']
+        for key in keys_to_check:
+            val = py_info.get(key)
+            if val and isinstance(val, str):
+                for part in val.split():
+                    part = part.strip().strip('"').strip("'")
+                    if part.startswith('-l') and len(part) > 2:
+                        if part not in dynamic_libs:
+                            dynamic_libs.append(part)
+                    elif part.startswith('-L') and len(part) > 2:
+                        dir_path = part[2:]
+                        if dir_path not in dynamic_lib_dirs:
+                            dynamic_lib_dirs.append(dir_path)
+
         if sys.platform == "win32":
             compile_cmd.extend(["--subsystem", "windows"])
+            compile_cmd.append("-Wl,--entry=mainCRTStartup")
             compile_cmd.append(f"-L{py_lib_dir}")
             compile_cmd.append(f"-L{bootloader_lib.parent}")
-            lib_name = f"python{py_ver_str}"
-            compile_cmd.append(f"-l{lib_name}")
-            # System libs required by Rust/Python
-            compile_cmd.extend(
-                [
-                    "-lws2_32",
-                    "-luserenv",
-                    "-lbcrypt",
-                    "-ladvapi32",
-                    "-lntdll",
-                    "-lkernel32",
-                    "-luser32",
-                    "-lole32",
-                    "-lshell32",
-                    "-lshlwapi",
-                ]
-            )
+            for d in dynamic_lib_dirs:
+                compile_cmd.append(f"-L{d}")
+            compile_cmd.append(f"-l{py_lib_name}")
+
+            # System libs required on Windows
+            if dynamic_libs:
+                compile_cmd.extend(dynamic_libs)
+            else:
+                # Fallback to standard Win32 libraries if sysconfig has no values
+                compile_cmd.extend(
+                    [
+                        "-lws2_32",
+                        "-luserenv",
+                        "-lbcrypt",
+                        "-ladvapi32",
+                        "-lntdll",
+                        "-lkernel32",
+                        "-luser32",
+                        "-lole32",
+                        "-lshell32",
+                        "-lshlwapi",
+                    ]
+                )
         else:
-            # Linux
+            # Linux / macOS
             if py_lib_dir:
                 compile_cmd.append(f"-L{py_lib_dir}")
+            for d in dynamic_lib_dirs:
+                compile_cmd.append(f"-L{d}")
+            compile_cmd.append(f"-l{py_lib_name}")
 
-            # Python standard link
-            compile_cmd.append(
-                f"-lpython{sys.version_info.major}.{sys.version_info.minor}"
-            )
-            # System libs
-            compile_cmd.extend(["-lpthread", "-ldl", "-lutil", "-lm"])
+            # System libs required on Unix
+            if dynamic_libs:
+                compile_cmd.extend(dynamic_libs)
+            else:
+                # Fallback to standard POSIX libs if sysconfig has no values
+                compile_cmd.extend(["-lpthread", "-ldl", "-lutil", "-lm"])
 
         try:
             res = subprocess.run(compile_cmd, capture_output=True, text=True)

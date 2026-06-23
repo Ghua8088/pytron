@@ -61,6 +61,16 @@ def resolve_native_module():
         if _NATIVE_CACHE["module"]:
             return _NATIVE_CACHE["module"]
 
+        # Safeguard: Check if pytron_native was already imported and registered in sys.modules
+        for name in ["pytron.dependencies.pytron_native", "pytron_native"]:
+            if name in sys.modules and sys.modules[name]:
+                mod = sys.modules[name]
+                if hasattr(mod, "NativeState"):
+                    _NATIVE_CACHE["module"] = mod
+                    _NATIVE_CACHE["origin"] = getattr(mod, "__file__", "sys.modules")
+                    _log_shield(f"NativeState recovered from sys.modules: {_NATIVE_CACHE['origin']}")
+                    return mod
+
         # Explicit Priorities (Lower is Higher Priority)
         PRIORITY_FROZEN_MEIPASS = 10
         PRIORITY_FROZEN_INTERNAL = 20
@@ -230,8 +240,12 @@ def _log_shield(msg):
         _NATIVE_CACHE["last_error"] = msg
 
         if getattr(sys, "frozen", False):
-            sys.stderr.write(f"[SHIELD] {msg}\n")
-            sys.stderr.flush()
+            try:
+                if sys.stderr and not getattr(sys.stderr, "closed", False):
+                    sys.stderr.write(f"[SHIELD] {msg}\n")
+                    sys.stderr.flush()
+            except Exception:
+                pass
 
         # Determine a safe log path
         if sys.platform == "win32":
@@ -239,9 +253,12 @@ def _log_shield(msg):
         else:
             log_path = "/tmp/pytron_debug.log"
 
-        with open(log_path, "a") as f:
-            f.write(f"[SHIELD] {msg}\n")
-    except:
+        try:
+            with open(log_path, "a") as f:
+                f.write(f"[SHIELD] {msg}\n")
+        except Exception:
+            pass
+    except Exception:
         pass
 
 
