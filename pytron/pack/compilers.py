@@ -113,6 +113,19 @@ def cython_gen_c(script_path: Path, build_dir: Path, python_exe: str):
         log("Cython failed to generate C source.", style="error")
         return None
 
+    try:
+        with open(c_file, "a", encoding="utf-8") as f:
+            f.write("\n\n/* Pytron static link compatibility patch */\n")
+            f.write("#ifdef _WIN32\n")
+            f.write("#if defined(__GNUC__) || defined(__clang__)\n")
+            f.write("__attribute__((used)) int _fltused = 1;\n")
+            f.write("#else\n")
+            f.write("int _fltused = 1;\n")
+            f.write("#endif\n")
+            f.write("#endif\n")
+    except Exception as e:
+        log(f"Warning: Failed to append compatibility patch: {e}", style="warning")
+
     return c_file
 
 
@@ -246,7 +259,7 @@ def compile_c_to_executable(
 
         if sys.platform == "win32":
             compile_cmd.extend(["--subsystem", "windows"])
-            compile_cmd.append("-Wl,--entry=mainCRTStartup")
+            compile_cmd.append("-fentry=mainCRTStartup")
             compile_cmd.append(f"-L{py_lib_dir}")
             compile_cmd.append(f"-L{bootloader_lib.parent}")
             for d in dynamic_lib_dirs:
