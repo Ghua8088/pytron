@@ -237,7 +237,8 @@ def build_parser() -> argparse.ArgumentParser:
     # Hook Generation
     grp_hooks = p_pkg.add_argument_group("Hook Generation")
     grp_hooks.add_argument(
-        "--collect-all",
+        "--harvest-all",
+        dest="collect_all",
         action="store_true",
         help='Generate full "collect_all" hooks (larger builds).',
     )
