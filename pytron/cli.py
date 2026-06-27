@@ -198,6 +198,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Pack frontend assets into a single uneditable .pytron archive.",
     )
+    grp_general.add_argument(
+        "--archive-only",
+        action="store_true",
+        help="Pack the entire app (frontend, backend scripts, settings) into a single app.pytron archive, bypassing compilation.",
+    )
 
     # Engine Options
     grp_engine = p_pkg.add_argument_group("Engine Options")

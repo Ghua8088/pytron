@@ -111,8 +111,9 @@ def get_smart_assets(
                     is_user_included = True
                     break
 
+            dest_dir = os.path.dirname(rel_path) or "."
             if is_user_included:
-                add_data.append(f"{file_path}{os.pathsep}{rel_path}")
+                add_data.append(f"{file_path}{os.pathsep}{dest_dir}")
                 log(f"Explicitly included asset: {rel_path}", style="cyan")
                 continue
 
@@ -125,7 +126,7 @@ def get_smart_assets(
                 continue
 
             # If passed all checks
-            add_data.append(f"{file_path}{os.pathsep}{rel_path}")
+            add_data.append(f"{file_path}{os.pathsep}{dest_dir}")
             log(f"Auto-including asset: {rel_path}", style="dim")
 
     return add_data

@@ -248,7 +248,7 @@ class MetadataModule(BuildModule):
 
 class InstallerModule(BuildModule):
     def post_build(self, context: BuildContext):
-        if not getattr(context, "build_installer", False):
+        if not getattr(context, "build_installer", False) or context.is_archive_only:
             return
 
         log("Building NSIS installer...", style="info")
@@ -393,7 +393,7 @@ class HookModule(BuildModule):
             or context.settings.get("force_hooks", False)
         )
 
-        if not should_run:
+        if not should_run or context.is_archive_only:
             return
 
         from .pipeline import log
@@ -611,25 +611,14 @@ class PackModule(BuildModule):
                     context.add_data.remove(entry)
                     break
 
-        if not frontend_src:
+        if not frontend_src and not context.is_archive_only:
             return
 
-        log(f"VAP-ifying frontend: {frontend_src.name} -> app.pytron", style="cyan")
-
-        # Create the archive
+        # Create the build dir if not exists
+        context.build_dir.mkdir(parents=True, exist_ok=True)
         archive_path = context.build_dir / "app.pytron"
-        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for root, _, files in os.walk(frontend_src):
-                for file in files:
-                    full_path = Path(root) / file
-                    rel_path = full_path.relative_to(frontend_src)
-                    zipf.write(full_path, rel_path)
 
-        # Add the archive to the distribution
-        # In PyInstaller, '.' maps to the root or _internal depending on onefile
-        context.add_data.append(f"{archive_path}{os.pathsep}.")
-
-        # Update settings to inform runtime about VAP mode
+        # Update settings early to inform runtime about VAP mode
         context.settings["vap_mode"] = True
         context.settings["vap_archive"] = "app.pytron"
 
@@ -639,6 +628,100 @@ class PackModule(BuildModule):
                 s_path = Path(entry.split(os.pathsep)[0])
                 s_path.write_text(json.dumps(context.settings, indent=4))
                 break
+
+        # EXCLUDE LISTS for zipping python logic & assets
+        EXCLUDE_DIRS = {
+            "venv",
+            ".venv",
+            "env",
+            ".env",
+            "node_modules",
+            ".git",
+            ".vscode",
+            ".idea",
+            "build",
+            "dist",
+            "__pycache__",
+            "frontend",  # Skip frontend source folder, we bundle dist instead
+        }
+        EXCLUDE_FILES = {
+            ".gitignore",
+            "package-lock.json",
+            "npm-debug.log",
+            ".DS_Store",
+            "thumbs.db",
+            "pnpm-lock.yaml",
+            "bun.lockb",
+            "crystal_runner.py",
+        }
+        EXCLUDE_SUFFIXES = {
+            ".spec",
+            ".md",
+            ".map",
+            ".pyc",
+            ".pyo",
+            ".gguf",
+            ".onnx",
+            ".bin",  # Offload heavy binary files
+        }
+
+        log(f"Creating VAP Archive: {archive_path.name} ...", style="cyan")
+        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            # 1. Pack Frontend Dist if available
+            if frontend_src:
+                log(f"  + Packing frontend assets...", style="dim")
+                for root, _, files in os.walk(frontend_src):
+                    for file in files:
+                        full_path = Path(root) / file
+                        rel_path = full_path.relative_to(frontend_src)
+                        if rel_path.name == "settings.json":
+                            continue
+                        zipf.write(full_path, rel_path)
+
+            # 2. Pack Python logic and project assets (if is_archive_only)
+            if context.is_archive_only:
+                log(f"  + Packing python logic and project files...", style="dim")
+                for root, dirs, files in os.walk(context.script_dir):
+                    # Filter dirs in-place to avoid walking into excluded ones
+                    dirs[:] = [
+                        d
+                        for d in dirs
+                        if d not in EXCLUDE_DIRS and not d.startswith(".")
+                    ]
+
+                    for file in files:
+                        if file in EXCLUDE_FILES:
+                            continue
+                        ext = Path(file).suffix.lower()
+                        if ext in EXCLUDE_SUFFIXES:
+                            continue
+
+                        full_path = Path(root) / file
+                        rel_path = full_path.relative_to(context.script_dir)
+
+                        # Skip if it is within the frontend_src directory (already handled above)
+                        if frontend_src and str(frontend_src) in str(full_path):
+                            continue
+                        # Skip settings.json since we write the adjusted one
+                        if file == "settings.json" and rel_path.parent == Path("."):
+                            continue
+
+                        zipf.write(full_path, rel_path)
+
+            # 3. Add adjusted settings.json from the build directory
+            settings_file = None
+            for entry in context.add_data:
+                if "settings.json" in entry and "pytron_assets" in entry:
+                    settings_file = Path(entry.split(os.pathsep)[0])
+                    break
+
+            if settings_file and settings_file.exists():
+                zipf.write(settings_file, "settings.json")
+            elif (context.script_dir / "settings.json").exists():
+                zipf.write(context.script_dir / "settings.json", "settings.json")
+
+        # Add the archive to the distribution data
+        context.add_data.append(f"{archive_path}{os.pathsep}.")
 
     def post_build(self, context: BuildContext):
         pass

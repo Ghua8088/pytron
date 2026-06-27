@@ -78,7 +78,10 @@ class MetadataEditor:
                 )
 
         if sys.platform == "win32":
-            log("Skipping rcedit post-processing to prevent PyInstaller PKG archive corruption.", style="warning")
+            log(
+                "Skipping rcedit post-processing to prevent PyInstaller PKG archive corruption.",
+                style="warning",
+            )
             return binary_path
         elif sys.platform == "darwin":
             return self._update_macos(binary_path, icon_path, settings, dist_dir)

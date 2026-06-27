@@ -36,32 +36,46 @@ class AssetComponent(WebviewComponent):
 
     def serve_asset_callback(self, key: str) -> Optional[Tuple[bytes, str]]:
         """Called by Native Engine Protocol Handler to fetch VAP assets."""
-        if key in self._served_data:
-            return self._served_data[key]
+        clean_key = key.lstrip("/").replace("\\", "/")
+
+        # 1. Check Memory Cache
+        if clean_key in self._served_data:
+            return self._served_data[clean_key]
+
+        # 2. Check mounted Zip Archive
+        if (
+            hasattr(self, "_zip_file")
+            and self._zip_file
+            and hasattr(self, "_zip_contents")
+        ):
+            if clean_key in self._zip_contents:
+                try:
+                    data = self._zip_file.read(clean_key)
+                    mime, _ = mimetypes.guess_type(clean_key)
+                    return data, mime or "application/octet-stream"
+                except Exception as e:
+                    self.logger.error(f"VAP: Failed to read {clean_key} from zip: {e}")
         return None
 
     def load_vap_archive(self, archive_name: str):
-        """Loads all assets from a .pytron archive into the VAP cache."""
+        """Loads and mounts a .pytron archive for stream-on-demand assets."""
         root_path = self.webview._routing_comp.root_path
-        archive_path = pathlib.Path(root_path) / archive_name
-
-        # Check if it's in _internal (common for PyInstaller)
-        if not archive_path.exists():
-            archive_path = pathlib.Path(root_path) / "_internal" / archive_name
+        archive_path = pathlib.Path(archive_name)
+        if not archive_path.is_absolute():
+            archive_path = pathlib.Path(root_path) / archive_name
+            if not archive_path.exists():
+                archive_path = pathlib.Path(root_path) / "_internal" / archive_name
 
         if not archive_path.exists():
             self.logger.warning(f"VAP Archive not found at {archive_path}")
             return
 
-        self.logger.info(f"Loading VAP Archive: {archive_path}")
+        self.logger.info(f"Mounting VAP Archive: {archive_path}")
         try:
-            with zipfile.ZipFile(archive_path, "r") as zipf:
-                for name in zipf.namelist():
-                    data = zipf.read(name)
-                    mime, _ = mimetypes.guess_type(name)
-                    self._served_data[name] = (data, mime or "application/octet-stream")
+            self._zip_file = zipfile.ZipFile(archive_path, "r")
+            self._zip_contents = set(self._zip_file.namelist())
             self.logger.info(
-                f"VAP: Loaded {len(self._served_data)} assets from archive."
+                f"VAP: Mounted content archive with {len(self._zip_contents)} files."
             )
         except Exception as e:
             self.logger.error(f"Failed to load VAP archive: {e}")
@@ -71,18 +85,35 @@ class AssetComponent(WebviewComponent):
         Retrieves an asset for the VAP bridge.
         Returns {'raw': <binary_string>, 'mime': <mime_type>} or None.
         """
+        clean_key = key.lstrip("/").replace("\\", "/")
+
         # 1. Check Memory Cache (_served_data)
-        if key in self._served_data:
-            data, mime = self._served_data[key]
+        if clean_key in self._served_data:
+            data, mime = self._served_data[clean_key]
             # Convert bytes to "latin-1" string for JS binary interop
             raw = data.decode("latin-1")
             return {"raw": raw, "mime": mime}
 
-        # 2. Check File System (if key is a relative path)
+        # 2. Check mounted Zip Archive
+        if (
+            hasattr(self, "_zip_file")
+            and self._zip_file
+            and hasattr(self, "_zip_contents")
+        ):
+            if clean_key in self._zip_contents:
+                try:
+                    data = self._zip_file.read(clean_key)
+                    mime, _ = mimetypes.guess_type(clean_key)
+                    raw = data.decode("latin-1")
+                    return {"raw": raw, "mime": mime or "application/octet-stream"}
+                except Exception as e:
+                    self.logger.error(f"VAP: Failed to read {clean_key} from zip: {e}")
+
+        # 3. Check File System (if key is a relative path)
         try:
             # Security: Prevent escaping app_root
             app_root = pathlib.Path(self.webview._app_root)
-            possible_path = (app_root / key).resolve()
+            possible_path = (app_root / clean_key).resolve()
             if (
                 str(possible_path).startswith(str(app_root))
                 and possible_path.exists()

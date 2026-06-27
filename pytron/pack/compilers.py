@@ -131,6 +131,7 @@ def cython_gen_c(script_path: Path, build_dir: Path, python_exe: str):
 
 import json
 
+
 def clean_library_name(lib_val):
     if not lib_val:
         return None
@@ -174,10 +175,15 @@ def compile_c_to_executable(
     )
 
     try:
-        res = subprocess.run([python_exe, "-c", query_code], capture_output=True, text=True, check=True)
+        res = subprocess.run(
+            [python_exe, "-c", query_code], capture_output=True, text=True, check=True
+        )
         py_info = json.loads(res.stdout.strip())
     except Exception as e:
-        log(f"Warning: Failed to consolidate python configuration query: {e}", style="warning")
+        log(
+            f"Warning: Failed to consolidate python configuration query: {e}",
+            style="warning",
+        )
         py_info = {}
 
     py_include = py_info.get("include") or ""
@@ -243,16 +249,16 @@ def compile_c_to_executable(
         # Parse dynamic libraries and directory paths from sysconfig
         dynamic_libs = []
         dynamic_lib_dirs = []
-        keys_to_check = ['libs', 'syslibs', 'ldflags', 'localmodlibs', 'modlibs']
+        keys_to_check = ["libs", "syslibs", "ldflags", "localmodlibs", "modlibs"]
         for key in keys_to_check:
             val = py_info.get(key)
             if val and isinstance(val, str):
                 for part in val.split():
                     part = part.strip().strip('"').strip("'")
-                    if part.startswith('-l') and len(part) > 2:
+                    if part.startswith("-l") and len(part) > 2:
                         if part not in dynamic_libs:
                             dynamic_libs.append(part)
-                    elif part.startswith('-L') and len(part) > 2:
+                    elif part.startswith("-L") and len(part) > 2:
                         dir_path = part[2:]
                         if dir_path not in dynamic_lib_dirs:
                             dynamic_lib_dirs.append(dir_path)

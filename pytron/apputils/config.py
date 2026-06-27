@@ -48,6 +48,8 @@ class ConfigComponent(AppComponent):
                 f.write(
                     f"\n--- DIAGNOSTIC SESSION START: {os.path.basename(sys.executable)} ---\n"
                 )
+                # Keep a persistent reference on the app object to prevent garbage collection/closure
+                self.app._diagnostic_file_handle = f
                 sys.stdout = f
                 sys.stderr = f
 
@@ -92,6 +94,52 @@ class ConfigComponent(AppComponent):
             return
 
         self.config = {}
+
+        # VAP 2.0 Content Archive Auto-Mount
+        archive_name = "app.pytron"
+        archive_path = None
+
+        roots = []
+        if getattr(sys, "frozen", False):
+            roots.append(os.path.dirname(sys.executable))
+        roots.append(os.getcwd())
+        if sys.path and sys.path[0]:
+            roots.append(sys.path[0])
+
+        for r in roots:
+            candidate = os.path.join(r, archive_name)
+            if os.path.exists(candidate):
+                archive_path = os.path.abspath(candidate)
+                break
+
+        if archive_path:
+            self.logger.info(f"VAP 2.0: Mounting app archive: {archive_path}")
+            if archive_path not in sys.path:
+                sys.path.insert(0, archive_path)
+
+            import zipfile
+
+            try:
+                with zipfile.ZipFile(archive_path, "r") as zipf:
+                    if "settings.json" in zipf.namelist():
+                        self.config = json.loads(
+                            zipf.read("settings.json").decode("utf-8")
+                        )
+                        self.logger.info("Loaded config from app.pytron archive")
+                        self.config["vap_mode"] = True
+                        self.config["vap_archive"] = archive_path
+
+                        if self.config.get("debug", False):
+                            self.logger.setLevel(logging.DEBUG)
+                            for handler in logging.root.handlers:
+                                handler.setLevel(logging.DEBUG)
+                            self.logger.debug(
+                                "Debug mode enabled from archive settings."
+                            )
+                        return
+            except Exception as e:
+                self.logger.error(f"Failed to load settings.json from archive: {e}")
+
         path = get_resource_path(config_file)
         self.logger.debug(f"Resolved settings path: {path}")
 

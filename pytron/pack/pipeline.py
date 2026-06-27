@@ -36,6 +36,7 @@ class BuildContext:
     is_secure: bool = False
     is_nuitka: bool = False
     is_onefile: bool = False
+    is_archive_only: bool = False
 
     # Internal State
     progress: Any = None

@@ -127,6 +127,7 @@ def cmd_package(args: argparse.Namespace) -> int:
         is_secure=args.secure,
         is_nuitka=args.nuitka,
         is_onefile=args.one_file,
+        is_archive_only=getattr(args, "archive_only", False),
         progress=progress,
         task_id=task,
     )
@@ -173,7 +174,7 @@ def cmd_package(args: argparse.Namespace) -> int:
     pipeline.add_module(IconModule())
     pipeline.add_module(AssetModule())
 
-    if getattr(args, "pack", False):
+    if getattr(args, "pack", False) or getattr(args, "archive_only", False):
         pipeline.add_module(PackModule())
 
     pipeline.add_module(HookModule())
@@ -210,7 +211,43 @@ def cmd_package(args: argparse.Namespace) -> int:
     pipeline.add_module(InstallerModule())
 
     # Run Pipeline with Core Compiler
-    if ctx.engine == "rust":
+    if getattr(args, "archive_only", False):
+
+        def run_archive_only_build(context: BuildContext):
+            log("Packaging in Archive-Only Mode...", style="info")
+            context.progress.update(
+                context.task_id, description="Generating app.pytron...", completed=50
+            )
+
+            # Ensure dist directory exists
+            context.dist_dir.mkdir(parents=True, exist_ok=True)
+
+            archive_path = context.build_dir / "app.pytron"
+            if not archive_path.exists():
+                log(
+                    "Error: app.pytron was not found in the build folder.",
+                    style="error",
+                )
+                return 1
+
+            dest_path = context.dist_dir / "app.pytron"
+            import shutil
+
+            shutil.copy2(archive_path, dest_path)
+            log(f"Archive written to: {dest_path}", style="success")
+
+            # Copy settings.json to dist directory too, so the runner can read it without opening zip
+            settings_dest = context.dist_dir / "settings.json"
+            import json
+
+            settings_dest.write_text(json.dumps(context.settings, indent=4))
+            log(f"Settings metadata written to: {settings_dest}", style="dim")
+
+            context.progress.update(context.task_id, description="Done!", completed=100)
+            return 0
+
+        ret_code = pipeline.run(run_archive_only_build)
+    elif ctx.engine == "rust":
         from ..pack.rust_engine import RustEngine
 
         rust_engine = RustEngine()
@@ -232,5 +269,11 @@ def cmd_package(args: argparse.Namespace) -> int:
     progress.stop()
     if ret_code == 0:
         console.print(Rule("[bold green]Success"))
-        log(f"App packaged successfully: dist/{ctx.out_name}", style="bold green")
+        if getattr(args, "archive_only", False):
+            log(
+                f"App archive packaged successfully: dist/{ctx.out_name}/app.pytron",
+                style="bold green",
+            )
+        else:
+            log(f"App packaged successfully: dist/{ctx.out_name}", style="bold green")
     return ret_code

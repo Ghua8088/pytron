@@ -68,7 +68,9 @@ def resolve_native_module():
                 if hasattr(mod, "NativeState"):
                     _NATIVE_CACHE["module"] = mod
                     _NATIVE_CACHE["origin"] = getattr(mod, "__file__", "sys.modules")
-                    _log_shield(f"NativeState recovered from sys.modules: {_NATIVE_CACHE['origin']}")
+                    _log_shield(
+                        f"NativeState recovered from sys.modules: {_NATIVE_CACHE['origin']}"
+                    )
                     return mod
 
         # Explicit Priorities (Lower is Higher Priority)
@@ -142,37 +144,46 @@ def resolve_native_module():
         img_ext = ".pyd" if sys.platform == "win32" else ".so"
         _log_shield(f"Starting discovery (Target Ext: {img_ext})")
 
+        candidates = []
         for priority, path in search_paths:
             pyd_path = os.path.join(path, "pytron_native" + img_ext)
             _log_shield(f"Checking candidate: {pyd_path}")
 
             if os.path.exists(pyd_path):
-                _log_shield(f"Found file at: {pyd_path}. Attempting load...")
-                try:
-                    spec = importlib.util.spec_from_file_location(
-                        "pytron.dependencies.pytron_native", pyd_path
-                    )
-                    if spec and spec.loader:
-                        mod = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(mod)
-                        if hasattr(mod, "NativeState"):
-                            _log_shield(
-                                f"Successfully loaded NativeState from {pyd_path}"
-                            )
-                            candidate_modules.append((priority, pyd_path, mod))
-                        else:
-                            _log_shield(
-                                f"Module found at {pyd_path} but missing 'NativeState' attribute."
-                            )
-                except Exception as e:
-                    import traceback
-
-                    err_msg = (
-                        f"Load Failure for {pyd_path}: {e}\n{traceback.format_exc()}"
-                    )
-                    _log_shield(err_msg)
+                norm_path = os.path.normpath(pyd_path)
+                # Avoid checking the same physical file twice
+                if norm_path not in [c[1] for c in candidates]:
+                    candidates.append((priority, norm_path))
+                    _log_shield(f"Found candidate: {norm_path} (priority={priority})")
             else:
                 _log_shield(f"File NOT found at: {pyd_path}")
+
+        # Sort candidates by priority (lowest number first)
+        candidates.sort(key=lambda x: x[0])
+
+        for priority, pyd_path in candidates:
+            _log_shield(f"Attempting load: {pyd_path}...")
+            try:
+                spec = importlib.util.spec_from_file_location(
+                    "pytron.dependencies.pytron_native", pyd_path
+                )
+                if spec and spec.loader:
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    if hasattr(mod, "NativeState"):
+                        _log_shield(f"Successfully loaded NativeState from {pyd_path}")
+                        candidate_modules.append((priority, pyd_path, mod))
+                        # Break immediately on first successful load to prevent PyO3 double-load crash
+                        break
+                    else:
+                        _log_shield(
+                            f"Module found at {pyd_path} but missing 'NativeState' attribute."
+                        )
+            except Exception as e:
+                import traceback
+
+                err_msg = f"Load Failure for {pyd_path}: {e}\n{traceback.format_exc()}"
+                _log_shield(err_msg)
 
         # B) Package Import Discovery (Fallback)
         if not candidate_modules:
