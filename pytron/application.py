@@ -171,12 +171,7 @@ class App:
         self._dispatch_buffer = deque()
         self.loop.create_task(self._flush_events_task())
 
-        # AUTO-CODEGEN: Generate TypeScript definitions in debug mode (After plugins are loaded)
-        if self.config.get("debug", False):
-            try:
-                self.generate_types()
-            except Exception as e:
-                self.logger.debug(f"Codegen failed: {e}")
+        # AUTO-CODEGEN: Moved to run() so user @app.expose calls are captured first.
 
     # --- Config Component Forwarding ---
     def store_set(self, key: str, value: Any):
@@ -198,6 +193,15 @@ class App:
 
     def run(self, **kwargs):
         """Starts the application event loop and shows the main window."""
+        # AUTO-CODEGEN: Generate TypeScript definitions now that all user
+        # @app.expose calls have been registered (runs only in dev mode).
+        import sys as _sys
+
+        if not getattr(_sys, "frozen", False):
+            try:
+                self.generate_types()
+            except Exception as e:
+                self.logger.debug(f"Codegen failed: {e}")
         return self._window_comp.run(**kwargs)
 
     def register_protocol(self, scheme: str = "pytron"):
@@ -447,7 +451,16 @@ class App:
             return func
 
         if name is None:
-            if hasattr(func, "__name__"):
+            # Unwrap decorated functions (pydantic validate_call, functools.wraps, etc.)
+            target_func = func
+            while hasattr(target_func, "__wrapped__"):
+                target_func = getattr(target_func, "__wrapped__")
+            if hasattr(target_func, "raw_function"):
+                target_func = getattr(target_func, "raw_function")
+
+            if hasattr(target_func, "__name__") and target_func.__name__ != "<lambda>":
+                name = target_func.__name__
+            elif hasattr(func, "__name__") and func.__name__ != "<lambda>":
                 name = func.__name__
             elif hasattr(func, "func") and hasattr(
                 getattr(func, "func"), "__name__"
@@ -462,6 +475,13 @@ class App:
             "run_in_thread": run_in_thread,
         }
         self._exposed_ts_defs[name] = self._codegen_comp._get_ts_definition(name, func)
+
+        # Dynamic binding: automatically bind to all active windows
+        for win in self.windows:
+            try:
+                win.bind(name, func, secure=secure, run_in_thread=run_in_thread)
+            except Exception as e:
+                self.logger.debug(f"Failed to dynamic-bind '{name}' to window: {e}")
         return func
 
     def shortcut(self, key_combo, func=None):
@@ -557,7 +577,11 @@ class App:
         self.expose(self.publish, name="app_publish")
 
         # Utility
-        self.expose(lambda: "pong", name="app_ping")
+        def _ping() -> str:
+            """Health-check: returns 'pong' to confirm the backend is alive."""
+            return "pong"
+
+        self.expose(_ping, name="app_ping")
 
         # Updater APIs
         self.expose(self.check_updates, name="app_check_updates")

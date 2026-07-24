@@ -374,7 +374,15 @@ class Webview:
 
     def expose(self, entity):
         if callable(entity) and not isinstance(entity, type):
-            self.bind(entity.__name__, entity)
+            target = entity
+            while hasattr(target, "__wrapped__"):
+                target = getattr(target, "__wrapped__")
+            if hasattr(target, "raw_function"):
+                target = getattr(target, "raw_function")
+            func_name = getattr(
+                target, "__name__", getattr(entity, "__name__", f"exposed_{id(entity)}")
+            )
+            self.bind(func_name, entity)
             return entity
         if isinstance(entity, type):
             instance = entity()

@@ -300,6 +300,16 @@ impl NativeWebview {
                     return;
                 }
 
+                if method == "pytron_minimize" || method == "minimize" {
+                    let _ = proxy_for_ipc.send_event(UserEvent::Minimize);
+                    return;
+                }
+
+                if method == "pytron_maximize" || method == "maximize" || method == "pytron_toggle_maximize" || method == "toggle_maximize" {
+                    let _ = proxy_for_ipc.send_event(UserEvent::SetMaximized(true));
+                    return;
+                }
+
                 if method == "pytron_sync_state" {
                     let mut state_json = String::from("{}");
                     
