@@ -17,10 +17,8 @@ protocol.registerSchemesAsPrivileged([
 const isDebug = process.argv.includes('--pytron-debug') || process.argv.includes('--inspect');
 
 const log = (msg) => {
-    const stamped = `[Mojo-Shell][${new Date().toISOString()}] ${msg}`;
+    const stamped = `[Chrome-Engine] ${msg}`;
     try {
-        // Prepare logs dir if needed, or just stdout
-        // fs.writeSync(1, stamped + "\n");
         console.log(stamped);
     } catch (e) {
         // Silent catch for EPIPE (Broken Pipe) or other stdout issues during shutdown
@@ -207,8 +205,6 @@ function sendToPython(type, payload) {
 }
 
 function handlePythonCommand(cmd) {
-    if (isDebug) log(`Executing: ${cmd.substring(0, 100)}...`);
-
     let command;
     try {
         command = JSON.parse(cmd);
@@ -216,6 +212,7 @@ function handlePythonCommand(cmd) {
         log(`Failed to parse command: ${e.message}`);
         return;
     }
+    if (isDebug) log(`CMD: ${command.action || 'reply'} (id=${command.id || 'none'})`);
 
     if (!isAppReady) {
         log(`Queueing command: ${command.action} (App not ready)`);

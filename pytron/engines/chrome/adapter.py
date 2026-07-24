@@ -395,14 +395,27 @@ class ChromeAdapter:
                     continue
 
                 if prefix == "STDOUT":
-                    # If it's a console.log from our Shell.js, it might already have a tag
-                    if content.startswith("[Mojo-Shell]"):
-                        logger.info(content)
+                    # Parse and sanitize Chrome-Engine messages
+                    if content.startswith("[Chrome-Engine]") or content.startswith(
+                        "[Mojo-Shell]"
+                    ):
+                        clean_msg = (
+                            content.replace("[Mojo-Shell]", "")
+                            .replace("[Chrome-Engine]", "")
+                            .strip()
+                        )
+                        # Remove redundant raw timestamp tags if present e.g. [2026-07-24T...]
+                        import re
+
+                        clean_msg = re.sub(
+                            r"^\[\d{4}-\d{2}-\d{2}T[^\]]+\]\s*", "", clean_msg
+                        )
+                        logger.debug(f"[Chrome-Engine] {clean_msg}")
                     else:
                         logger.debug(f"[Electron] {content}")
                 else:
                     # STDERR usually contains Chromium warnings
-                    logger.warning(f"[Electron-Err] {content}")
+                    logger.debug(f"[Electron-Err] {content}")
 
         except Exception as e:
             logger.debug(f"Log proxy error: {e}")
