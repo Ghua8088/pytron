@@ -545,11 +545,11 @@ button {
         progress.update(
             task, description="Installing Python Dependencies...", completed=90
         )
-        # Install pytron in the new env.
-        run_command_with_output([str(pip_exe), "install", "pytron-kit"])
+        # Install light pytron core in the new env.
+        run_command_with_output([str(pip_exe), "install", "pytron-kit[core]"])
 
         # Create requirements.json
-        req_data = {"dependencies": ["pytron-kit"]}
+        req_data = {"dependencies": ["pytron-kit[core]"]}
         (target / "requirements.json").write_text(json.dumps(req_data, indent=4))
 
         # Create helper run scripts

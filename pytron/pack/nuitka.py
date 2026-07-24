@@ -19,19 +19,33 @@ def run_nuitka_build(context: BuildContext):
     log("Packaging using Nuitka (Native Compilation)...", style="info")
 
     # 1. Check for Nuitka
-    import shutil
-    from .pipeline import BuildContext
-    from ..commands.helpers import get_python_executable, get_venv_site_packages
-
     python_exe = get_python_executable()
-    if (
-        not shutil.which("nuitka")
-        and not get_venv_site_packages(python_exe).joinpath("nuitka").exists()
-    ):
-        log("Nuitka not found. Installing...", style="warning")
-        subprocess.check_call(
-            [python_exe, "-m", "pip", "install", "nuitka", "zstandard"]
+
+    # Try importing nuitka or checking executable
+    nuitka_missing = True
+    try:
+        res = subprocess.run([python_exe, "-c", "import nuitka"], capture_output=True)
+        if res.returncode == 0:
+            nuitka_missing = False
+    except Exception:
+        pass
+
+    if nuitka_missing and shutil.which("nuitka"):
+        nuitka_missing = False
+
+    if nuitka_missing:
+        log(
+            "Nuitka is required for compilation but not found. Auto-installing 'pytron[nuitka]'...",
+            style="warning",
         )
+        try:
+            subprocess.check_call(
+                [python_exe, "-m", "pip", "install", "nuitka", "zstandard"]
+            )
+            log("Successfully installed Nuitka toolchain!", style="success")
+        except subprocess.CalledProcessError as e:
+            log(f"Failed to auto-install Nuitka: {e}", style="error")
+            raise SystemExit(1)
 
     # 2. Build Nuitka Command
     cmd = [
