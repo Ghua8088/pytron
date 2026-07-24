@@ -51,7 +51,15 @@ class BuildContext:
         self.dist_dir = Path("dist") / self.out_name
 
         # Default stdlib exclusions to trim dead weight from final app binaries
-        default_excludes = ["tkinter", "tcl", "unittest", "pydoc", "doctest", "difflib", "turtle"]
+        default_excludes = [
+            "tkinter",
+            "tcl",
+            "unittest",
+            "pydoc",
+            "doctest",
+            "difflib",
+            "turtle",
+        ]
         for ex in default_excludes:
             if ex not in self.excludes:
                 self.excludes.append(ex)

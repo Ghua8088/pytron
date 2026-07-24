@@ -546,7 +546,9 @@ button {
             task, description="Installing Python Dependencies...", completed=90
         )
         # Install light pytron core in the new env using cached binary wheels.
-        run_command_with_output([str(pip_exe), "install", "--prefer-binary", "pytron-kit[core]"])
+        run_command_with_output(
+            [str(pip_exe), "install", "--prefer-binary", "pytron-kit[core]"]
+        )
 
         # Create requirements.json
         req_data = {"dependencies": ["pytron-kit[core]"]}

@@ -40,8 +40,18 @@ def get_smart_assets(
         "frontend",
     }
     EXCLUDE_SUFFIXES = {
-        ".py", ".pyc", ".pyo", ".spec", ".md", ".map",
-        ".ts", ".tsx", ".scss", ".sass", ".less", ".log"
+        ".py",
+        ".pyc",
+        ".pyo",
+        ".spec",
+        ".md",
+        ".map",
+        ".ts",
+        ".tsx",
+        ".scss",
+        ".sass",
+        ".less",
+        ".log",
     }
     EXCLUDE_FILES = {
         ".gitignore",
@@ -54,7 +64,7 @@ def get_smart_assets(
         "bun.lockb",
         "tsconfig.json",
         "vite.config.ts",
-        "vite.config.js"
+        "vite.config.js",
     }
 
     include_patterns = include_patterns or []
