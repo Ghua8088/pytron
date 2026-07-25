@@ -213,6 +213,119 @@ class ChromeWebView(Webview):
         # 6. Navigate
         self.navigate(navigate_url)
 
+        # 7. JS Init Shim (With Proxy for Dynamic Methods)
+        # Injected via init_script so it runs on every page load, not just once.
+        # NOTE: Previously this was dead code trapped inside _resolve_chrome_binary
+        # after a return statement — it never ran. Fixed here.
+        init_js = f"""
+        (function() {{
+            try {{
+                if (!window.pytron) {{
+                    window.pytron = {{ is_ready: true, id: "{self.id}" }};
+                }} else {{
+                    window.pytron.is_ready = true;
+                    window.pytron.id = "{self.id}";
+                }}
+            }} catch (e) {{
+                // Already read-only or handled by bridge
+            }}
+
+            window.pytron_is_native = true;
+
+            // --- DE-BROWSERIFY CORE ---
+            (function() {{
+                const isDebug = {str(self.config.get("debug", False)).lower()};
+
+                // 1. Kill Context Menu (Unless debugging)
+                if (!isDebug) {{
+                    document.addEventListener('contextmenu', e => e.preventDefault());
+                }}
+
+                // 2. Kill "Ghost" Drags (images/links flying around)
+                document.addEventListener('dragstart', e => {{
+                    if (e.target.tagName === 'IMG' || e.target.tagName === 'A') e.preventDefault();
+                }});
+
+                // 3. Kill Browser Shortcuts
+                window.addEventListener('keydown', e => {{
+                    const forbidden = ['r', 'p', 's', 'j', 'u', 'f'];
+                    if (e.ctrlKey && forbidden.includes(e.key.toLowerCase())) e.preventDefault();
+                    if (e.key === 'F5' || e.key === 'F3' || (e.ctrlKey && e.key === 'f')) e.preventDefault();
+                    // Block Zoom
+                    if (e.ctrlKey && (e.key === '=' || e.key === '-' || e.key === '0')) e.preventDefault();
+                }}, true);
+
+                // 4. Kill System UI Styles (Selection, Outlines, Rubber-banding)
+                const style = document.createElement('style');
+                style.textContent = `
+                    * {{
+                        -webkit-user-select: none;
+                        user-select: none;
+                        -webkit-user-drag: none;
+                        -webkit-tap-highlight-color: transparent;
+                        outline: none !important;
+                    }}
+                    input, textarea, [contenteditable], [contenteditable] * {{
+                        -webkit-user-select: text !important;
+                        user-select: text !important;
+                    }}
+                    html, body {{
+                        overscroll-behavior: none !important;
+                        cursor: default;
+                    }}
+                    a, button, input[type="button"], input[type="submit"] {{
+                        cursor: pointer;
+                    }}
+                `;
+                document.head ? document.head.appendChild(style) : document.addEventListener('DOMContentLoaded', () => document.head.appendChild(style));
+            }})();
+
+            // Universal IPC Bridge
+            if (!window.__pytron_native_bridge) {{
+                window.__pytron_native_bridge = (method, args) => {{
+                    const seq = Math.random().toString(36).substring(2, 10);
+                    if (window.ipc) {{
+                         window.ipc.postMessage(JSON.stringify({{id: seq, method: method, params: args}}));
+                    }}
+                    return new Promise((resolve, reject) => {{
+                        window._rpc = window._rpc || {{}};
+                        window._rpc[seq] = {{resolve, reject}};
+                    }});
+                }};
+            }}
+
+            // Dynamic Proxy to handle ANY method call from frontend (hide, center, etc.)
+            try {{
+                const existing = window.pytron;
+                window.pytron = new Proxy(existing || {{}}, {{
+                    get: function(target, prop) {{
+                        if (prop in target) return target[prop];
+                        // If not found, assume it's a bridge call
+                        return (...args) => window.__pytron_native_bridge(prop, args);
+                    }}
+                }});
+            }} catch (e) {{
+                // Skip proxy if window.pytron is read-only
+            }}
+
+            // Standard Pollys & Asset Bridge
+            window.pytron_drag = () => window.__pytron_native_bridge('pytron_drag', []);
+            window.pytron_minimize = () => window.__pytron_native_bridge('pytron_minimize', []);
+            window.pytron_get_asset = (key) => window.__pytron_native_bridge('pytron_get_asset', [key]);
+
+            window['pytron_drag'] = window.pytron_drag;
+            window['pytron_minimize'] = window.pytron_minimize;
+            window['pytron_get_asset'] = window.pytron_get_asset;
+            window['__pytron_vap_get'] = window.pytron_get_asset;
+
+        }})();
+        """
+        self.bridge.init_script(init_js)
+
+        # Force Resizable Update (Fix gray maximize button)
+        # Sometimes init flag is overridden by window style defaults in Electron
+        self.adapter.send({"action": "set_resizable", "resizable": True})
+
     def _setup_icon(self, config):
         """Resolves and sets the window icon."""
         icon_raw = config.get("icon")
@@ -272,116 +385,6 @@ class ChromeWebView(Webview):
         if os.path.exists(dev_path):
             return dev_path
         return None
-
-        # 7. JS Init Shim (With Proxy for Dynamic Methods)
-        init_js = f"""
-        (function() {{
-            try {{
-                if (!window.pytron) {{
-                    window.pytron = {{ is_ready: true, id: "{self.id}" }};
-                }} else {{
-                    window.pytron.is_ready = true;
-                    window.pytron.id = "{self.id}";
-                }}
-            }} catch (e) {{
-                // Already read-only or handled by bridge
-            }}
-            
-            window.pytron_is_native = true;
-
-            // --- DE-BROWSERIFY CORE ---
-            (function() {{
-                const isDebug = {str(self.config.get("debug", False)).lower()};
-                
-                // 1. Kill Context Menu (Unless debugging)
-                if (!isDebug) {{
-                    document.addEventListener('contextmenu', e => e.preventDefault());
-                }}
-
-                // 2. Kill "Ghost" Drags (images/links flying around)
-                document.addEventListener('dragstart', e => {{
-                    if (e.target.tagName === 'IMG' || e.target.tagName === 'A') e.preventDefault();
-                }});
-
-                // 3. Kill Browser Shortcuts
-                window.addEventListener('keydown', e => {{
-                    const forbidden = ['r', 'p', 's', 'j', 'u', 'f'];
-                    if (e.ctrlKey && forbidden.includes(e.key.toLowerCase())) e.preventDefault();
-                    if (e.key === 'F5' || e.key === 'F3' || (e.ctrlKey && e.key === 'f')) e.preventDefault();
-                    // Block Zoom
-                    if (e.ctrlKey && (e.key === '=' || e.key === '-' || e.key === '0')) e.preventDefault();
-                }}, true);
-
-                // 4. Kill System UI Styles (Selection, Outlines, Rubber-banding)
-                const style = document.createElement('style');
-                style.textContent = `
-                    * {{ 
-                        -webkit-user-select: none; 
-                        user-select: none;
-                        -webkit-user-drag: none; 
-                        -webkit-tap-highlight-color: transparent;
-                        outline: none !important;
-                    }}
-                    input, textarea, [contenteditable], [contenteditable] * {{ 
-                        -webkit-user-select: text !important; 
-                        user-select: text !important;
-                    }}
-                    html, body {{
-                        overscroll-behavior: none !important;
-                        cursor: default;
-                    }}
-                    a, button, input[type="button"], input[type="submit"] {{
-                        cursor: pointer;
-                    }}
-                `;
-                document.head ? document.head.appendChild(style) : document.addEventListener('DOMContentLoaded', () => document.head.appendChild(style));
-            }})();
-
-            // Universal IPC Bridge
-            if (!window.__pytron_native_bridge) {{
-                window.__pytron_native_bridge = (method, args) => {{
-                    const seq = Math.random().toString(36).substring(2, 10);
-                    if (window.ipc) {{
-                         window.ipc.postMessage(JSON.stringify({{id: seq, method: method, params: args}}));
-                    }}
-                    return new Promise((resolve, reject) => {{
-                        window._rpc = window._rpc || {{}};
-                        window._rpc[seq] = {{resolve, reject}};
-                    }});
-                }};
-            }}
-
-            // Dynamic Proxy to handle ANY method call from frontend (hide, center, etc.)
-            try {{
-                const existing = window.pytron;
-                window.pytron = new Proxy(existing || {{}}, {{
-                    get: function(target, prop) {{
-                        if (prop in target) return target[prop];
-                        // If not found, assume it's a bridge call
-                        return (...args) => window.__pytron_native_bridge(prop, args);
-                    }}
-                }});
-            }} catch (e) {{
-                // Skip proxy if window.pytron is read-only
-            }}
-            
-            // Standard Pollys & Asset Bridge
-            window.pytron_drag = () => window.__pytron_native_bridge('pytron_drag', []);
-            window.pytron_minimize = () => window.__pytron_native_bridge('pytron_minimize', []);
-            window.pytron_get_asset = (key) => window.__pytron_native_bridge('pytron_get_asset', [key]);
-            
-            window['pytron_drag'] = window.pytron_drag;
-            window['pytron_minimize'] = window.pytron_minimize;
-            window['pytron_get_asset'] = window.pytron_get_asset;
-            window['__pytron_vap_get'] = window.pytron_get_asset; 
-
-        }})();
-        """
-        self.eval(init_js)
-
-        # Force Resizable Update (Fix gray maximize button)
-        # Sometimes init flag is overridden by window style defaults in Electron
-        self.adapter.send({"action": "set_resizable", "resizable": True})
 
     @property
     def hwnd(self):
@@ -457,13 +460,22 @@ class ChromeWebView(Webview):
                 self.logger.debug(
                     f"Re-applying Curvature for event: {payload.get('event')}"
                 )
-                try:
-                    import asyncio
+                # asyncio.create_task() requires a running event loop, which is NOT
+                # guaranteed here — this is called from a plain IPC reader thread.
+                # Use a daemon thread with a short sleep instead (same effect, always safe).
+                import threading
+                import time
 
-                    asyncio.create_task(self._reapply_curvature_delayed())
-                except:
-                    # Fallback for non-async environments
-                    self._platform.set_window_curvature(self.bridge.real_hwnd)
+                hwnd = self.bridge.real_hwnd
+
+                def _delayed_curvature():
+                    time.sleep(0.1)
+                    try:
+                        self._platform.set_window_curvature(hwnd)
+                    except Exception as e:
+                        self.logger.debug(f"Delayed curvature error: {e}")
+
+                threading.Thread(target=_delayed_curvature, daemon=True).start()
             return
 
         if msg_type == "ipc":

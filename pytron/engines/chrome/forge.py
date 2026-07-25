@@ -3,6 +3,7 @@ import zipfile
 import shutil
 import requests
 import sys
+import platform
 import logging
 import stat
 from ...exceptions import ForgeError
@@ -71,7 +72,14 @@ def _required_runtime_files():
 
 def get_electron_url():
     system = sys.platform  # 'win32', 'darwin', or 'linux'
-    arch = "x64"  # Default to x64 for now
+
+    machine = platform.machine().lower()
+    if machine in ("arm64", "aarch64"):
+        arch = "arm64"
+    elif machine in ("armv7l", "armv6l"):
+        arch = "armv7l"
+    else:
+        arch = "x64"
 
     if system == "win32":
         return f"https://github.com/electron/electron/releases/download/v{ELECTRON_VERSION}/electron-v{ELECTRON_VERSION}-win32-{arch}.zip"
