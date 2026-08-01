@@ -17,7 +17,7 @@ import hashlib
 
 
 def _compute_spec_hash(context: BuildContext, makespec_cmd: list) -> str:
-    """Computes a SHA-256 fingerprint of the makespec arguments and configuration manifests."""
+    """Computes a SHA-256 fingerprint of the makespec arguments, manifests, and environment packages."""
     h = hashlib.sha256()
     h.update(" ".join(makespec_cmd).encode("utf-8"))
 
@@ -34,6 +34,28 @@ def _compute_spec_hash(context: BuildContext, makespec_cmd: list) -> str:
                 h.update(manifest_path.read_bytes())
             except Exception:
                 pass
+
+    # Include virtual environment package fingerprint (.dist-info / .egg-info names)
+    try:
+        from ..commands.helpers import get_python_executable, get_venv_site_packages
+
+        py_exe = get_python_executable()
+        site_paths = get_venv_site_packages(py_exe)
+        if isinstance(site_paths, (str, Path)):
+            site_paths = [site_paths]
+        for sp in site_paths:
+            sp_str = str(sp)
+            if sp_str and os.path.exists(sp_str) and os.path.isdir(sp_str):
+                pkg_names = sorted(
+                    [
+                        name
+                        for name in os.listdir(sp_str)
+                        if name.endswith((".dist-info", ".egg-info"))
+                    ]
+                )
+                h.update(",".join(pkg_names).encode("utf-8"))
+    except Exception:
+        pass
 
     return h.hexdigest()
 
