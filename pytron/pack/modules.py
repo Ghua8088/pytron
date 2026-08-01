@@ -45,7 +45,12 @@ class FrontendModule(BuildModule):
         if not node_modules.exists() or force_install:
             log(f"Installing frontend dependencies ({manager})...", style="dim")
             try:
-                cmd = [manager, "install"]
+                # On Windows, npm/yarn/pnpm/bun are .cmd batch scripts and need
+                # cmd /c to be invoked without shell=True on a raw string.
+                if sys.platform == "win32":
+                    cmd = ["cmd", "/c", manager, "install"]
+                else:
+                    cmd = [manager, "install"]
                 subprocess.run(cmd, cwd=str(frontend_dir), check=True)
             except Exception as e:
                 log(f"Frontend install failed: {e}", style="error")
@@ -67,7 +72,10 @@ class FrontendModule(BuildModule):
                     pass
 
         try:
-            cmd = [manager, "run", "build"]
+            if sys.platform == "win32":
+                cmd = ["cmd", "/c", manager, "run", "build"]
+            else:
+                cmd = [manager, "run", "build"]
             subprocess.run(cmd, cwd=str(frontend_dir), check=True)
             log("Frontend build completed.", style="success")
         except Exception as e:
