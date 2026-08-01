@@ -27,12 +27,12 @@ dependencies = [
   "pydantic",
   "importlib-metadata; python_version < '3.8'",
   "pyinstaller",
-  "Pillow",
+  "Pillow>=12.3.0",   # CVE fixes: PYSEC-2026-2253..2257, 3451..3496
   "rich",
   "comtypes; sys_platform == 'win32'",
-  "cryptography",
+  "cryptography>=48.0.1",  # CVE fixes: PYSEC-2026-35,36, GHSA-537c-gmf6-5ccf
   "keyring",
-  "requests",
+  "requests>=2.33.0",  # CVE fix: PYSEC-2026-2275
   "Cython",
   "python-xlib; sys_platform == 'linux'"
 ]
@@ -51,9 +51,9 @@ core = [
   "watchfiles",
   "pydantic",
   "importlib-metadata; python_version < '3.8'",
-  "Pillow",
+  "Pillow>=12.3.0",
   "rich",
-  "requests",
+  "requests>=2.33.0",
   "comtypes; sys_platform == 'win32'",
   "python-xlib; sys_platform == 'linux'"
 ]

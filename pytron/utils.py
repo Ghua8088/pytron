@@ -1,6 +1,7 @@
 import sys
 import os
 import threading
+import tempfile
 import importlib
 import importlib.util
 
@@ -262,7 +263,7 @@ def _log_shield(msg):
         if sys.platform == "win32":
             log_path = "C:/pytron_debug.log"
         else:
-            log_path = "/tmp/pytron_debug.log"
+            log_path = os.path.join(tempfile.gettempdir(), "pytron_debug.log")
 
         try:
             with open(log_path, "a") as f:

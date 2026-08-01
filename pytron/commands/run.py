@@ -416,7 +416,7 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
                         log("Manual restart triggered...", style="info")
                         start_app()
                     elif char == "c":
-                        os.system("cls" if sys.platform == "win32" else "clear")
+                        os.system("cls" if sys.platform == "win32" else "clear")  # nosec B605 - hardcoded command, no user input
                         print_dev_menu()
                     elif char == "q":
                         log("Stopping dev mode...", style="info")

@@ -45,8 +45,8 @@ class FrontendModule(BuildModule):
         if not node_modules.exists() or force_install:
             log(f"Installing frontend dependencies ({manager})...", style="dim")
             try:
-                cmd = f"{manager} install"
-                subprocess.run(cmd, cwd=str(frontend_dir), shell=True, check=True)
+                cmd = [manager, "install"]
+                subprocess.run(cmd, cwd=str(frontend_dir), check=True)
             except Exception as e:
                 log(f"Frontend install failed: {e}", style="error")
                 return
@@ -67,8 +67,8 @@ class FrontendModule(BuildModule):
                     pass
 
         try:
-            cmd = f"{manager} run build"
-            subprocess.run(cmd, cwd=str(frontend_dir), shell=True, check=True)
+            cmd = [manager, "run", "build"]
+            subprocess.run(cmd, cwd=str(frontend_dir), check=True)
             log("Frontend build completed.", style="success")
         except Exception as e:
             log(f"Frontend build failed: {e}", style="error")
