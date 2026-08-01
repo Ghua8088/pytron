@@ -192,7 +192,8 @@ class ChromeWebView(Webview):
         self.adapter.bind_raw(self._handle_ipc_message)
         self._pending_geometry = []
 
-        # 5. Initialize Window & Bindings
+        # 5. Setup Icon & Create Window
+        self._setup_icon(config)
         self.w = self.bridge.create(
             config.get("debug", False), self, root_path=root_path
         )
@@ -200,7 +201,7 @@ class ChromeWebView(Webview):
         self._ipc_comp.init_core_bindings()
 
         self.set_title(config.get("title", "Pytron App"))
-        self._setup_icon(config)
+
 
         w, h = config.get("dimensions", [800, 600])
         self.set_size(w, h)

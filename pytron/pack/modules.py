@@ -789,7 +789,8 @@ class IconModule(BuildModule):
             )
             return
 
-        icon_path = Path(icon_path)
+        icon_path = Path(icon_path).resolve()
+        context.app_icon = str(icon_path)
 
         # 3. High-Res Conversion & Platform Specifics
         if icon_path.suffix.lower() == ".png":
