@@ -13,17 +13,38 @@ from .metadata import MetadataEditor
 from .pipeline import BuildContext
 
 
+import hashlib
+
+
+def _compute_spec_hash(context: BuildContext, makespec_cmd: list) -> str:
+    """Computes a SHA-256 fingerprint of the makespec arguments and dependency manifests."""
+    h = hashlib.sha256()
+    h.update(" ".join(makespec_cmd).encode("utf-8"))
+
+    # Include dependency manifests if present
+    for manifest_name in ["requirements.json", "requirements.txt", "pyproject.toml"]:
+        manifest_path = context.script_dir / manifest_name
+        if manifest_path.exists():
+            try:
+                h.update(manifest_path.read_bytes())
+            except Exception:
+                pass
+
+    # Include script modification timestamp
+    try:
+        if context.script.exists():
+            h.update(str(context.script.stat().st_mtime).encode("utf-8"))
+    except Exception:
+        pass
+
+    return h.hexdigest()
+
+
 def run_pyinstaller_build(context: BuildContext):
     """
     Core PyInstaller compiler stage.
     """
     try:
-        log("Generating spec file...", style="info")
-        context.progress.update(
-            context.task_id, description="Generating Spec...", completed=30
-        )
-
-        # 1. Resolve Platform-Specific Libs
         # 1. Resolve Platform-Specific Libs
         from .utils import get_native_engine_binaries
 
@@ -44,11 +65,6 @@ def run_pyinstaller_build(context: BuildContext):
         else:
             makespec_cmd.append("--onedir")
 
-        # Console handling
-        # Note: We'd ideally have this in the context, but for now we read from context.settings/args if available
-        # In this refactor, we'll assume context has what it needs.
-        # For simplicity, if --console was passed to CLI, we should have it in extra_args or similar.
-        # But let's check settings for now.
         if context.settings.get("console"):
             makespec_cmd.append("--console")
         else:
@@ -61,9 +77,6 @@ def run_pyinstaller_build(context: BuildContext):
                 makespec_cmd.append(f"--add-binary={bin_src}{os.pathsep}{dll_dest}")
 
         # Add Scripts
-        # For secure builds, we add BOTH the bootstrap and the original script
-        # PyInstaller will analyze both for dependencies, but bootstrap (first)
-        # stays as the primary entry point script.
         makespec_cmd.append(str(context.script))
 
         if context.is_secure and hasattr(context, "original_script"):
@@ -98,7 +111,6 @@ def run_pyinstaller_build(context: BuildContext):
         forced_pkgs = context.settings.get("force-package", [])
         if forced_pkgs:
             for pkg in forced_pkgs:
-                # Use collect-all to ensure data files (like .pyi stubs for lazy_loader) are included
                 makespec_cmd.append(f"--collect-all={pkg}")
             log(f"Forcing collect-all for packages: {forced_pkgs}", style="dim")
 
@@ -119,16 +131,53 @@ def run_pyinstaller_build(context: BuildContext):
                     f"Warning: Splash image not found at {splash_path}", style="warning"
                 )
 
-        # Run Makespec
-        log(f"Running makespec: {' '.join(makespec_cmd)}", style="dim")
-        makespec_ret = run_command_with_output(makespec_cmd, style="dim")
-        if makespec_ret != 0:
-            return 1
-
+        # Spec Cache Check
         spec_file = Path(f"{context.out_name}.spec")
-        if not spec_file.exists():
-            log(f"Error: spec file {spec_file} not found", style="error")
-            return 1
+        spec_hash = _compute_spec_hash(context, makespec_cmd)
+
+        context.build_dir.mkdir(parents=True, exist_ok=True)
+        hash_file = context.build_dir / f"{context.out_name}.spec.hash"
+
+        force_fresh = (
+            context.settings.get("force_makespec", False)
+            or "--clean" in context.extra_args
+        )
+
+        reuse_spec = False
+        if spec_file.exists() and hash_file.exists() and not force_fresh:
+            try:
+                cached_hash = hash_file.read_text(encoding="utf-8").strip()
+                if cached_hash == spec_hash:
+                    reuse_spec = True
+            except Exception:
+                pass
+
+        if reuse_spec:
+            log(
+                f"Reusing existing spec file {spec_file.name} (configuration unchanged)",
+                style="info",
+            )
+            context.progress.update(
+                context.task_id, description="Reusing Spec...", completed=35
+            )
+        else:
+            log("Generating spec file...", style="info")
+            context.progress.update(
+                context.task_id, description="Generating Spec...", completed=30
+            )
+            log(f"Running makespec: {' '.join(makespec_cmd)}", style="dim")
+            makespec_ret = run_command_with_output(makespec_cmd, style="dim")
+            if makespec_ret != 0:
+                return 1
+
+            if not spec_file.exists():
+                log(f"Error: spec file {spec_file} not found", style="error")
+                return 1
+
+            try:
+                hash_file.write_text(spec_hash, encoding="utf-8")
+            except Exception:
+                pass
 
         # Fortress / Spec Optimization Hook
         if (
@@ -153,9 +202,12 @@ def run_pyinstaller_build(context: BuildContext):
             "-m",
             "PyInstaller",
             "--noconfirm",
-            "--clean",
-            str(spec_file),
         ]
+        # Only add --clean when not reusing cached spec
+        if not reuse_spec:
+            build_cmd.append("--clean")
+
+        build_cmd.append(str(spec_file))
 
         context.progress.update(
             context.task_id, description="Compiling...", completed=50
@@ -174,3 +226,4 @@ def run_pyinstaller_build(context: BuildContext):
     except Exception as e:
         log(f"PyInstaller build failed: {e}", style="error")
         return 1
+
