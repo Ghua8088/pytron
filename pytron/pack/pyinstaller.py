@@ -17,25 +17,23 @@ import hashlib
 
 
 def _compute_spec_hash(context: BuildContext, makespec_cmd: list) -> str:
-    """Computes a SHA-256 fingerprint of the makespec arguments and dependency manifests."""
+    """Computes a SHA-256 fingerprint of the makespec arguments and configuration manifests."""
     h = hashlib.sha256()
     h.update(" ".join(makespec_cmd).encode("utf-8"))
 
-    # Include dependency manifests if present
-    for manifest_name in ["requirements.json", "requirements.txt", "pyproject.toml"]:
+    # Include dependency & project configuration manifests if present
+    for manifest_name in [
+        "requirements.json",
+        "requirements.txt",
+        "pyproject.toml",
+        "settings.json",
+    ]:
         manifest_path = context.script_dir / manifest_name
         if manifest_path.exists():
             try:
                 h.update(manifest_path.read_bytes())
             except Exception:
                 pass
-
-    # Include script modification timestamp
-    try:
-        if context.script.exists():
-            h.update(str(context.script.stat().st_mtime).encode("utf-8"))
-    except Exception:
-        pass
 
     return h.hexdigest()
 
