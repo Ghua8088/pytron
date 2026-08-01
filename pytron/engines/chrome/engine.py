@@ -310,9 +310,9 @@ class ChromeWebView(Webview):
             }}
 
             // Standard Pollys & Asset Bridge
-            window.pytron_drag = () => window.__pytron_native_bridge('pytron_drag', []);
-            window.pytron_minimize = () => window.__pytron_native_bridge('pytron_minimize', []);
-            window.pytron_get_asset = (key) => window.__pytron_native_bridge('pytron_get_asset', [key]);
+            window.pytron_drag = () => {{ if (window.__pytron_native_bridge && window.__pytron_native_bridge.emit) window.__pytron_native_bridge.emit('pytron_drag', {{ data: [] }}); }};
+            window.pytron_minimize = () => {{ if (window.__pytron_native_bridge && window.__pytron_native_bridge.emit) window.__pytron_native_bridge.emit('pytron_minimize', {{ data: [] }}); }};
+            window.pytron_get_asset = (key) => {{ if (window.__pytron_native_bridge && window.__pytron_native_bridge.emit) window.__pytron_native_bridge.emit('pytron_get_asset', {{ data: [key] }}); }};
 
             window['pytron_drag'] = window.pytron_drag;
             window['pytron_minimize'] = window.pytron_minimize;
