@@ -34,8 +34,10 @@ class ChromeBridge:
                 "options": {
                     "debug": bool(debug),
                     "root": root_path,
+                    "app_id": self.adapter.config.get("app_id", ""),
                     "frameless": self.adapter.config.get("frameless", False),
                     "icon": self.adapter.config.get("icon", ""),
+
                     "width": self.adapter.config.get("width", 1024),
                     "height": self.adapter.config.get("height", 768),
                     "title": self.adapter.config.get("title", "Pytron"),

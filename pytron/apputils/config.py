@@ -190,12 +190,14 @@ class ConfigComponent(AppComponent):
             c if c.isalnum() or c in ("-", "_") else "_" for c in title
         ).strip("_")
         app_id = self._register_app_id(title, safe_title)
+        self.config["app_id"] = app_id
 
         # Single Instance Guard
         if self.config.get("single_instance", True):
             self._setup_single_instance(app_id)
 
         return title, safe_title
+
 
     def _register_app_id(self, title, safe_title):
         author = self.config.get("author", "PytronUser")

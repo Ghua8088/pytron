@@ -424,9 +424,12 @@ function createWindow(options = {}) {
     // Set Windows AppUserModelID so Taskbar groups under custom App ID and displays app icon
     if (process.platform === 'win32') {
         const titleStr = options.title || 'PytronApp';
-        const appId = `Pytron.${titleStr.replace(/[^a-zA-Z0-9]/g, '')}`;
+        const fallbackAppId = `PytronUser.${titleStr.replace(/[^a-zA-Z0-9]/g, '')}.App`;
+        const appId = options.app_id || fallbackAppId;
         app.setAppUserModelId(appId);
+        log(`Set AppUserModelID: ${appId}`);
     }
+
 
     const config = { ...WINDOW_CONFIG, ...options };
 
