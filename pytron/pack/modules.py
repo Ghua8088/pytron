@@ -255,7 +255,6 @@ class EngineModule(BuildModule):
         editor.update(renamed_exe, context.app_icon, context.settings)
 
 
-
 class MetadataModule(BuildModule):
     def post_build(self, context: BuildContext):
         log("Applying application metadata...", style="dim")
