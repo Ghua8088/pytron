@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, protocol, shell, session, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, shell, session, Notification, nativeImage } = require('electron');
 const path = require('path');
 const net = require('net');
 const fs = require('fs');
@@ -246,7 +246,14 @@ function handlePythonCommand(cmd) {
                 if (mainWindow) mainWindow.setTitle(command.title);
                 break;
             case 'set_icon':
-                if (mainWindow && command.icon) mainWindow.setIcon(command.icon);
+                if (mainWindow && command.icon && fs.existsSync(command.icon)) {
+                    try {
+                        const img = nativeImage.createFromPath(command.icon);
+                        if (!img.isEmpty()) mainWindow.setIcon(img);
+                    } catch (e) {
+                        log(`Failed to update icon: ${e.message}`);
+                    }
+                }
                 break;
             case 'set_size':
                 if (mainWindow) {
@@ -413,12 +420,27 @@ function createWindow(options = {}) {
     if (mainWindow) return;
 
     log("Creating BrowserWindow...");
+
+    // Set Windows AppUserModelID so Taskbar groups under custom App ID and displays app icon
+    if (process.platform === 'win32') {
+        const titleStr = options.title || 'PytronApp';
+        const appId = `Pytron.${titleStr.replace(/[^a-zA-Z0-9]/g, '')}`;
+        app.setAppUserModelId(appId);
+    }
+
     const config = { ...WINDOW_CONFIG, ...options };
 
-    // Icon (Resolve absolute path if provided)
+    // Icon (Resolve and convert via nativeImage if provided)
     if (options.icon) {
         if (fs.existsSync(options.icon)) {
-            config.icon = options.icon; // Electron handles absolute paths fine
+            try {
+                const img = nativeImage.createFromPath(options.icon);
+                if (!img.isEmpty()) {
+                    config.icon = img;
+                }
+            } catch (e) {
+                log(`Failed to create NativeImage from icon: ${e.message}`);
+            }
         } else {
             log(`Warning: Icon file not found: ${options.icon}`);
         }
