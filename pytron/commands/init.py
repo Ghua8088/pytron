@@ -140,7 +140,6 @@ def cmd_init(args: argparse.Namespace) -> int:
         "author": "Your Name",
         "app_id": f"com.yourname.{target.name.lower().replace('-', '_')}",
         "description": "A brief description of your app",
-
         "copyright": f"Copyright © 2026 Your Name",
         "pytron_version": __version__,
         # Window Configuration

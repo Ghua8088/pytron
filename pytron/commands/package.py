@@ -140,7 +140,6 @@ def cmd_package(args: argparse.Namespace) -> int:
         task_id=task,
     )
 
-
     # Pass through some CLI flags to context for module use
     ctx.smart_assets = args.smart_assets
     ctx.build_installer = args.installer

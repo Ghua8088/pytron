@@ -198,7 +198,6 @@ class ConfigComponent(AppComponent):
 
         return title, safe_title
 
-
     def _register_app_id(self, title, safe_title):
         author = self.config.get("author", "PytronUser")
         if not safe_title:

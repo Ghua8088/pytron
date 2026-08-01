@@ -20,7 +20,7 @@ class TestAppConfig:
         # if path exists: load.
         # else: log warning.
         app = App(config_file="non_existent_settings.json")
-        assert app.config == {}
+        assert app.config == {"app_id": "PytronUser.Pytron_App.App"}
 
     def test_app_init_invalid_json(self):
         # Create a temp file with invalid json

@@ -72,6 +72,29 @@ let buffer = Buffer.alloc(0);
 let initScripts = [];
 let isAppReady = false;
 let pendingCommands = [];
+let pendingIcon = null;
+
+function resolveIconPath(iconPath) {
+    if (!iconPath) return null;
+    if (fs.existsSync(iconPath)) return iconPath;
+    if (!path.isAbsolute(iconPath) && PROJECT_ROOT) {
+        const absPath = path.join(PROJECT_ROOT, iconPath);
+        if (fs.existsSync(absPath)) return absPath;
+    }
+    return null;
+}
+
+function processNativeImage(img) {
+    if (!img || img.isEmpty()) return null;
+    try {
+        const size = img.getSize();
+        if (size.width > 256 || size.height > 256) {
+            return img.resize({ width: 256, height: 256, quality: 'high' });
+        }
+    } catch (e) { }
+    return img;
+}
+
 
 function connectToPytron() {
     const portArg = process.argv.find(arg => arg.startsWith('--pytron-port='));
@@ -246,12 +269,48 @@ function handlePythonCommand(cmd) {
                 if (mainWindow) mainWindow.setTitle(command.title);
                 break;
             case 'set_icon':
-                if (mainWindow && command.icon && fs.existsSync(command.icon)) {
-                    try {
-                        const img = nativeImage.createFromPath(command.icon);
-                        if (!img.isEmpty()) mainWindow.setIcon(img);
-                    } catch (e) {
-                        log(`Failed to update icon: ${e.message}`);
+                if (command.icon) {
+                    const resolvedIcon = resolveIconPath(command.icon);
+                    if (resolvedIcon) {
+                        try {
+                            const rawImg = nativeImage.createFromPath(resolvedIcon);
+                            const img = processNativeImage(rawImg);
+                            if (img && !img.isEmpty()) {
+                                pendingIcon = img;
+                                if (mainWindow && !mainWindow.isDestroyed()) {
+                                    mainWindow.setIcon(img);
+                                    log(`Updated window icon: ${resolvedIcon}`);
+                                }
+                            }
+                        } catch (e) {
+                            log(`Failed to update icon: ${e.message}`);
+                        }
+                    } else {
+                        log(`Icon file not found: ${command.icon}`);
+                    }
+                }
+                break;
+            case 'create_tray':
+                if (command.icon) {
+                    const resolvedTrayIcon = resolveIconPath(command.icon);
+                    if (resolvedTrayIcon) {
+                        try {
+                            const { Tray } = require('electron');
+                            const rawImg = nativeImage.createFromPath(resolvedTrayIcon);
+                            const img = processNativeImage(rawImg);
+                            if (img && !img.isEmpty()) {
+                                if (global._pytron_tray) {
+                                    global._pytron_tray.destroy();
+                                }
+                                global._pytron_tray = new Tray(img);
+                                if (command.tooltip) {
+                                    global._pytron_tray.setToolTip(command.tooltip);
+                                }
+                                log(`Created system tray icon: ${resolvedTrayIcon}`);
+                            }
+                        } catch (e) {
+                            log(`Failed to create tray icon: ${e.message}`);
+                        }
                     }
                 }
                 break;
@@ -421,40 +480,29 @@ function createWindow(options = {}) {
 
     log("Creating BrowserWindow...");
 
-    // Set Windows AppUserModelID so Taskbar groups under custom App ID and displays app icon
-    if (process.platform === 'win32') {
-        const titleStr = options.title || 'PytronApp';
-        const fallbackAppId = `PytronUser.${titleStr.replace(/[^a-zA-Z0-9]/g, '')}.App`;
-        const appId = options.app_id || fallbackAppId;
-        app.setAppUserModelId(appId);
-        log(`Set AppUserModelID: ${appId}`);
+    // Set Windows AppUserModelID ONLY if app_id is explicitly provided
+    if (process.platform === 'win32' && options.app_id) {
+        app.setAppUserModelId(options.app_id);
+        log(`Set AppUserModelID: ${options.app_id}`);
     }
 
 
     const config = { ...WINDOW_CONFIG, ...options };
 
     // Icon Resolution:
-    // 1) Try options.icon file if passed and exists
-    // 2) Fallback to extracting PE icon from process.execPath (the patched executable itself!)
-    let windowIcon = null;
-    if (options.icon && fs.existsSync(options.icon)) {
+    // 1) Try options.icon file if passed and resolved
+    // 2) Fallback to pendingIcon if previously set via set_icon
+    let windowIcon = pendingIcon;
+    const resolvedIconPath = resolveIconPath(options.icon);
+    if (resolvedIconPath) {
         try {
-            const img = nativeImage.createFromPath(options.icon);
-            if (!img.isEmpty()) windowIcon = img;
-        } catch (e) {
-            log(`Failed to create NativeImage from icon path: ${e.message}`);
-        }
-    }
-
-    if (!windowIcon && process.platform === 'win32') {
-        try {
-            const exeImg = nativeImage.createFromPath(process.execPath);
-            if (!exeImg.isEmpty()) {
-                windowIcon = exeImg;
-                log(`Loaded embedded PE icon from process.execPath: ${process.execPath}`);
+            const img = nativeImage.createFromPath(resolvedIconPath);
+            if (!img.isEmpty()) {
+                windowIcon = img;
+                log(`Loaded window icon from: ${resolvedIconPath}`);
             }
         } catch (e) {
-            log(`Failed to extract PE icon from process.execPath: ${e.message}`);
+            log(`Failed to create NativeImage from icon path: ${e.message}`);
         }
     }
 
@@ -496,6 +544,28 @@ function createWindow(options = {}) {
     config.show = false; // Always start false, show on ready
 
     mainWindow = new BrowserWindow(config);
+
+    if (windowIcon) {
+        try {
+            mainWindow.setIcon(windowIcon);
+            log(`Explicitly applied window icon to mainWindow via setIcon`);
+        } catch (e) {
+            log(`Failed to set icon on mainWindow: ${e.message}`);
+        }
+    } else if (process.platform === 'win32') {
+        try {
+            app.getFileIcon(process.execPath).then(exeImg => {
+                if (mainWindow && !mainWindow.isDestroyed() && exeImg && !exeImg.isEmpty()) {
+                    mainWindow.setIcon(exeImg);
+                    log(`Loaded embedded PE icon from process.execPath: ${process.execPath}`);
+                }
+            }).catch(e => {
+                log(`Failed to extract PE icon from process.execPath: ${e.message}`);
+            });
+        } catch (e) {
+            log(`Failed to trigger getFileIcon for process.execPath: ${e.message}`);
+        }
+    }
 
     // SEND HWND TO PYTHON (Critical for Taskbar/Native Ops)
     try {

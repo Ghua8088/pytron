@@ -37,7 +37,6 @@ class ChromeBridge:
                     "app_id": self.adapter.config.get("app_id", ""),
                     "frameless": self.adapter.config.get("frameless", False),
                     "icon": self.adapter.config.get("icon", ""),
-
                     "width": self.adapter.config.get("width", 1024),
                     "height": self.adapter.config.get("height", 768),
                     "title": self.adapter.config.get("title", "Pytron"),
@@ -204,7 +203,6 @@ class ChromeWebView(Webview):
 
         self.set_title(config.get("title", "Pytron App"))
 
-
         w, h = config.get("dimensions", [800, 600])
         self.set_size(w, h)
         if config.get("center", True):
@@ -331,22 +329,59 @@ class ChromeWebView(Webview):
 
     def _setup_icon(self, config):
         """Resolves and sets the window icon."""
-        icon_raw = config.get("icon") or config.get("app_icon")
+        icon_raw = (
+            config.get("icon")
+            or config.get("app_icon")
+            or self.adapter.config.get("icon")
+        )
         if icon_raw:
+            resolved = None
             if os.path.exists(icon_raw):
-                config["icon"] = os.path.abspath(icon_raw)
+                resolved = os.path.abspath(icon_raw)
             else:
-                possible = os.path.join(self._routing_comp.root_path, icon_raw)
-                if os.path.exists(possible):
-                    config["icon"] = os.path.abspath(possible)
-                elif getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+                from ...utils import get_resource_path
+
+                res = get_resource_path(icon_raw)
+                if res and os.path.exists(res):
+                    resolved = os.path.abspath(res)
+
+                root = (
+                    getattr(self._routing_comp, "root_path", None)
+                    if hasattr(self, "_routing_comp")
+                    else None
+                )
+                if not resolved and root:
+                    possible = os.path.join(root, icon_raw)
+                    if os.path.exists(possible):
+                        resolved = os.path.abspath(possible)
+                if (
+                    not resolved
+                    and getattr(sys, "frozen", False)
+                    and hasattr(sys, "_MEIPASS")
+                ):
                     meipass_cand = os.path.join(sys._MEIPASS, icon_raw)
                     if os.path.exists(meipass_cand):
-                        config["icon"] = os.path.abspath(meipass_cand)
+                        resolved = os.path.abspath(meipass_cand)
+
+            if not resolved:
+                from ...utils import get_resource_path
+
+                for cand in [
+                    get_resource_path(os.path.join("resources", "app_icon.ico")),
+                    get_resource_path(os.path.join("resources", "app_icon.png")),
+                    get_resource_path("app_icon.ico"),
+                    get_resource_path("app_icon.png"),
+                ]:
+                    if cand and os.path.exists(cand):
+                        resolved = os.path.abspath(cand)
+                        break
+
+            target_icon = resolved or icon_raw
+            config["icon"] = target_icon
+            self.adapter.config["icon"] = target_icon
 
         if config.get("icon"):
             self.set_icon(config["icon"])
-
 
     def _resolve_chrome_binary(self, config) -> Optional[str]:
         """Chrome-specific binary detection logic."""
@@ -426,6 +461,10 @@ class ChromeWebView(Webview):
                 self.logger.info(f"Acquired Electron HWND: {self.bridge.real_hwnd}")
                 # Initial curvature enforcement
                 self._platform.set_window_curvature(self.bridge.real_hwnd)
+                # Enforce native window icon on HWND
+                icon_path = self.config.get("icon") or self.adapter.config.get("icon")
+                if icon_path and hasattr(self._platform, "set_window_icon"):
+                    self._platform.set_window_icon(self.bridge.real_hwnd, icon_path)
             except Exception as e:
                 self.logger.error(f"Failed to process window_created: {e}")
 

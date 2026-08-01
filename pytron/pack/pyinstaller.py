@@ -226,4 +226,3 @@ def run_pyinstaller_build(context: BuildContext):
     except Exception as e:
         log(f"PyInstaller build failed: {e}", style="error")
         return 1
-
