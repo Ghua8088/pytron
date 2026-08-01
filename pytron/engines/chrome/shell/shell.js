@@ -433,21 +433,35 @@ function createWindow(options = {}) {
 
     const config = { ...WINDOW_CONFIG, ...options };
 
-    // Icon (Resolve and convert via nativeImage if provided)
-    if (options.icon) {
-        if (fs.existsSync(options.icon)) {
-            try {
-                const img = nativeImage.createFromPath(options.icon);
-                if (!img.isEmpty()) {
-                    config.icon = img;
-                }
-            } catch (e) {
-                log(`Failed to create NativeImage from icon: ${e.message}`);
-            }
-        } else {
-            log(`Warning: Icon file not found: ${options.icon}`);
+    // Icon Resolution:
+    // 1) Try options.icon file if passed and exists
+    // 2) Fallback to extracting PE icon from process.execPath (the patched executable itself!)
+    let windowIcon = null;
+    if (options.icon && fs.existsSync(options.icon)) {
+        try {
+            const img = nativeImage.createFromPath(options.icon);
+            if (!img.isEmpty()) windowIcon = img;
+        } catch (e) {
+            log(`Failed to create NativeImage from icon path: ${e.message}`);
         }
     }
+
+    if (!windowIcon && process.platform === 'win32') {
+        try {
+            const exeImg = nativeImage.createFromPath(process.execPath);
+            if (!exeImg.isEmpty()) {
+                windowIcon = exeImg;
+                log(`Loaded embedded PE icon from process.execPath: ${process.execPath}`);
+            }
+        } catch (e) {
+            log(`Failed to extract PE icon from process.execPath: ${e.message}`);
+        }
+    }
+
+    if (windowIcon) {
+        config.icon = windowIcon;
+    }
+
 
     // Enhanced Window Configuration
     config.resizable = options.resizable !== undefined ? !!options.resizable : true;

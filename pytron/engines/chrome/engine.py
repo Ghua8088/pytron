@@ -331,7 +331,7 @@ class ChromeWebView(Webview):
 
     def _setup_icon(self, config):
         """Resolves and sets the window icon."""
-        icon_raw = config.get("icon")
+        icon_raw = config.get("icon") or config.get("app_icon")
         if icon_raw:
             if os.path.exists(icon_raw):
                 config["icon"] = os.path.abspath(icon_raw)
@@ -339,9 +339,14 @@ class ChromeWebView(Webview):
                 possible = os.path.join(self._routing_comp.root_path, icon_raw)
                 if os.path.exists(possible):
                     config["icon"] = os.path.abspath(possible)
+                elif getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+                    meipass_cand = os.path.join(sys._MEIPASS, icon_raw)
+                    if os.path.exists(meipass_cand):
+                        config["icon"] = os.path.abspath(meipass_cand)
 
         if config.get("icon"):
             self.set_icon(config["icon"])
+
 
     def _resolve_chrome_binary(self, config) -> Optional[str]:
         """Chrome-specific binary detection logic."""
