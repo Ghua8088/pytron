@@ -162,7 +162,7 @@ impl NativeWebview {
             handle_pytron_protocol(request, protocol_root.clone(), cbs_for_protocol.clone())
         });
         
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         {
              builder = builder.with_https_scheme(true);
         }
