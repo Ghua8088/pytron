@@ -357,21 +357,32 @@ impl NativeWebview {
             }
         });
 
+        // On Linux, build() creates a WebView that renders internally but whose surface
+        // is never composited into the visible tao window → blank page despite working JS/IPC.
+        // build_gtk(vbox) properly embeds the WebView into the window's GTK container hierarchy.
+        #[cfg(target_os = "linux")]
+        let webview = {
+            use tao::platform::unix::WindowExtUnix;
+            use wry::WebViewBuilderExtUnix;
+            let vbox = window.default_vbox()
+                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    "Failed to get GTK VBox from tao window. Cannot embed WebView on Linux."
+                ))?;
+            builder.build_gtk(vbox)
+                .map_err(|e| {
+                    use raw_window_handle::HasRawWindowHandle;
+                    let handle_kind = format!("{:?}", window.raw_window_handle());
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                        "Failed to build WebView (GTK): {}\nHandle: {}", e, handle_kind
+                    ))
+                })?
+        };
+
+        #[cfg(not(target_os = "linux"))]
         let webview = builder.build()
-             .map_err(|e| {
-                 #[cfg(target_os = "linux")]
-                 {
-                     use raw_window_handle::HasRawWindowHandle;
-                     let handle_kind = format!("{:?}", window.raw_window_handle());
-                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                         "Failed to build WebView: {}\nHandle: {}", e, handle_kind
-                     ))
-                 }
-                 #[cfg(not(target_os = "linux"))]
-                 {
-                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to build WebView: {}", e))
-                 }
-             })?;
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                format!("Failed to build WebView: {}", e)
+            ))?;
 
         // Re-hide on Linux after successful build so it stays hidden until explicitly shown
         #[cfg(target_os = "linux")]
