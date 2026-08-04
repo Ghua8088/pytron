@@ -153,6 +153,23 @@ impl NativeWebview {
         let callbacks = Arc::new(Mutex::new(HashMap::<String, PyObject>::new()));
         let cbs_for_ipc = callbacks.clone();
 
+        // On Linux, new_gtk(vbox) embeds the WebView into the tao window's GTK container.
+        // Without this, build() creates a detached WebKit surface → blank page despite working JS.
+        // In wry 0.40.1, new_gtk() is the constructor (returns Self), not a terminal builder method.
+        #[cfg(target_os = "linux")]
+        let mut builder = {
+            use tao::platform::unix::WindowExtUnix;
+            use wry::WebViewBuilderExtUnix;
+            let vbox = window.default_vbox()
+                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    "Failed to get GTK VBox from tao window. Cannot embed WebView on Linux."
+                ))?;
+            WebViewBuilder::new_gtk(vbox)
+                .with_devtools(debug)
+                .with_url(&safe_url)
+        };
+
+        #[cfg(not(target_os = "linux"))]
         let mut builder = WebViewBuilder::new(&window)
             .with_devtools(debug)
             .with_url(&safe_url);
@@ -357,32 +374,21 @@ impl NativeWebview {
             }
         });
 
-        // On Linux, build() creates a WebView that renders internally but whose surface
-        // is never composited into the visible tao window → blank page despite working JS/IPC.
-        // build_gtk(vbox) properly embeds the WebView into the window's GTK container hierarchy.
-        #[cfg(target_os = "linux")]
-        let webview = {
-            use tao::platform::unix::WindowExtUnix;
-            use wry::WebViewBuilderExtUnix;
-            let vbox = window.default_vbox()
-                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                    "Failed to get GTK VBox from tao window. Cannot embed WebView on Linux."
-                ))?;
-            builder.build_gtk(vbox)
-                .map_err(|e| {
+        let webview = builder.build()
+            .map_err(|e| {
+                #[cfg(target_os = "linux")]
+                {
                     use raw_window_handle::HasRawWindowHandle;
                     let handle_kind = format!("{:?}", window.raw_window_handle());
                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
                         "Failed to build WebView (GTK): {}\nHandle: {}", e, handle_kind
                     ))
-                })?
-        };
-
-        #[cfg(not(target_os = "linux"))]
-        let webview = builder.build()
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                format!("Failed to build WebView: {}", e)
-            ))?;
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to build WebView: {}", e))
+                }
+            })?;
 
         // Re-hide on Linux after successful build so it stays hidden until explicitly shown
         #[cfg(target_os = "linux")]
