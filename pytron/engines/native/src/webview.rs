@@ -78,6 +78,17 @@ impl NativeWebview {
             std::env::set_var("GIO_USE_VFS", "local");
             std::env::set_var("GIO_MODULE_DIR", "/nonexistent");
             std::env::set_var("NO_AT_BRIDGE", "1");
+
+            // --- WEBKIT RENDERING FIX ---
+            // These MUST be set before GTK/WebKit initializes (i.e. before EventLoop::build).
+            // Setting them after window creation is too late — WebKit has already chosen
+            // its compositing path. This is the #1 cause of blank white pages on Linux.
+            if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
+                std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+            }
+            if std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").is_err() {
+                std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+            }
             
             // Force X11 on VMs for better stability/handle support.
             if std::env::var("WINIT_UNIX_BACKEND").is_err() {
@@ -117,14 +128,6 @@ impl NativeWebview {
         // Linux: workarounds for VMs and realization timing.
         #[cfg(target_os = "linux")]
         {
-            // Disable hardware acceleration: critical for VMware/VirtualBox.
-            if std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").is_err() {
-                std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
-            }
-            if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
-                std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-            }
-            
             // Give the window a moment to get realized on the X server.
             // Pumping the loop directly via glib crate causes symbol collisions with gi.
             std::thread::sleep(std::time::Duration::from_millis(10));
@@ -159,10 +162,14 @@ impl NativeWebview {
         let cbs_for_protocol = callbacks.clone();
         
         builder = builder.with_custom_protocol("pytron".into(), move |request| {
+            #[cfg(target_os = "linux")]
+            println!("[PYTRON LINUX PROTOCOL] URI='{}'  PATH='{}'",
+                request.uri().to_string(),
+                request.uri().path());
             handle_pytron_protocol(request, protocol_root.clone(), cbs_for_protocol.clone())
         });
         
-        #[cfg(any(target_os = "windows", target_os = "linux"))]
+        #[cfg(target_os = "windows")]
         {
              builder = builder.with_https_scheme(true);
         }
