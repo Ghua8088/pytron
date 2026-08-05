@@ -173,8 +173,11 @@ def run_pyinstaller_build(context: BuildContext):
                 cached_hash = hash_file.read_text(encoding="utf-8").strip()
                 if cached_hash == spec_hash:
                     reuse_spec = True
-            except Exception:
-                pass
+            except Exception as e:
+                log(
+                    f"Warning: failed to read spec hash cache {hash_file}: {e}",
+                    style="warning",
+                )
 
         if reuse_spec:
             log(
