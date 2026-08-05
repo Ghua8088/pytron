@@ -13,7 +13,7 @@ namespaces = false
 
 [project]
 name = "pytron-kit"
-version = "0.3.15.post6"
+version = "0.3.15.post7"
 description = "An Electron-like library for Python to build Cross Platform Apps"
 readme = "README.md"
 requires-python = ">=3.7"

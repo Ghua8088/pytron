@@ -200,18 +200,67 @@ class MetadataEditor:
         return bundled_binary
 
     def _update_linux(self, binary_path, icon_path, settings, dist_dir):
-        """Linux Fallback: Manual .desktop entry."""
+        """Linux: Write .desktop entry and convert icon to PNG."""
         out_name = binary_path.stem
         app_name = settings.get("title", out_name)
 
-        desktop_content = f"""[Desktop Entry]
-Type=Application
-Name={app_name}
-Exec=./{out_name}
-Icon=./icon.png
-Terminal=false
-"""
-        (dist_dir / f"{out_name}.desktop").write_text(desktop_content)
+        # Convert icon to a real PNG — Linux ignores .ico/.icns.
+        # Icon= in .desktop files needs an absolute path for portable apps.
+        icon_dest = dist_dir / "icon.png"
         if icon_path and os.path.exists(icon_path):
-            shutil.copy(icon_path, dist_dir / "icon.png")
+            icon_src = Path(icon_path)
+            try:
+                from PIL import Image
+
+                img = Image.open(icon_src)
+                # For ICO files, pick the largest available size
+                if hasattr(img, "n_frames") or icon_src.suffix.lower() in (
+                    ".ico",
+                    ".icns",
+                ):
+                    try:
+                        # ICO: grab the biggest size
+                        sizes = getattr(img, "ico", None)
+                        if sizes:
+                            img = img.ico.getimage(max(img.ico.sizes()))
+                    except Exception:
+                        pass
+                img = img.convert("RGBA")
+                img.save(icon_dest, "PNG")
+            except ImportError:
+                # Pillow not available — copy as-is and hope it's already a PNG
+                shutil.copy(icon_src, icon_dest)
+                log(
+                    "Pillow not found — icon may not display correctly on Linux. "
+                    "Install it with: pip install Pillow",
+                    style="warning",
+                )
+            except Exception as e:
+                log(f"Icon conversion failed: {e}", style="warning")
+                shutil.copy(icon_src, icon_dest)
+
+        # Icon= requires an absolute path in .desktop files for portable apps.
+        # At runtime, we resolve it relative to the binary using a launcher script.
+        launcher_name = f"{out_name}.sh"
+        launcher = dist_dir / launcher_name
+        launcher.write_text(
+            f"#!/bin/bash\n"
+            f'DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"\n'
+            f'exec "$DIR/{out_name}" "$@"\n'
+        )
+        launcher.chmod(0o755)
+
+        # Use the launcher as Exec so the app finds its files regardless of CWD.
+        # Icon path: use $DIR trick is not valid in .desktop, so we rely on
+        # the icon being in the same dir and use a fallback name match.
+        desktop_content = (
+            f"[Desktop Entry]\n"
+            f"Type=Application\n"
+            f"Name={app_name}\n"
+            f'Exec=bash -c \'cd "$(dirname "$0")" && ./{out_name}\' %k\n'
+            f"Icon={icon_dest.resolve()}\n"
+            f"Terminal=false\n"
+            f"Categories=Application;\n"
+        )
+        (dist_dir / f"{out_name}.desktop").write_text(desktop_content)
         return binary_path
