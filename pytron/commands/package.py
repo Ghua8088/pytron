@@ -117,11 +117,19 @@ def cmd_package(args: argparse.Namespace) -> int:
         IconModule,
     )
 
+    # Resolve icon to absolute path NOW (before CWD can drift during post_build)
+    resolved_icon = None
+    if args.icon:
+        icon_path = Path(args.icon)
+        if not icon_path.is_absolute():
+            icon_path = (script.parent / icon_path).resolve()
+        resolved_icon = str(icon_path) if icon_path.exists() else args.icon
+
     # Initialize Context
     ctx = BuildContext(
         script=script,
         out_name=out_name,
-        app_icon=args.icon,
+        app_icon=resolved_icon,
         settings=settings,
         engine=args.engine or ("chrome" if args.chrome else None),
         is_secure=args.secure,

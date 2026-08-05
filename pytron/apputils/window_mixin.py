@@ -81,7 +81,7 @@ class WindowComponent(AppComponent):
         icon = window_config.get("icon")
         if icon:
             # Resolve icon path relative to app root or via resource_path
-            from ..core import get_resource_path
+            from ..utils import get_resource_path
 
             resolved_icon = get_resource_path(icon)
 
@@ -90,10 +90,24 @@ class WindowComponent(AppComponent):
                 resolved_icon = os.path.join(self.app_root, icon)
 
             # If it's a PNG, check if a converted .ico exists (from packaging)
-            if resolved_icon.lower().endswith(".png"):
+            if not os.path.exists(resolved_icon) and resolved_icon.lower().endswith(
+                ".png"
+            ):
                 ico_path = resolved_icon.rsplit(".", 1)[0] + ".ico"
                 if os.path.exists(ico_path):
                     resolved_icon = ico_path
+
+            # Fallback to Pytron pack bundled runtime icons if raw file not found
+            if not os.path.exists(resolved_icon):
+                for cand in [
+                    get_resource_path(os.path.join("resources", "app_icon.ico")),
+                    get_resource_path(os.path.join("resources", "app_icon.png")),
+                    get_resource_path("app_icon.ico"),
+                    get_resource_path("app_icon.png"),
+                ]:
+                    if cand and os.path.exists(cand):
+                        resolved_icon = cand
+                        break
 
             if os.path.exists(resolved_icon):
                 self.logger.debug(f"Runtime: Applying window icon from {resolved_icon}")

@@ -112,7 +112,7 @@ def run_command_with_output(
             cwd=cwd,
             env=env,
             bufsize=1,
-            shell=shell,
+            shell=shell,  # nosec B602 - shell=False by default; callers are internal only
         )
 
         for line in process.stdout:

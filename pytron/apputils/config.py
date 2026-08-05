@@ -190,6 +190,7 @@ class ConfigComponent(AppComponent):
             c if c.isalnum() or c in ("-", "_") else "_" for c in title
         ).strip("_")
         app_id = self._register_app_id(title, safe_title)
+        self.config["app_id"] = app_id
 
         # Single Instance Guard
         if self.config.get("single_instance", True):

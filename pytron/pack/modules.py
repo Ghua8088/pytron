@@ -45,8 +45,13 @@ class FrontendModule(BuildModule):
         if not node_modules.exists() or force_install:
             log(f"Installing frontend dependencies ({manager})...", style="dim")
             try:
-                cmd = f"{manager} install"
-                subprocess.run(cmd, cwd=str(frontend_dir), shell=True, check=True)
+                # On Windows, npm/yarn/pnpm/bun are .cmd batch scripts and need
+                # cmd /c to be invoked without shell=True on a raw string.
+                if sys.platform == "win32":
+                    cmd = ["cmd", "/c", manager, "install"]
+                else:
+                    cmd = [manager, "install"]
+                subprocess.run(cmd, cwd=str(frontend_dir), check=True)
             except Exception as e:
                 log(f"Frontend install failed: {e}", style="error")
                 return
@@ -67,8 +72,11 @@ class FrontendModule(BuildModule):
                     pass
 
         try:
-            cmd = f"{manager} run build"
-            subprocess.run(cmd, cwd=str(frontend_dir), shell=True, check=True)
+            if sys.platform == "win32":
+                cmd = ["cmd", "/c", manager, "run", "build"]
+            else:
+                cmd = [manager, "run", "build"]
+            subprocess.run(cmd, cwd=str(frontend_dir), check=True)
             log("Frontend build completed.", style="success")
         except Exception as e:
             log(f"Frontend build failed: {e}", style="error")
@@ -215,20 +223,44 @@ class EngineModule(BuildModule):
         if context.engine != "chrome" or sys.platform != "win32":
             return
 
-        # Refactored Chrome Engine renaming/patching
-        engine_exe = context.dist_dir / "pytron" / "engines" / "chrome" / "electron.exe"
+        # The chrome engine is bundled by prepare() into:
+        #   <dist_dir>/_internal/pytron/dependencies/chrome/electron.exe  (onedir)
+        # OR directly into:
+        #   <dist_dir>/pytron/dependencies/chrome/electron.exe             (older layout)
+        # post_build was previously checking pytron/engines/chrome/ which is wrong.
+
         target_name = f"{context.out_name}.exe"
+
+        candidate_roots = [
+            context.dist_dir / "pytron" / "dependencies" / "chrome",
+            context.dist_dir / "_internal" / "pytron" / "dependencies" / "chrome",
+        ]
+
+        engine_exe = None
+        for root in candidate_roots:
+            candidate = root / "electron.exe"
+            if candidate.exists():
+                engine_exe = candidate
+                log(f"Found electron.exe at: {candidate}", style="dim")
+                break
+
+        if not engine_exe:
+            log(
+                "Warning: electron.exe not found in dist — rename skipped. "
+                "Check that 'pytron engine install chrome' ran successfully.",
+                style="warning",
+            )
+            return
+
         renamed_exe = engine_exe.parent / target_name
+        log(f"Renaming engine binary → {target_name}", style="dim")
+        if renamed_exe.exists():
+            os.remove(renamed_exe)
+        os.rename(engine_exe, renamed_exe)
 
-        if engine_exe.exists():
-            log(f"Patching engine binary: {target_name}", style="dim")
-            if renamed_exe.exists():
-                os.remove(renamed_exe)
-            os.rename(engine_exe, renamed_exe)
-
-            # Apply metadata to the renamed electron binary
-            editor = MetadataEditor(package_dir=context.package_dir)
-            editor.update(renamed_exe, context.app_icon, context.settings)
+        # Apply icon + version metadata to the renamed Electron binary
+        editor = MetadataEditor(package_dir=context.package_dir)
+        editor.update(renamed_exe, context.app_icon, context.settings)
 
 
 class MetadataModule(BuildModule):
@@ -757,7 +789,8 @@ class IconModule(BuildModule):
             )
             return
 
-        icon_path = Path(icon_path)
+        icon_path = Path(icon_path).resolve()
+        context.app_icon = str(icon_path)
 
         # 3. High-Res Conversion & Platform Specifics
         if icon_path.suffix.lower() == ".png":

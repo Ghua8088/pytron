@@ -1,7 +1,6 @@
 import os
 import inspect
 import typing
-from ..webview import Webview
 
 try:
     import pydantic
@@ -10,6 +9,26 @@ except ImportError:
 
 
 from .component import AppComponent
+
+# Typed definitions for the stable window-level IPC aliases registered in ipc.py.
+# These are hardcoded because the Webview class methods have no type annotations
+# and reflecting against them produces useless `any` types.
+_WINDOW_IPC_DEFS: list[str] = [
+    "    minimize(): Promise<void>;",
+    "    toggle_maximize(): Promise<void>;",
+    "    close(force?: boolean): Promise<void>;",
+    "    hide(): Promise<void>;",
+    "    show(): Promise<void>;",
+    "    start_drag(): Promise<void>;",
+    "    set_title(title: string): Promise<void>;",
+    "    set_size(w: number, h: number): Promise<void>;",
+    "    center(width?: number, height?: number): Promise<void>;",
+    "    set_bounds(x: number, y: number, width: number, height: number): Promise<void>;",
+    "    set_border_color(color_hex: string): Promise<void>;",
+    "    system_notification(title: string, message: string, icon?: string): Promise<void>;",
+    "    trigger_shortcut(combo: string): Promise<boolean>;",
+    "    get_registered_shortcuts(): Promise<string[]>;",
+]
 
 
 class CodegenComponent(AppComponent):
@@ -72,32 +91,15 @@ class CodegenComponent(AppComponent):
         ts_lines.append("")
 
         # 1. Add User Exposed Functions (pre-calculated in expose)
-        for def_str in self._exposed_ts_defs.values():
-            ts_lines.append(def_str)
+        # Skip internal/private APIs from the output
+        _skip = {"__pytron_event__", "inspector_toggle"}
+        for name, def_str in self._exposed_ts_defs.items():
+            if name not in _skip:
+                ts_lines.append(def_str)
 
-        # 3. Add Window methods
-        # Map exposed name to Window class method name
-        win_map = {
-            "minimize": "minimize",
-            "toggle_maximize": "toggle_maximize",
-            "close": "close",
-            "hide": "hide",
-            "show": "show",
-            "notify": "notify",
-            "start_drag": "start_drag",
-            "set_title": "set_title",
-            "set_size": "set_size",
-            "center": "center",
-            "system_notification": "system_notification",
-            "set_bounds": "set_bounds",
-        }
-        for exposed_name, method_name in win_map.items():
-            method = getattr(Webview, method_name, None)
-            if method:
-                ts_lines.append(self._get_ts_definition(exposed_name, method))
-        # 4. Add dynamic methods that are not on Window class
-        ts_lines.append("    trigger_shortcut(combo: string): Promise<boolean>;")
-        ts_lines.append("    get_registered_shortcuts(): Promise<string[]>;")
+        # 2. Add stable, typed window IPC aliases
+        for def_str in _WINDOW_IPC_DEFS:
+            ts_lines.append(def_str)
 
         ts_lines.append("  }")
         ts_lines.append("")
@@ -127,11 +129,24 @@ class CodegenComponent(AppComponent):
         Generate TypeScript definition for a given function.
         """
         try:
-            sig = inspect.signature(func)
+            # Unwrap decorated/wrapped functions so we get the real signature
+            target = func
+            while hasattr(target, "__wrapped__"):
+                target = target.__wrapped__
+            if hasattr(target, "raw_function"):
+                target = target.raw_function
+
+            sig = inspect.signature(target)
             params = []
 
             for param_name, param in sig.parameters.items():
-                if param_name == "self":
+                if param_name in ("self", "cls"):
+                    continue
+                # Skip *args / **kwargs — not representable in a fixed TS signature
+                if param.kind in (
+                    inspect.Parameter.VAR_POSITIONAL,
+                    inspect.Parameter.VAR_KEYWORD,
+                ):
                     continue
 
                 py_type = param.annotation
@@ -141,7 +156,7 @@ class CodegenComponent(AppComponent):
 
                 # Escape TypeScript reserved keywords
                 ts_param_name = param_name
-                reserved = [
+                reserved = {
                     "default",
                     "delete",
                     "class",
@@ -178,21 +193,28 @@ class CodegenComponent(AppComponent):
                     "false",
                     "typeof",
                     "instanceof",
-                ]
+                }
                 if ts_param_name in reserved:
                     ts_param_name = f"{ts_param_name}_"
 
-                params.append(f"{ts_param_name}: {ts_type}")
+                # Mark optional if there is a default value
+                has_default = param.default is not inspect.Parameter.empty
+                if has_default:
+                    params.append(f"{ts_param_name}?: {ts_type}")
+                else:
+                    params.append(f"{ts_param_name}: {ts_type}")
 
             param_str = ", ".join(params)
 
             return_annotation = sig.return_annotation
-            ts_return = self._python_type_to_ts(return_annotation)
-            if return_annotation == inspect.Parameter.empty:
+            if return_annotation is inspect.Parameter.empty:
                 ts_return = "any"
+            else:
+                ts_return = self._python_type_to_ts(return_annotation)
 
             lines = []
-            doc = inspect.getdoc(func)
+            # Prefer docstring on the original (possibly wrapped) func first
+            doc = inspect.getdoc(func) or inspect.getdoc(target)
             if doc:
                 lines.append("    /**")
                 for line in doc.split("\n"):

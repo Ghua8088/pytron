@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, protocol, shell, session } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, shell, session, Notification, nativeImage } = require('electron');
 const path = require('path');
 const net = require('net');
 const fs = require('fs');
@@ -17,10 +17,8 @@ protocol.registerSchemesAsPrivileged([
 const isDebug = process.argv.includes('--pytron-debug') || process.argv.includes('--inspect');
 
 const log = (msg) => {
-    const stamped = `[Mojo-Shell][${new Date().toISOString()}] ${msg}`;
+    const stamped = `[Chrome-Engine] ${msg}`;
     try {
-        // Prepare logs dir if needed, or just stdout
-        // fs.writeSync(1, stamped + "\n");
         console.log(stamped);
     } catch (e) {
         // Silent catch for EPIPE (Broken Pipe) or other stdout issues during shutdown
@@ -74,6 +72,29 @@ let buffer = Buffer.alloc(0);
 let initScripts = [];
 let isAppReady = false;
 let pendingCommands = [];
+let pendingIcon = null;
+
+function resolveIconPath(iconPath) {
+    if (!iconPath) return null;
+    if (fs.existsSync(iconPath)) return iconPath;
+    if (!path.isAbsolute(iconPath) && PROJECT_ROOT) {
+        const absPath = path.join(PROJECT_ROOT, iconPath);
+        if (fs.existsSync(absPath)) return absPath;
+    }
+    return null;
+}
+
+function processNativeImage(img) {
+    if (!img || img.isEmpty()) return null;
+    try {
+        const size = img.getSize();
+        if (size.width > 256 || size.height > 256) {
+            return img.resize({ width: 256, height: 256, quality: 'high' });
+        }
+    } catch (e) { }
+    return img;
+}
+
 
 function connectToPytron() {
     const portArg = process.argv.find(arg => arg.startsWith('--pytron-port='));
@@ -207,8 +228,6 @@ function sendToPython(type, payload) {
 }
 
 function handlePythonCommand(cmd) {
-    if (isDebug) log(`Executing: ${cmd.substring(0, 100)}...`);
-
     let command;
     try {
         command = JSON.parse(cmd);
@@ -216,6 +235,7 @@ function handlePythonCommand(cmd) {
         log(`Failed to parse command: ${e.message}`);
         return;
     }
+    if (isDebug) log(`CMD: ${command.action || 'reply'} (id=${command.id || 'none'})`);
 
     if (!isAppReady) {
         log(`Queueing command: ${command.action} (App not ready)`);
@@ -249,7 +269,50 @@ function handlePythonCommand(cmd) {
                 if (mainWindow) mainWindow.setTitle(command.title);
                 break;
             case 'set_icon':
-                if (mainWindow && command.icon) mainWindow.setIcon(command.icon);
+                if (command.icon) {
+                    const resolvedIcon = resolveIconPath(command.icon);
+                    if (resolvedIcon) {
+                        try {
+                            const rawImg = nativeImage.createFromPath(resolvedIcon);
+                            const img = processNativeImage(rawImg);
+                            if (img && !img.isEmpty()) {
+                                pendingIcon = img;
+                                if (mainWindow && !mainWindow.isDestroyed()) {
+                                    mainWindow.setIcon(img);
+                                    log(`Updated window icon: ${resolvedIcon}`);
+                                }
+                            }
+                        } catch (e) {
+                            log(`Failed to update icon: ${e.message}`);
+                        }
+                    } else {
+                        log(`Icon file not found: ${command.icon}`);
+                    }
+                }
+                break;
+            case 'create_tray':
+                if (command.icon) {
+                    const resolvedTrayIcon = resolveIconPath(command.icon);
+                    if (resolvedTrayIcon) {
+                        try {
+                            const { Tray } = require('electron');
+                            const rawImg = nativeImage.createFromPath(resolvedTrayIcon);
+                            const img = processNativeImage(rawImg);
+                            if (img && !img.isEmpty()) {
+                                if (global._pytron_tray) {
+                                    global._pytron_tray.destroy();
+                                }
+                                global._pytron_tray = new Tray(img);
+                                if (command.tooltip) {
+                                    global._pytron_tray.setToolTip(command.tooltip);
+                                }
+                                log(`Created system tray icon: ${resolvedTrayIcon}`);
+                            }
+                        } catch (e) {
+                            log(`Failed to create tray icon: ${e.message}`);
+                        }
+                    }
+                }
                 break;
             case 'set_size':
                 if (mainWindow) {
@@ -416,16 +479,37 @@ function createWindow(options = {}) {
     if (mainWindow) return;
 
     log("Creating BrowserWindow...");
+
+    // Set Windows AppUserModelID ONLY if app_id is explicitly provided
+    if (process.platform === 'win32' && options.app_id) {
+        app.setAppUserModelId(options.app_id);
+        log(`Set AppUserModelID: ${options.app_id}`);
+    }
+
+
     const config = { ...WINDOW_CONFIG, ...options };
 
-    // Icon (Resolve absolute path if provided)
-    if (options.icon) {
-        if (fs.existsSync(options.icon)) {
-            config.icon = options.icon; // Electron handles absolute paths fine
-        } else {
-            log(`Warning: Icon file not found: ${options.icon}`);
+    // Icon Resolution:
+    // 1) Try options.icon file if passed and resolved
+    // 2) Fallback to pendingIcon if previously set via set_icon
+    let windowIcon = pendingIcon;
+    const resolvedIconPath = resolveIconPath(options.icon);
+    if (resolvedIconPath) {
+        try {
+            const img = nativeImage.createFromPath(resolvedIconPath);
+            if (!img.isEmpty()) {
+                windowIcon = img;
+                log(`Loaded window icon from: ${resolvedIconPath}`);
+            }
+        } catch (e) {
+            log(`Failed to create NativeImage from icon path: ${e.message}`);
         }
     }
+
+    if (windowIcon) {
+        config.icon = windowIcon;
+    }
+
 
     // Enhanced Window Configuration
     config.resizable = options.resizable !== undefined ? !!options.resizable : true;
@@ -460,6 +544,28 @@ function createWindow(options = {}) {
     config.show = false; // Always start false, show on ready
 
     mainWindow = new BrowserWindow(config);
+
+    if (windowIcon) {
+        try {
+            mainWindow.setIcon(windowIcon);
+            log(`Explicitly applied window icon to mainWindow via setIcon`);
+        } catch (e) {
+            log(`Failed to set icon on mainWindow: ${e.message}`);
+        }
+    } else if (process.platform === 'win32') {
+        try {
+            app.getFileIcon(process.execPath).then(exeImg => {
+                if (mainWindow && !mainWindow.isDestroyed() && exeImg && !exeImg.isEmpty()) {
+                    mainWindow.setIcon(exeImg);
+                    log(`Loaded embedded PE icon from process.execPath: ${process.execPath}`);
+                }
+            }).catch(e => {
+                log(`Failed to extract PE icon from process.execPath: ${e.message}`);
+            });
+        } catch (e) {
+            log(`Failed to trigger getFileIcon for process.execPath: ${e.message}`);
+        }
+    }
 
     // SEND HWND TO PYTHON (Critical for Taskbar/Native Ops)
     try {

@@ -62,7 +62,20 @@ class IPCComponent(WebviewComponent):
             def _runner():
                 com_thread_initializer()
                 try:
-                    res = python_func(*args)
+                    target_func = python_func
+                    # Fallback lookup in case function reference was updated on App
+                    if not target_func:
+                        app = getattr(
+                            self.webview, "app", None
+                        ) or self.webview.config.get("__app__")
+                        if (
+                            app
+                            and hasattr(app, "_exposed_functions")
+                            and name in app._exposed_functions
+                        ):
+                            target_func = app._exposed_functions[name]["func"]
+
+                    res = target_func(*args)
                     _respond(0, _serialize_result(res))
                 except Exception as e:
                     import traceback

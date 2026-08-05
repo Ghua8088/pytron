@@ -98,3 +98,24 @@ def test_chrome_adapter_on_message():
     adapter._on_message({"type": "lifecycle", "payload": "app_ready"})
     assert adapter.ready is True
     callback.assert_called_once()
+
+
+def test_chrome_engine_setup_icon(tmp_path):
+    from pytron.engines.chrome.engine import ChromeWebView
+
+    icon_file = tmp_path / "app_icon.png"
+    icon_file.write_bytes(b"fake png content")
+
+    engine = MagicMock(spec=ChromeWebView)
+    engine.adapter = MagicMock()
+    engine.adapter.config = {"icon": str(icon_file)}
+    engine.bridge = MagicMock()
+    engine._routing_comp = MagicMock()
+    engine._routing_comp.root_path = str(tmp_path)
+
+    config = {"icon": str(icon_file)}
+    ChromeWebView._setup_icon(engine, config)
+
+    assert config["icon"] == str(icon_file.resolve())
+    assert engine.adapter.config["icon"] == str(icon_file.resolve())
+    engine.set_icon.assert_called_with(str(icon_file.resolve()))

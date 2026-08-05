@@ -41,12 +41,10 @@ def test_python_type_to_ts_generics(app):
 def test_generate_types(app, tmp_path):
     output_file = tmp_path / "pytron.d.ts"
 
-    # Mock Webview methods to avoid import issues or side effects
-    with patch("pytron.apputils.codegen.Webview") as mock_webview:
-        # Add some dummy exposed functions
-        app._exposed_ts_defs["my_func"] = "    my_func(a: string): Promise<void>;"
+    # Add some dummy exposed functions
+    app._exposed_ts_defs["my_func"] = "    my_func(a: string): Promise<void>;"
 
-        app.generate_types(str(output_file))
+    app.generate_types(str(output_file))
 
     assert output_file.exists()
     content = output_file.read_text()
@@ -54,9 +52,10 @@ def test_generate_types(app, tmp_path):
     assert "declare module 'pytron-client'" in content
     assert "interface PytronClient" in content
     assert "my_func(a: string): Promise<void>;" in content
-    # Since Webview is mocked, it falls back to generic signature
-    # MagicMock has (*args, **kwargs) signature
-    assert "minimize(args: any, kwargs: any): Promise<any>;" in content
+    # Verify typed window IPC defs are present (no longer reliant on Webview reflection)
+    assert "minimize(): Promise<void>;" in content
+    assert "close(force?: boolean): Promise<void>;" in content
+    assert "trigger_shortcut(combo: string): Promise<boolean>;" in content
 
 
 def test_pydantic_model_generation(app):

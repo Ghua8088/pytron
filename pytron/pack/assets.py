@@ -39,16 +39,32 @@ def get_smart_assets(
         "installer",
         "frontend",
     }
-    EXCLUDE_SUFFIXES = {".py", ".pyc", ".pyo", ".spec", ".md", ".map"}
+    EXCLUDE_SUFFIXES = {
+        ".py",
+        ".pyc",
+        ".pyo",
+        ".spec",
+        ".md",
+        ".map",
+        ".ts",
+        ".tsx",
+        ".scss",
+        ".sass",
+        ".less",
+        ".log",
+    }
     EXCLUDE_FILES = {
         ".gitignore",
         "package-lock.json",
         "npm-debug.log",
-        ".DS_Store",
+        ".ds_store",
         "thumbs.db",
         "settings.json",
         "pnpm-lock.yaml",
         "bun.lockb",
+        "tsconfig.json",
+        "vite.config.ts",
+        "vite.config.js",
     }
 
     include_patterns = include_patterns or []
@@ -118,7 +134,7 @@ def get_smart_assets(
                 continue
 
             # 3. Default Checks
-            if filename in EXCLUDE_FILES:
+            if filename.lower() in EXCLUDE_FILES:
                 continue
 
             _, ext = os.path.splitext(filename)

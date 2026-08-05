@@ -138,6 +138,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         "title": target.name,
         "version": "1.0.0",
         "author": "Your Name",
+        "app_id": f"com.yourname.{target.name.lower().replace('-', '_')}",
         "description": "A brief description of your app",
         "copyright": f"Copyright © 2026 Your Name",
         "pytron_version": __version__,
@@ -545,11 +546,13 @@ button {
         progress.update(
             task, description="Installing Python Dependencies...", completed=90
         )
-        # Install pytron in the new env.
-        run_command_with_output([str(pip_exe), "install", "pytron-kit"])
+        # Install light pytron core in the new env using cached binary wheels.
+        run_command_with_output(
+            [str(pip_exe), "install", "--prefer-binary", "pytron-kit[core]"]
+        )
 
         # Create requirements.json
-        req_data = {"dependencies": ["pytron-kit"]}
+        req_data = {"dependencies": ["pytron-kit[core]"]}
         (target / "requirements.json").write_text(json.dumps(req_data, indent=4))
 
         # Create helper run scripts

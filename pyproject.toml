@@ -13,7 +13,7 @@ namespaces = false
 
 [project]
 name = "pytron-kit"
-version = "0.3.15.post5"
+version = "0.3.15.post6"
 description = "An Electron-like library for Python to build Cross Platform Apps"
 readme = "README.md"
 requires-python = ">=3.7"
@@ -27,17 +27,16 @@ dependencies = [
   "pydantic",
   "importlib-metadata; python_version < '3.8'",
   "pyinstaller",
-  "Pillow",
+  "Pillow>=12.3.0",   # CVE fixes: PYSEC-2026-2253..2257, 3451..3496
   "rich",
-  "nuitka",
-  "zstandard",
   "comtypes; sys_platform == 'win32'",
-  "cryptography",
+  "cryptography>=48.0.1",  # CVE fixes: PYSEC-2026-35,36, GHSA-537c-gmf6-5ccf
   "keyring",
-  "requests",
+  "requests>=2.33.0",  # CVE fix: PYSEC-2026-2275
   "Cython",
   "python-xlib; sys_platform == 'linux'"
 ]
+
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: Apache Software License",
@@ -45,6 +44,22 @@ classifiers = [
   "Operating System :: POSIX :: Linux",
   "Operating System :: MacOS :: MacOS X",
   "Intended Audience :: Developers",
+]
+
+[project.optional-dependencies]
+core = [
+  "watchfiles",
+  "pydantic",
+  "importlib-metadata; python_version < '3.8'",
+  "Pillow>=12.3.0",
+  "rich",
+  "requests>=2.33.0",
+  "comtypes; sys_platform == 'win32'",
+  "python-xlib; sys_platform == 'linux'"
+]
+nuitka = [
+  "nuitka",
+  "zstandard"
 ]
 
 [project.urls]

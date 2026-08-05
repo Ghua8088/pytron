@@ -225,9 +225,84 @@ def message_box(w, title, message, style=0):
     return user32.MessageBoxW(hwnd, message, title, style)
 
 
+def _ensure_ico_file(icon_path):
+    if not icon_path or not os.path.exists(icon_path):
+        return icon_path
+    if icon_path.lower().endswith(".ico"):
+        return icon_path
+
+    ico_candidate = os.path.splitext(icon_path)[0] + ".ico"
+    if os.path.exists(ico_candidate):
+        return ico_candidate
+
+    try:
+        from PIL import Image
+
+        img = Image.open(icon_path)
+        ico_dir = os.path.join(os.path.expanduser("~"), ".pytron", "cache", "icons")
+        os.makedirs(ico_dir, exist_ok=True)
+        import hashlib
+
+        h = hashlib.md5(os.path.abspath(icon_path).encode("utf-8")).hexdigest()
+        cache_ico = os.path.join(ico_dir, f"icon_{h}.ico")
+
+        sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+        img.save(cache_ico, format="ICO", sizes=sizes)
+        return cache_ico
+    except Exception:
+        pass
+
+    return icon_path
+
+
+def _load_hicon_gdiplus(icon_path):
+    try:
+        gdiplus = ctypes.windll.gdiplus
+
+        class GdiplusStartupInput(ctypes.Structure):
+            _fields_ = [
+                ("GdiplusVersion", ctypes.c_uint32),
+                ("DebugEventCallback", ctypes.c_void_p),
+                ("SuppressBackgroundThread", ctypes.c_int32),
+                ("SuppressExternalCodecs", ctypes.c_int32),
+            ]
+
+        input_struct = GdiplusStartupInput(1, None, 0, 0)
+        token = ctypes.c_ulonglong()
+        if (
+            gdiplus.GdiplusStartup(
+                ctypes.byref(token), ctypes.byref(input_struct), None
+            )
+            != 0
+        ):
+            return None
+        p_bitmap = ctypes.c_void_p()
+        if (
+            gdiplus.GdipCreateBitmapFromFile(
+                ctypes.c_wchar_p(str(os.path.abspath(icon_path))),
+                ctypes.byref(p_bitmap),
+            )
+            != 0
+        ):
+            gdiplus.GdiplusShutdown(token)
+            return None
+        h_icon = ctypes.c_void_p()
+        if gdiplus.GdipCreateHICONFromBitmap(p_bitmap, ctypes.byref(h_icon)) != 0:
+            gdiplus.GdipDisposeImage(p_bitmap)
+            gdiplus.GdiplusShutdown(token)
+            return None
+        gdiplus.GdipDisposeImage(p_bitmap)
+        return h_icon
+    except Exception:
+        return None
+
+
 def set_window_icon(w, icon_path):
     if not icon_path or not os.path.exists(icon_path):
         return
+
+    icon_path = _ensure_ico_file(icon_path)
+
     if pytron_native:
         try:
             pytron_native.set_window_icon(get_hwnd(w), str(os.path.abspath(icon_path)))
@@ -246,6 +321,13 @@ def set_window_icon(w, icon_path):
         h_big = user32.LoadImageW(None, str(icon_path), 1, 32, 32, flags)
         if h_big:
             user32.SendMessageW(hwnd, 0x0080, 1, h_big)  # WM_SETICON, ICON_BIG
+
+        if not h_small and not h_big:
+            # Fallback for PNG/JPG image formats using GDI+
+            h_gdi = _load_hicon_gdiplus(icon_path)
+            if h_gdi:
+                user32.SendMessageW(hwnd, 0x0080, 0, h_gdi)  # WM_SETICON, ICON_SMALL
+                user32.SendMessageW(hwnd, 0x0080, 1, h_gdi)  # WM_SETICON, ICON_BIG
     except Exception as e:
         print(f"Icon error: {e}")
 

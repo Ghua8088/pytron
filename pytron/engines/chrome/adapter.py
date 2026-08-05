@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import ctypes
 import stat
+from collections import deque
 
 try:
     from ...dependencies import pytron_native
@@ -40,8 +41,8 @@ class ChromeIPCServer:
         if pytron_native:
             try:
                 self._native = pytron_native.ChromeIPC()
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to initialize native ChromeIPC: {e}")
 
         # Windows Handles (Fallback)
         self._win_in_handle = None
@@ -220,26 +221,34 @@ class ChromeIPCServer:
 
     def _recv_bytes(self, n):
         if self.is_windows:
-            buf = ctypes.create_string_buffer(n)
-            read = ctypes.c_ulong(0)
-            # Read from OUT handle
-            res = ctypes.windll.kernel32.ReadFile(
-                self._win_out_handle, buf, n, ctypes.byref(read), None
-            )
-            if res == 0:
-                err = ctypes.GetLastError()
-                # 109 = ERROR_BROKEN_PIPE (Normal EOF when client disconnects)
-                if err != 109:
-                    logger.error(f"ReadFile Failed. Error: {err}, Requested: {n}")
-                else:
-                    logger.warning(f"Pipe Disconnected (ERROR_BROKEN_PIPE).")
-                return None
-
-            if read.value != n:
-                logger.error(f"ReadFile checking Partial Read: Got {read.value} / {n}")
-                return None
-
-            return buf.raw
+            # Loop to handle partial reads — ReadFile on named pipes can return
+            # fewer bytes than requested even in blocking (PIPE_WAIT) mode.
+            data = bytearray()
+            remaining = n
+            while remaining > 0:
+                buf = ctypes.create_string_buffer(remaining)
+                read = ctypes.c_ulong(0)
+                res = ctypes.windll.kernel32.ReadFile(
+                    self._win_out_handle, buf, remaining, ctypes.byref(read), None
+                )
+                if res == 0:
+                    err = ctypes.GetLastError()
+                    # 109 = ERROR_BROKEN_PIPE (Normal EOF when client disconnects)
+                    if err != 109:
+                        logger.error(
+                            f"ReadFile Failed. Error: {err}, Requested: {remaining}"
+                        )
+                    else:
+                        logger.warning("Pipe Disconnected (ERROR_BROKEN_PIPE).")
+                    return None
+                if read.value == 0:
+                    logger.error(
+                        "ReadFile returned 0 bytes without error — treating as EOF."
+                    )
+                    return None
+                data.extend(buf.raw[: read.value])
+                remaining -= read.value
+            return bytes(data)
         else:
             # Unix Socket
             data = bytearray()
@@ -248,7 +257,7 @@ class ChromeIPCServer:
                 if not packet:
                     return None
                 data.extend(packet)
-            return data
+            return bytes(data)
 
     def send(self, data_dict):
         if not self.connected:
@@ -292,7 +301,7 @@ class ChromeAdapter:
         self.ipc = None
         self.ready = False
         self._raw_callback = None
-        self._queue = []
+        self._queue = deque()
         self._flush_lock = threading.Lock()
 
     def start(self):
@@ -311,10 +320,8 @@ class ChromeAdapter:
 
         app_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "shell"))
 
-        # FIX: Pass current working directory as root for pytron:// protocol
-        pipe_arg = (
-            self.ipc.pipe_path_base if self.ipc.is_windows else self.ipc.pipe_path_base
-        )
+        # Pass current working directory as root for pytron:// protocol
+        pipe_arg = self.ipc.pipe_path_base
 
         # Use explicit CWD from config if available (set by Engine calculation)
         # otherwise fall back to process CWD.
@@ -395,14 +402,27 @@ class ChromeAdapter:
                     continue
 
                 if prefix == "STDOUT":
-                    # If it's a console.log from our Shell.js, it might already have a tag
-                    if content.startswith("[Mojo-Shell]"):
-                        logger.info(content)
+                    # Parse and sanitize Chrome-Engine messages
+                    if content.startswith("[Chrome-Engine]") or content.startswith(
+                        "[Mojo-Shell]"
+                    ):
+                        clean_msg = (
+                            content.replace("[Mojo-Shell]", "")
+                            .replace("[Chrome-Engine]", "")
+                            .strip()
+                        )
+                        # Remove redundant raw timestamp tags if present e.g. [2026-07-24T...]
+                        import re
+
+                        clean_msg = re.sub(
+                            r"^\[\d{4}-\d{2}-\d{2}T[^\]]+\]\s*", "", clean_msg
+                        )
+                        logger.debug(f"[Chrome-Engine] {clean_msg}")
                     else:
                         logger.debug(f"[Electron] {content}")
                 else:
                     # STDERR usually contains Chromium warnings
-                    logger.warning(f"[Electron-Err] {content}")
+                    logger.debug(f"[Electron-Err] {content}")
 
         except Exception as e:
             logger.debug(f"Log proxy error: {e}")
@@ -413,7 +433,7 @@ class ChromeAdapter:
             logger.info(f"Flushing {count} queued messages via IPC...")
             flushed = 0
             while self._queue:
-                msg = self._queue.pop(0)
+                msg = self._queue.popleft()
                 try:
                     # Log the critical 'show' or 'init' commands to verify order
                     action = msg.get("action") if isinstance(msg, dict) else "unknown"
@@ -422,7 +442,6 @@ class ChromeAdapter:
 
                     self.ipc.send(msg)
                     flushed += 1
-                    # Reduced sleep to 0, relying on OS buffering
                 except Exception as e:
                     logger.error(f"Failed to flush message {action}: {e}")
             logger.info(f"Flush complete. Sent {flushed}/{count} messages.")
@@ -452,7 +471,7 @@ class ChromeAdapter:
             self.ipc.send(payload)
         else:
             with self._flush_lock:
-                self._queue.append(payload)
+                self._queue.append(payload)  # deque.append is O(1)
 
     def bind_raw(self, callback):
         self._raw_callback = callback
