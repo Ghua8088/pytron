@@ -385,7 +385,6 @@ class ChromeWebView(Webview):
 
     def _resolve_chrome_binary(self, config) -> Optional[str]:
         """Chrome-specific binary detection logic."""
-        renamed_engine = None
         if getattr(sys, "frozen", False):
             exe_name = os.path.splitext(os.path.basename(sys.executable))[0]
             candidates = [
