@@ -200,8 +200,11 @@ def run_pyinstaller_build(context: BuildContext):
 
             try:
                 hash_file.write_text(spec_hash, encoding="utf-8")
-            except Exception:
-                pass
+            except Exception as e:
+                log(
+                    f"Warning: failed to write spec hash cache {hash_file}: {e}",
+                    style="warning",
+                )
 
         # Fortress / Spec Optimization Hook
         if (
