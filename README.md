@@ -1,226 +1,182 @@
 ![Pytron](pytron-banner.png)
-# Pytron
 
-Pytron is a modern framework for building desktop applications using Python for the backend and web technologies (React, Vite) for the frontend. It combines the power of Python's ecosystem with the rich user interfaces of the web.
+# Pytron Kit
 
-## Features
+> **Stop wrapping AI in boring API calls and web tabs. Turn Python scripts into full-fledged desktop applications.**
 
-*   **Type-Safe Bridge**: Automatically generate TypeScript definitions (`.d.ts`) from your Python code.
-*   **Reactive State**: Synchronize state seamlessly between Python and JavaScript.
-*   **Advanced Serialization**: Built-in support for Pydantic models, PIL Images, UUIDs, and more.
-*   **System Integration**: Native file dialogs, notifications, and shortcuts.
-*   **Developer Experience**: Hot-reloading, automatic virtual environment management, and easy packaging.
+[![Website](https://img.shields.io/badge/Website-pytron--kit.github.io-007acc?style=flat-square)](https://pytron-kit.github.io)
+[![PyPI Version](https://img.shields.io/pypi/v/pytron-kit.svg?color=blue&style=flat-square)](https://pypi.org/project/pytron-kit/)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Server-7289da?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/m7J6ddwSs)
+[![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
 
-## New / Notable Features (latest)
+---
 
-- **Daemon & System Integration**: New `hide`/`show` APIs and `system_notification` support allow apps to run as daemons, show/hide windows programmatically, and emit native notifications across Windows/macOS/Linux.
-- **Taskbar / Dock Progress & Icons**: APIs to set taskbar progress and update the application icon at runtime (Windows taskbar, macOS Dock badge, basic Linux support).
-- **Native Dialogs**: Cross-platform native file dialogs (open/save/folder) using the OS tools (Windows common dialogs, macOS AppleScript, Linux `zenity`/`kdialog`) are exposed to the `Webview` layer.
-- **Message Boxes**: Unified `message_box` with cross-platform fallbacks (native MessageBox on Windows, `zenity`/`kdialog` on Linux, AppleScript on macOS).
-- **Packaging Improvements**: `pytron package` can now bundle a splash screen into PyInstaller builds (`--splash` support), and the Windows installer compression has been updated for better AV compatibility.
-- **Serializer Enhancements**: `PytronJSONEncoder` gained broader support (Pydantic models, PIL images -> data URIs, dataclasses, enums, timedeltas, complex numbers, __slots__, and iterable fallbacks) for safer frontend bridging.
-- **Platform Interface Expanded**: Platform backends now provide richer capabilities (notifications, dialogs, icon/app-id management, tray/daemon helpers).
+## The Vision: Python is the Controller, JS is the UI
 
+Python is the undisputed heart of AI, ML, and data processing — PyTorch, Ollama, Transformers, LangChain, Whisper, and OpenCV all live here. But traditionally, building desktop apps forced developers to make **Node/JavaScript the main process** while Python got demoted to an awkward "sidecar" subprocess.
 
-## Prerequisites
+**Pytron Kit inverts the architecture:**
 
-- **Python 3.11+** (3.7+ minimum supported)
-- **Node.js & npm** (for frontend development)
+* **Python is the Native Controller**: Manages state, OS integrations, daemons, file systems, and heavy AI hardware directly.
+* **JavaScript is the UI Controller**: Renders beautiful, ultra-responsive web UIs (React, Vite, Next.js, Vue, Tailwind).
 
-### Linux (Ubuntu/Debian) Requirements
-Pytron uses a high-performance native engine on Linux that requires GTK3 and WebKit2GTK. Install them with:
-```bash
-# Ubuntu 22.04 / 24.04
-sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0
-```
-> [!NOTE]
-> Pytron-Kit now includes a **Linux Schism Guard**. You no longer need to install `python3-gi` or `PyGObject` for most apps, as the Native Engine handles GLib/GTK isolation automatically to prevent crashes.
+Instead of locking AI inside terminal scripts or browser tabs tied to `requests.post()`, Pytron is the ultimate **Python-to-App Enabler** — giving your Python logic native desktop superpowers, zero-latency IPC, and automatic TypeScript definitions.
 
-## Quick Start
+---
 
-1.  **Install Pytron**:
-**Windows**:
-    ```bash
-    pip install pytron-kit
-    ```
+## Why Pytron Kit?
 
-    **Linux / macOS (Recommended)**:
-    ```bash
-    pipx install pytron-kit
-    ```
-    *Note: On modern Linux distros (Ubuntu 23.04+), `pipx` involves less risk of breaking system packages (PEP 668).*
+* **Built for AI & Python Workflows**: Offload heavy Python models (Ollama, PyTorch, Whisper) to background thread pools effortlessly. Your UI stays smooth at 60 FPS while Python works.
+* **Native or Chrome/Electron Engines**: Use lightweight native OS WebViews by default, or run `pytron run --chrome` / `pytron package --chrome` to bundle Electron/Chromium for 100% cross-platform UI consistency!
+* **Type-Safe Magic**: Decorated Python functions auto-generate frontend TypeScript definitions (`.d.ts`). Calling Python from JS feels like calling a local function with full autocompletion!
+* **Dual Hot-Reloading**: Save frontend code -> Vite HMR updates UI instantly. Save Python backend code -> Pytron hot-restarts the backend automatically.
+* **Full Desktop Superpowers**: Daemons, system notifications, taskbar progress, dock badges, native file dialogs, system tray icons, and global shortcuts out of the box.
+* **One-Command Standalone Executables**: Ready to distribute? `pytron package` bundles your Python controller and web frontend into a compact binary (`.exe`, macOS app, Linux binary).
 
-2.  **Initialize a New Project**:
-    This command scaffolds a new project, creates a virtual environment (`env/`), installs initial dependencies, and sets up a frontend.
-    ```bash
-    # Default (React + Vite)
-    pytron init my_app
+---
 
-    # Using a specific template (vue, svelte, next, etc.)
-    pytron init my_app --template next
-    ```
-    Supported templates: `react` (default), `vue`, `svelte`, `next` (Next.js), `vanilla`, `preact`, `lit`, `solid`, `qwik`.
+## Show Me the Code: Build a Native AI Assistant in Seconds
 
-3.  **Install project dependencies (recommended)**:
-    After cloning or when you need to install/update dependencies for the project, use the CLI-managed installer which will create/use the `env/` virtual environment automatically:
-    ```bash
-    # Creates env/ if missing and installs from requirements.txt
-    pytron install
-    ```
-
-    Notes:
-    - This creates an `env/` directory in the project root (if not already present) and runs `pip install -r requirements.txt` inside it.
-    - All subsequent `pytron` commands (`run`, `package`, etc.) will automatically prefer the project's `env/` Python when present.
-
-4.  **Run the App**:
-    Start the app in development mode (hot-reloading enabled). The CLI will use `env/` Python automatically if an `env/` exists in the project root.
-    *   **Windows**: `run.bat`
-    *   **Linux/Mac**: `./run.sh`
-    
-    Or manually via the CLI:
-    ```bash
-    pytron run --dev
-    ```
-
-## Core Concepts
-
-### 1. Exposing Python Functions
-Use the `@app.expose` decorator to make Python functions available to the frontend.
-
+### 1. Python Backend (`main.py`)
 ```python
 from pytron import App
 from pydantic import BaseModel
 
 app = App()
 
-class User(BaseModel):
-    name: str
-    age: int
+class Query(BaseModel):
+    prompt: str
 
 @app.expose
-def get_user(user_id: int) -> User:
-    return User(name="Alice", age=30)
+def ask_ai(query: Query) -> str:
+    # Run local Ollama, PyTorch model, or agentic loop here!
+    return f"AI Thinking on: {query.prompt}"
 
-app.generate_types() # Generates frontend/src/pytron.d.ts
+app.generate_types() # Auto-generates frontend/src/pytron.d.ts
 app.run()
 ```
 
-### 2. Calling from Frontend
-Import the client and call your functions with full TypeScript support.
-any  registered function with "pytron_" prefix will be available as pytron_{function_name}
-and will not be proxied into the pytron object.
+### 2. Frontend React / TypeScript (`App.tsx`)
 ```typescript
 import pytron from 'pytron-client';
+import { useState } from 'react';
 
-async function loadUser() {
-    const user = await pytron.get_user(1);
-    console.log(user.name); // Typed as string
+export function App() {
+  const [response, setResponse] = useState('');
+
+  async function handleAsk() {
+    // Fully typed autocomplete for your Python methods!
+    const answer = await pytron.ask_ai({ prompt: "Analyze local desktop files" });
+    setResponse(answer);
+  }
+
+  return (
+    <button onClick={handleAsk}>
+      {response || "Run AI Agent"}
+    </button>
+  );
 }
 ```
-
-### 3. Reactive State
-Sync data automatically.
-
-**Python:**
-```python
-app.state.counter = 0
-```
-
-**JavaScript:**
-```javascript
-console.log(pytron.state.counter); // 0
-
-// Listen for changes
-pytron.on('pytron:state-update', (change) => {
-    console.log(change.key, change.value);
-});
-```
-
-### 4. Window Management
-Control the window directly from JS.
-
-```javascript
-pytron.minimize();
-pytron.toggle_fullscreen();
-pytron.close();
-```
-
-### 5. Development Workflow (`--dev`)
-The development mode in Pytron is designed for modern web development workflows.
-```bash
-pytron run --dev
-```
-*   **Dual Hot Reloading**:
-    *   **Frontend**: Pytron detects your `npm run dev` script (Vite/Next/WebPack) and proxies the window to your local dev server (e.g., `localhost:5173`). This gives you **Hot Module Replacement (HMR)**—UI changes update instantly without a reload.
-    *   **Backend**: Pytron watches your Python files. If you change backend logic, the Python application performs a **Hot Restart** automatically.
-*   **Debug Logging**: If `debug: true` is set in `settings.json`, Pytron switches to verbose logging, showing bridge messages and binding invocations.
-*   **Non-Blocking UI**: Pytron automatically runs synchronous Python functions in a background thread pool, ensuring that heavy Python tasks never freeze the UI.
-
-## Configuration (settings.json)
-
-Pytron uses a `settings.json` file in your project root to manage application configuration.
-
-**Example `settings.json`:**
-```json
-{
-    "title": "pytron app",
-    "pytron_version": "0.2.2",
-    "frontend_framework": "react",
-    "dimensions":[800,600],
-    "frameless": false,
-    "debug": true,
-    "url": "frontend/dist/index.html",
-    "icon": "assets/icon.ico",
-    "version": "1.0.0"
-}
-```
-
-*   **title**: The window title and the name of your packaged executable.
-*   **debug**: Set to `true` to enable verbose logging and dev tools.
-*   **url**: Entry point for the frontend (usually the built `index.html`). In `--dev` mode, this is overridden by the dev server URL.
-*   **icon**: Path to your application icon (relative to project root).
-
-## UI Components
-
-Pytron provides a set of UI components to help you build a modern desktop application.
-They have preimplemented window controls and are ready to use.
-
-# Usage
-```bash
-npm install pytron-ui
-```
-then import the webcomponents into your frontend app
-```javascript
-import "pytron-ui/webcomponents/TitleBar.js";
-//usage
-<pytron-title-bar></pytron-title-bar>
-//for react
-import { TitleBar } from "pytron-ui/react";
-//usage
-<TitleBar></TitleBar>
-```
-## Packaging
-
-Distribute your app as a standalone executable. Pytron automatically reads your `settings.json` to determine the app name, version, and icon.
-**Note on File Permissions**: When your app is installed in `Program Files`, it is read-only. If your app writes logs or databases using relative paths (e.g., `logging.basicConfig(filename='app.log')`), it will crash with `PermissionError`.
-**Pytron Solution**: When running as a packaged app, Pytron automatically changes the Current Working Directory (CWD) to a safe user-writable path (e.g., `%APPDATA%/MyApp`). Your relative writes will safely end up there.
-
-1.  **Build**:
-    ```bash
-    pytron package
-    ```
-
-## CLI Reference
-
-*   `pytron init <name> [--template <name>]`: Create a new project.
-*   `pytron install [package]`: Install dependencies.
-    *   Pin versions in `requirements.json`.
-    *   Smartly resolving local path installs to package names.
-*   `pytron frontend install [package]`: Install npm packages for the frontend (auto-detects directory).
-*   `pytron run [--dev]`: Run the application.
-*   `pytron show`: List installed Python packages and versions.
-*   `pytron package`: Build standalone executable.
 
 ---
 
-**Happy Coding with Pytron!**
+## Quick Start
+
+### 1. Install Pytron Kit
+```bash
+# Windows
+pip install pytron-kit
+
+# Linux / macOS (Recommended via pipx)
+pipx install pytron-kit
+```
+
+### 2. Initialize Your App
+Create a new app with your choice of frontend framework:
+```bash
+pytron init my_ai_app --template react
+```
+*(Supported templates: `react` (default), `next`, `vue`, `svelte`, `preact`, `solid`, `lit`, `qwik`, `vanilla`)*
+
+### 3. Install & Run in Dev Mode
+```bash
+cd my_ai_app
+pytron install
+
+# Run with native OS webview
+pytron run --dev
+
+# Or run with Electron / Chrome engine
+pytron run --dev --chrome
+```
+
+---
+
+## Platform Superpowers & Cross-Platform Support
+
+* **Engine Flexibility**: Switch between native webview engines or Electron (`--chrome`) seamlessly during dev and packaging.
+* **Daemon & System Integration**: Run in background mode, show/hide windows programmatically, emit cross-platform native OS notifications.
+* **Taskbar & Dock Controls**: Set taskbar progress bars, update app icons, and control macOS Dock badges.
+* **Native Dialogs**: Use native OS file dialogs (open, save, folder select) and message boxes without third-party popups.
+* **Linux Schism Guard**: Built-in GTK3 & WebKit2GTK isolation prevents GLib crashes automatically on Linux distros (Ubuntu 22.04 / 24.04+).
+
+---
+
+## Packaging & Distribution
+
+Ready to ship your app to users? Distribute it as a standalone desktop binary:
+```bash
+# Package with Native Webview
+pytron package
+
+# Package with Chrome / Electron engine
+pytron package --chrome
+```
+Pytron handles current working directory safety (so app data writes cleanly to `%APPDATA%` or user configs without permission errors), splash screens (`--splash`), and bundle optimization.
+
+---
+
+## CLI Reference
+
+* `pytron init <name> [--template <template>]` — Scaffold a new Pytron app.
+* `pytron install` — Smartly manage Python dependencies in a project virtual environment (`env/`).
+* `pytron run [--dev] [--chrome]` — Launch your app with dual hot-reloading (optionally with Chrome/Electron engine).
+* `pytron frontend install <pkg>` — Auto-install frontend npm dependencies.
+* `pytron package [--chrome]` — Build a standalone desktop executable (Native or Chrome/Electron).
+* `pytron show` — List installed environment packages.
+
+---
+
+## Community & Support
+
+Join the Pytron developer community on Discord! Whether you're building local AI agents, sleek utility tools, or native desktop dashboards:
+
+**[Join the Discord Server](https://discord.gg/m7J6ddwSs)**
+
+* Get help and debug issues
+* Showcase what you're building
+* Suggest features and shape the roadmap
+
+---
+
+## Documentation & Resources
+
+Explore the detailed documentation and community resources:
+
+* **[Official Website](https://pytron-kit.github.io)** — Official documentation, tutorials, and guides.
+* **[Usage Guide](USAGE.md)** — Comprehensive usage patterns, state management, and API examples.
+* **[Architecture Overview](ARCHITECTURE.md)** — Deep dive into Pytron's native IPC, engine adapters, and process isolation.
+* **[Project Roadmap](ROADMAP.md)** — Upcoming features, vision, and release milestones.
+* **[Contributing Guide](CONTRIBUTING.md)** — Guidelines for contributing, local setup, and pull requests.
+* **[Credits & Acknowledgements](CREDITS.md)** — Core contributors, open-source libraries, and technology inspirations.
+* **[Changelog](CHANGELOG.md)** — Version history and release notes.
+* **[Support Guide](SUPPORT.md)** — Troubleshooting tips and community support channels.
+* **[Security Policy](SECURITY.md)** — Security guidelines and vulnerability reporting.
+* **[Code of Conduct](CODE_OF_CONDUCT.md)** — Community standards and principles.
+* **[License](LICENSE)** — MIT License details.
+
+---
+
+Happy building with **Pytron Kit**!
+
+
