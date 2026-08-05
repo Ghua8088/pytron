@@ -32,8 +32,10 @@ def _compute_spec_hash(context: BuildContext, makespec_cmd: list) -> str:
         if manifest_path.exists():
             try:
                 h.update(manifest_path.read_bytes())
-            except Exception:
-                pass
+            except Exception as exc:
+                log(
+                    f"Warning: Failed to read manifest '{manifest_path}' while computing spec hash: {exc}"
+                )
 
     # Include virtual environment package fingerprint (.dist-info / .egg-info names)
     try:
