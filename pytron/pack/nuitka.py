@@ -27,8 +27,12 @@ def run_nuitka_build(context: BuildContext):
         res = subprocess.run([python_exe, "-c", "import nuitka"], capture_output=True)
         if res.returncode == 0:
             nuitka_missing = False
-    except Exception:
-        pass
+    except Exception as e:
+        log(
+            f"Unable to verify Nuitka via interpreter import check: {e}. "
+            "Falling back to executable detection.",
+            style="warning",
+        )
 
     if nuitka_missing and shutil.which("nuitka"):
         nuitka_missing = False
