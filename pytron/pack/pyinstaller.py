@@ -56,8 +56,10 @@ def _compute_spec_hash(context: BuildContext, makespec_cmd: list) -> str:
                     ]
                 )
                 h.update(",".join(pkg_names).encode("utf-8"))
-    except Exception:
-        pass
+    except Exception as exc:
+        log(
+            f"Skipping virtual environment package fingerprint while computing spec hash: {exc}"
+        )
 
     return h.hexdigest()
 
