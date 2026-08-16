@@ -40,6 +40,7 @@ class ServoIPCServer:
             try:
                 self._native = pytron_native.ServoIPC()
             except Exception:
+                # Silently ignore if native Servo IPC extension is unavailable
                 pass
 
         # Windows Handles (Fallback)
@@ -217,6 +218,7 @@ class ServoIPCServer:
             try:
                 os.remove(self.pipe_path_base)
             except Exception:
+                # Silently ignore if pipe file was already cleaned up
                 pass
 
     def _recv_bytes(self, n):

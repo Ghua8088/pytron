@@ -35,6 +35,7 @@ def json_safe_dump(obj):
         try:
             return json_safe_dump(obj.to_dict())
         except Exception:
+            # Silently fallback to str(obj) if to_dict fails
             pass
     return str(obj)
 
@@ -46,6 +47,7 @@ def log_shield(msg):
             sys.stderr.write(f"[SHIELD] {msg}\n")
             sys.stderr.flush()
     except Exception:
+        # Silently ignore failure to write to stderr in frozen environment
         pass
 
 
@@ -294,4 +296,5 @@ class ReactiveState:
             store = object.__getattribute__(self, "_store")
             store.update(json_safe_dump(mapping))
         except Exception:
+            # Silently ignore store update errors
             pass

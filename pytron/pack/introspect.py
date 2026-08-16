@@ -258,6 +258,7 @@ class DependencyIntrospector:
             try:
                 os.remove(c_file)
             except Exception:
+                # Silently ignore failure to remove temporary C file
                 pass
 
             # Scan for standard C-API import calls

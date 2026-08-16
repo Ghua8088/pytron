@@ -199,6 +199,7 @@ class ServoBridge:
             js_code = _to_str(ctypes.cast(arg, ctypes.c_char_p))
             self.eval(js_code)
         except Exception:
+            # Silently ignore invalid dispatch payloads
             pass
 
 
@@ -420,6 +421,7 @@ class ServoWebView(Webview):
                 self.bridge.real_hwnd = int(hwnd_str)
                 self.logger.info(f"Acquired Electron HWND: {self.bridge.real_hwnd}")
             except Exception:
+                # Silently ignore invalid HWND parse
                 pass
             return
 

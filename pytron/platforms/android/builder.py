@@ -866,6 +866,7 @@ endian = 'little'
                     env=os.environ.copy(),
                 )  # nosec B603
             except Exception:
+                # Silently ignore if build dependencies are already present or network fails
                 pass
 
             # 2. Setup Spoofed Environment

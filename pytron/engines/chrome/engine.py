@@ -131,6 +131,7 @@ class ChromeBridge:
             js_code = _to_str(ctypes.cast(arg, ctypes.c_char_p))
             self.eval(js_code)
         except Exception:
+            # Silently ignore invalid dispatch payloads or serialization errors
             pass
 
 
@@ -555,7 +556,6 @@ class ChromeWebView(Webview):
             return
 
         if sys.platform == "win32":
-            import ctypes
             import ctypes.wintypes
 
             user32 = ctypes.windll.user32
@@ -657,7 +657,6 @@ class ChromeWebView(Webview):
             return
 
         if sys.platform == "win32":
-            import ctypes
             import ctypes.wintypes
 
             user32 = ctypes.windll.user32

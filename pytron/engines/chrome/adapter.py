@@ -217,6 +217,7 @@ class ChromeIPCServer:
             try:
                 os.remove(self.pipe_path_base)
             except Exception:
+                # Silently ignore if pipe file was already cleaned up
                 pass
 
     def _recv_bytes(self, n):

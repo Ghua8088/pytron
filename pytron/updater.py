@@ -38,6 +38,7 @@ class Updater:
                 if "version" in data:
                     self.current_version = data["version"]
         except Exception:
+            # Silently ignore if settings.json is missing or unparseable
             pass
 
     def check(self, url: str) -> dict | None:

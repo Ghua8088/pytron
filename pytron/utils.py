@@ -137,6 +137,7 @@ def resolve_native_module():
                     try:
                         os.add_dll_directory(p)
                     except Exception:
+                        # Silently ignore if directory cannot be added as DLL search path
                         pass
 
         # 2. DISCOVERY
@@ -200,8 +201,10 @@ def resolve_native_module():
                         (PRIORITY_PACKAGE_FALLBACK, path, native_pkg)
                     )
                 except Exception:
+                    # Silently ignore failure to import native package fallback
                     pass
             except Exception:
+                # Silently ignore general import fallback failure
                 pass
 
         # 3. SELECTION & LOCKDOWN

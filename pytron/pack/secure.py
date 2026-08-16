@@ -231,6 +231,7 @@ if __name__ == "__main__":
                         try:
                             shutil.copy2(dll, final_dist / dll.name)
                         except Exception:
+                            # Silently ignore if runtime DLL cannot be copied
                             pass
 
         # 5. FUSE AND CLOAK LIBRARY (Optional via --bundled)
