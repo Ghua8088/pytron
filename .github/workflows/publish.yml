@@ -123,7 +123,7 @@ jobs:
       # it into a manylinux wheel.
 
       - name: 📤 Upload Wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: wheels-${{ matrix.os }}
           path: dist/*.whl
@@ -143,7 +143,7 @@ jobs:
           pip install build
           python -m build --sdist
       - name: 📤 Upload SDist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: sdist
           path: dist/*.tar.gz
