@@ -1,16 +1,16 @@
 import threading
 import unittest.mock
 from unittest.mock import MagicMock
-from pytron.state import ReactiveState
-
 
 import pytest
+
+from pytron.state import ReactiveState
 
 
 @pytest.fixture(autouse=True)
 def reset_store():
-    import sys
     import builtins
+    import sys
 
     # Clear Sovereign Key
     for store in (sys, builtins):

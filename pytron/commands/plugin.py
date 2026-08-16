@@ -1,14 +1,16 @@
 import argparse
+import json
 import os
 import shutil
-import zipfile
-import requests
-import json
 import subprocess
+import zipfile
 from pathlib import Path
+
+import requests
+
 from ..console import log, print_rule
+from .helpers import get_config, get_python_executable
 from .login import get_github_token
-from .helpers import get_python_executable, get_config
 
 
 def cmd_plugin(args: argparse.Namespace) -> int:
@@ -79,7 +81,7 @@ class {name.capitalize()}Plugin:
     def setup(self):
         \"\"\"Standard Pytron plugin setup hook.\"\"\"
         self.app.expose(self.greet, name="{name}_greet")
-        
+
         # Example usage of Scoped Storage
         count = self.app.storage.get("load_count", 0)
         self.app.storage.set("load_count", count + 1)

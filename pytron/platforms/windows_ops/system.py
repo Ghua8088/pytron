@@ -1,6 +1,9 @@
 import ctypes
 import os
 import sys
+
+from ...utils import resolve_native_bridge
+from . import toasts
 from .constants import (
     BIF_NEWDIALOGSTYLE,
     BIF_RETURNONLYFSDIRS,
@@ -12,8 +15,8 @@ from .constants import (
     NIM_ADD,
     NIM_MODIFY,
     NIM_SETVERSION,
-    NOTIFYICONDATAW,
     NOTIFYICON_VERSION_4,
+    NOTIFYICONDATAW,
     OFN_EXPLORER,
     OFN_FILEMUSTEXIST,
     OFN_NOCHANGEDIR,
@@ -22,8 +25,6 @@ from .constants import (
     OPENFILENAMEW,
 )
 from .utils import get_hwnd
-from . import toasts
-from ...utils import resolve_native_bridge
 
 _AUTO_NATIVE_BRIDGE = object()
 pytron_native = _AUTO_NATIVE_BRIDGE

@@ -1,7 +1,8 @@
-import sys
 import os
-from ..utils import resolve_native_bridge
+import sys
 from typing import Optional
+
+from ..utils import resolve_native_bridge
 from .component import AppComponent
 
 # Legacy compatibility symbol retained so older tests and patch points

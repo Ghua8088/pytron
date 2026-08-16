@@ -1,6 +1,7 @@
-import pytest
 import sys
-from unittest.mock import patch, MagicMock, ANY, PropertyMock
+from unittest.mock import ANY, MagicMock, PropertyMock, patch
+
+import pytest
 
 from pytron.exceptions import NativeEngineError
 

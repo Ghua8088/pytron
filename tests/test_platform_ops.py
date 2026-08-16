@@ -1,8 +1,8 @@
-from unittest.mock import patch, mock_open
 import os
+from unittest.mock import mock_open, patch
 
-from pytron.platforms.linux import LinuxImplementation
 from pytron.platforms.darwin import DarwinImplementation
+from pytron.platforms.linux import LinuxImplementation
 
 
 class TestLinuxImplementation:

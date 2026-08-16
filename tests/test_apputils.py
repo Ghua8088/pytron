@@ -1,4 +1,5 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from pytron.apputils.deadmansswitch import DeadMansSwitch
 from pytron.apputils.shell import ShellComponent
 

@@ -1,7 +1,7 @@
-import subprocess
+import ctypes
 import os
 import shutil
-import ctypes
+import subprocess
 
 # from . import libs # Lazy import inside functions to avoid Schism
 

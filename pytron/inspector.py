@@ -1,9 +1,10 @@
 import logging
-import traceback
-import time
 import os
 import sys
+import time
+import traceback
 from collections import deque
+
 from .serializer import pytron_serialize
 
 

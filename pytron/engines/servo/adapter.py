@@ -1,14 +1,14 @@
-import os
-import sys
+import ctypes
 import json
 import logging
-import threading
+import os
 import socket
-import uuid
 import struct
 import subprocess
+import sys
 import tempfile
-import ctypes
+import threading
+import uuid
 
 try:
     from ...dependencies import pytron_native

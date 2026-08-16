@@ -1,4 +1,5 @@
 import os
+
 from pytron import App
 
 # Setup example directory

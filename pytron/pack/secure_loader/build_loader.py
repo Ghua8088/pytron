@@ -1,8 +1,8 @@
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-import os
 
 
 def build_and_deploy():

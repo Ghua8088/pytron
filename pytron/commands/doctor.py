@@ -1,10 +1,11 @@
+import argparse
 import os
-import sys
 import platform
 import shutil
 import subprocess
-import argparse
+import sys
 from pathlib import Path
+
 from ..console import console, print_rule
 
 

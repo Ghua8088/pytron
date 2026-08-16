@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
-from ..console import log, console, print_rule
+
+from ..console import console, log, print_rule
 
 WORKFLOW_TEMPLATE = r"""name: Package App (Multi-Platform)
 

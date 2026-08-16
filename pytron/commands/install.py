@@ -1,17 +1,17 @@
 import argparse
-import subprocess
-import venv
 import json
 import re
+import shutil
+import subprocess
+import venv
 from pathlib import Path
+
 from ..console import (
-    log,
     get_progress,
+    log,
     run_command_with_output,
 )
-import shutil
-
-from .helpers import get_venv_python_path, get_sanitized_env
+from .helpers import get_sanitized_env, get_venv_python_path
 from .plugin import perform_plugin_install
 
 REQUIREMENTS_JSON = Path("requirements.json")

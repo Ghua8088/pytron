@@ -1,7 +1,8 @@
+import argparse
+import importlib.util
 import os
 import sys
-import importlib.util
-import argparse
+
 from pytron.console import log
 
 

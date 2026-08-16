@@ -1,9 +1,10 @@
+import importlib.metadata
+import json
 import os
 import sys
-import json
-import importlib.metadata
 from pathlib import Path
-from typing import List, Set, Optional
+from typing import List, Optional, Set
+
 from ..console import log
 
 

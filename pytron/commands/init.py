@@ -1,23 +1,24 @@
-import sys
-import subprocess
 import argparse
-import shutil
 import json
+import shutil
+import subprocess
+import sys
 from pathlib import Path
+
+from .. import __version__
 from ..console import (
-    log,
     console,
     get_progress,
+    log,
     print_rule,
     run_command_with_output,
 )
-from .. import __version__
 
 TEMPLATE_APP = """from pytron import App
 
 def main():
     app = App()
-    
+
     # Expose Python function to Frontend
     @app.expose
     def greet(name):
@@ -40,7 +41,7 @@ This project is built with **Pytron-kit**, a multi-engine desktop framework.
 - **Async & Threading:** Exposed functions are powered by `asyncio`. For CPU-intensive tasks, use `run_in_thread=True` (default) to keep the UI responsive.
 - **IPC Batching:** To avoid latency, batch multiple backend updates into one `dispatch()` call rather than emitting many small events.
 - **State Management:** Pytron's reactive state is optimized; direct updates to `app.state` only trigger re-renders for the specific affected components.
-    
+
 ## API Documentation (Flat API)
 Access these via `app` in Python or `pytron` in JS.
 
@@ -52,9 +53,9 @@ Access these via `app` in Python or `pytron` in JS.
 
 ### 2. IPC & Event Bus
 - **Calls:** `pytron.method_name(args)` in JS calls `@app.expose` in Python.
-- **Python -> JS Events:** Use `app.dispatch(event, data)`. 
+- **Python -> JS Events:** Use `app.dispatch(event, data)`.
   - Handle in JS: `pytron.on('event', (data) => { ... })`
-- **JS -> Python Events:** Use `pytron.emit(event, data)`. 
+- **JS -> Python Events:** Use `pytron.emit(event, data)`.
   - Handle in Python: `@app.listen('event') def my_handler(data): ...`
 
 ### 3. Native UI & Dialogs
@@ -447,7 +448,7 @@ function App() {
     <div style={{ textAlign: "center", marginTop: "50px", fontFamily: "system-ui" }}>
         <h1> Pytron + React</h1>
         <p style={{ fontSize: "1.2rem", color: "#666" }}>{msg}</p>
-        <button 
+        <button
           onClick={handleGreet}
           style={{ padding: "10px 20px", fontSize: "1rem", cursor: "pointer" }}
         >

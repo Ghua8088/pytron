@@ -1,15 +1,15 @@
-import os
-import sys
+import ctypes
 import json
 import logging
-import threading
+import os
 import socket
-import uuid
+import stat
 import struct
 import subprocess
+import sys
 import tempfile
-import ctypes
-import stat
+import threading
+import uuid
 from collections import deque
 
 try:

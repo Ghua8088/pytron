@@ -1,11 +1,10 @@
-import os
-import sys
 import json
 import logging
-from ..utils import get_resource_path
+import os
+import sys
+
 from ..exceptions import ConfigError
-
-
+from ..utils import get_resource_path
 from .component import AppComponent
 
 
@@ -231,10 +230,10 @@ class ConfigComponent(AppComponent):
         return app_id
 
     def _setup_single_instance(self, app_id):
-        import socket
         import hashlib
-        import threading
         import os
+        import socket
+        import threading
 
         # Skip during tests and development as they often require flexibility
         if "PYTEST_CURRENT_TEST" in os.environ or not getattr(sys, "frozen", False):

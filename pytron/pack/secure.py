@@ -1,16 +1,14 @@
 import os
-import sys
 import shutil
+import sys
 from pathlib import Path
+
 from ..console import log
 from ..exceptions import ModuleError
-
-from .metadata import MetadataEditor
-from .pipeline import BuildModule, BuildContext
-from .utils import cleanup_dist
-
-
 from .compilers import compile_script as cython_compile
+from .metadata import MetadataEditor
+from .pipeline import BuildContext, BuildModule
+from .utils import cleanup_dist
 
 # Legacy compatibility if needed or removed entirely
 # def cython_compile(script_path: Path, build_dir: Path): ...
@@ -41,7 +39,7 @@ import pytron
 
 # 'app' is a built-in module linked statically into this executable.
 try:
-    import app 
+    import app
 except Exception as e:
     # LOUD FAILURE: Write to log and show messagebox if on Windows
     msg = f"Boot Error: Failed to load built-in app: {e}"

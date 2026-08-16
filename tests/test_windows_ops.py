@@ -1,8 +1,10 @@
-import sys
 import ctypes
-import pytest
+import sys
 from unittest.mock import MagicMock, patch
-from pytron.platforms.windows_ops import window, system, constants
+
+import pytest
+
+from pytron.platforms.windows_ops import constants, system, window
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows only tests")
 
@@ -486,8 +488,8 @@ def test_set_window_icon_skips_missing_file(hwnd_system, no_pytron_native_system
 
 
 def test_set_window_icon_ctypes_sends_wm_seticon(hwnd_system, no_pytron_native_system):
-    import tempfile
     import os
+    import tempfile
 
     with tempfile.NamedTemporaryFile(suffix=".ico", delete=False) as f:
         ico_path = f.name

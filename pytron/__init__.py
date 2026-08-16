@@ -1,6 +1,6 @@
-import sys
-import os
 import io
+import os
+import sys
 import types
 
 # --- Linux Stability Guards (Nuclear Edition) ---
@@ -102,9 +102,9 @@ if "pytest" not in sys.modules and "pytest" not in sys.argv[0]:
 # Fetch version from installed package metadata to avoid manual updates
 try:
     if sys.version_info >= (3, 8):
-        from importlib.metadata import version, PackageNotFoundError
+        from importlib.metadata import PackageNotFoundError, version
     else:
-        from importlib_metadata import version, PackageNotFoundError
+        from importlib_metadata import PackageNotFoundError, version
 
     try:
         __version__ = version("pytron-kit")
@@ -143,10 +143,10 @@ sys.modules["plugins"] = plugins
 # print(f"[Pytron] Injected plugins namespace into sys.modules: {sys.modules['plugins']}")
 # --------------------------------------
 
-from .core import App, Webview, get_resource_path, Menu, MenuBar  # noqa: E402
+from .core import App, Menu, MenuBar, Webview, get_resource_path  # noqa: E402
 from .plugin import Plugin  # noqa: E402
-from .updater import Updater  # noqa: E402
 from .testing import PytronTestClient  # noqa: E402
+from .updater import Updater  # noqa: E402
 
 __all__ = [
     "App",

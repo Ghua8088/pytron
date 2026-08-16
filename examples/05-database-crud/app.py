@@ -1,4 +1,5 @@
 import sqlite3
+
 from pytron import App
 
 app = App()

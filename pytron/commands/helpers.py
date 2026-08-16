@@ -1,10 +1,11 @@
 from __future__ import annotations
+
+import json
+import os
 import shutil
 import subprocess
-import json
 import sys
 from pathlib import Path
-import os
 
 
 def get_venv_python_path(venv_dir: Path = Path("env")) -> Path:

@@ -1,8 +1,9 @@
 import os
-import sys
 import subprocess
-from .interface import PlatformInterface
+import sys
+
 from ..utils import resolve_native_bridge
+from .interface import PlatformInterface
 
 
 class DarwinImplementation(PlatformInterface):

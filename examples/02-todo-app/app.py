@@ -1,6 +1,8 @@
-from pytron import App
-from pydantic import BaseModel
 import uuid
+
+from pydantic import BaseModel
+
+from pytron import App
 
 app = App()
 

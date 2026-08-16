@@ -4,6 +4,7 @@ try:
     import ctypes.wintypes
 except ImportError:
     ctypes.wintypes = None
+from ...utils import resolve_native_bridge
 from .constants import (
     DWMWA_BORDER_COLOR,
     DWMWA_WINDOW_CORNER_PREFERENCE,
@@ -11,13 +12,13 @@ from .constants import (
     GWL_EXSTYLE,
     GWL_STYLE,
     HTCAPTION,
+    SW_HIDE,
+    SW_SHOW,
     SWP_FRAMECHANGED,
     SWP_NOACTIVATE,
     SWP_NOMOVE,
     SWP_NOSIZE,
     SWP_NOZORDER,
-    SW_HIDE,
-    SW_SHOW,
     WM_CLOSE,
     WM_NCLBUTTONDOWN,
     WS_CAPTION,
@@ -26,7 +27,6 @@ from .constants import (
     WS_THICKFRAME,
 )
 from .utils import get_hwnd
-from ...utils import resolve_native_bridge
 
 
 class _NativeBridgeProxy:

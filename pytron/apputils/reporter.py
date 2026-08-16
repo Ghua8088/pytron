@@ -1,7 +1,8 @@
+import datetime
 import os
 import sys
-import datetime
 import traceback
+
 from .component import AppComponent
 
 

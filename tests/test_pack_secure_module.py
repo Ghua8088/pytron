@@ -1,5 +1,6 @@
 from unittest.mock import patch
-from pytron.pack.secure import SecurityModule, BuildContext
+
+from pytron.pack.secure import BuildContext, SecurityModule
 
 
 def test_security_module_prepare(tmp_path):

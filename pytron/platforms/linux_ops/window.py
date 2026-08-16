@@ -1,4 +1,5 @@
 import ctypes
+
 from . import libs
 from .utils import get_window
 

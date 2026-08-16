@@ -1,11 +1,13 @@
 import os
-import pytest
-from unittest.mock import patch
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
 from pytron.pack.installers import (
     build_installer,
-    build_windows_installer,
     build_linux_installer,
+    build_windows_installer,
 )
 
 

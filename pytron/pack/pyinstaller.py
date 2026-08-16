@@ -1,14 +1,12 @@
+import hashlib
 import os
 import sys
 from pathlib import Path
-from ..console import log, run_command_with_output
+
 from ..commands.helpers import get_python_executable
-from .utils import cleanup_dist
-
+from ..console import log, run_command_with_output
 from .pipeline import BuildContext
-
-
-import hashlib
+from .utils import cleanup_dist
 
 
 def _compute_spec_hash(context: BuildContext, makespec_cmd: list) -> str:

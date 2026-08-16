@@ -1,8 +1,9 @@
-import sys
-import os
-import time
-import threading
 import json
+import os
+import sys
+import threading
+import time
+
 import pytest
 
 try:

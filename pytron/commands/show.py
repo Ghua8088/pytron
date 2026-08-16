@@ -1,7 +1,8 @@
 import argparse
 from pathlib import Path
-from .helpers import get_venv_python_path
+
 from ..console import log, run_command_with_output
+from .helpers import get_venv_python_path
 
 
 def cmd_show(args: argparse.Namespace) -> int:

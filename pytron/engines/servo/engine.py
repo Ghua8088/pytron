@@ -1,10 +1,11 @@
-import os
-import sys
+import asyncio
+import ctypes
 import json
 import logging
-import ctypes
+import os
+import sys
 import threading
-import asyncio
+
 from ...webview import Webview
 from .adapter import ServoAdapter
 from .forge import ServoForge
@@ -284,13 +285,13 @@ class ServoWebView(Webview):
             }} catch (e) {{
                 // Already read-only or handled by bridge
             }}
-            
+
             window.pytron_is_native = true;
 
             // --- DE-BROWSERIFY CORE ---
             (function() {{
                 const isDebug = {str(self.config.get("debug", False)).lower()};
-                
+
                 // 1. Kill Context Menu (Unless debugging)
                 if (!isDebug) {{
                     document.addEventListener('contextmenu', e => e.preventDefault());
@@ -313,15 +314,15 @@ class ServoWebView(Webview):
                 // 4. Kill System UI Styles (Selection, Outlines, Rubber-banding)
                 const style = document.createElement('style');
                 style.textContent = `
-                    * {{ 
-                        -webkit-user-select: none; 
+                    * {{
+                        -webkit-user-select: none;
                         user-select: none;
-                        -webkit-user-drag: none; 
+                        -webkit-user-drag: none;
                         -webkit-tap-highlight-color: transparent;
                         outline: none !important;
                     }}
-                    input, textarea, [contenteditable], [contenteditable] * {{ 
-                        -webkit-user-select: text !important; 
+                    input, textarea, [contenteditable], [contenteditable] * {{
+                        -webkit-user-select: text !important;
                         user-select: text !important;
                     }}
                     html, body {{
@@ -362,16 +363,16 @@ class ServoWebView(Webview):
             }} catch (e) {{
                 // Skip proxy if window.pytron is read-only
             }}
-            
+
             // Standard Pollys & Asset Bridge
             window.pytron_drag = () => window.__pytron_native_bridge('pytron_drag', []);
             window.pytron_minimize = () => window.__pytron_native_bridge('pytron_minimize', []);
             window.pytron_get_asset = (key) => window.__pytron_native_bridge('pytron_get_asset', [key]);
-            
+
             window['pytron_drag'] = window.pytron_drag;
             window['pytron_minimize'] = window.pytron_minimize;
             window['pytron_get_asset'] = window.pytron_get_asset;
-            window['__pytron_vap_get'] = window.pytron_get_asset; 
+            window['__pytron_vap_get'] = window.pytron_get_asset;
 
         }})();
         """

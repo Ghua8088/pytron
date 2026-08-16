@@ -1,6 +1,8 @@
-import pytest
 import subprocess
 from unittest.mock import patch
+
+import pytest
+
 from pytron.platforms.android.builder import AndroidBuilder
 
 

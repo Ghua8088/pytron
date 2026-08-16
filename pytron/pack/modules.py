@@ -1,12 +1,13 @@
-import os
-import sys
 import json
+import os
 import shutil
+import sys
 from pathlib import Path
-from .pipeline import BuildModule, BuildContext
-from ..console import log, console
+
+from ..console import console, log
 from .assets import get_smart_assets
 from .metadata import MetadataEditor
+from .pipeline import BuildContext, BuildModule
 
 
 class FrontendModule(BuildModule):
@@ -428,9 +429,9 @@ class HookModule(BuildModule):
         if not should_run or context.is_archive_only:
             return
 
-        from .pipeline import log
         from ..commands.harvest import generate_nuclear_hooks
         from ..commands.helpers import get_python_executable, get_venv_site_packages
+        from .pipeline import log
 
         log("Generating nuclear build hooks...", style="info")
         temp_hooks_dir = context.build_dir / "nuclear_hooks"

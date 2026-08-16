@@ -1,20 +1,21 @@
 import argparse
 from pathlib import Path
+
 from ..console import (
-    console,
-    log,
-    get_progress,
-    run_command_with_output,
     Rule,
+    console,
+    get_progress,
+    log,
+    run_command_with_output,
 )
+from ..pack.installers import build_installer
+from ..pack.utils import cleanup_dist
 from .harvest import generate_nuclear_hooks
 from .helpers import (
     get_python_executable,
     get_venv_site_packages,
 )
 from .utils import resolve_package_metadata
-from ..pack.installers import build_installer
-from ..pack.utils import cleanup_dist
 
 
 def cmd_package(args: argparse.Namespace) -> int:
@@ -98,18 +99,18 @@ def cmd_package(args: argparse.Namespace) -> int:
     out_name, settings = resolve_package_metadata(script, args.name)
 
     # --- Modular Build Pipeline ---
-    from ..pack.pipeline import BuildContext, Pipeline
     from ..pack.modules import (
-        FrontendModule,
         AssetModule,
-        PackModule,
         EngineModule,
-        MetadataModule,
-        InstallerModule,
-        PluginModule,
+        FrontendModule,
         HookModule,
         IconModule,
+        InstallerModule,
+        MetadataModule,
+        PackModule,
+        PluginModule,
     )
+    from ..pack.pipeline import BuildContext, Pipeline
 
     # Resolve icon to absolute path NOW (before CWD can drift during post_build)
     resolved_icon = None

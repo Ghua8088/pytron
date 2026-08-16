@@ -1,8 +1,9 @@
 import os
 import sys
 from typing import Any, List
-from .component import AppComponent
+
 from ..plugin import Plugin
+from .component import AppComponent
 
 
 class PluginComponent(AppComponent):

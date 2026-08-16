@@ -1,9 +1,9 @@
-import sys
 import ctypes
-import queue
-import threading
 import logging
-from typing import Callable, Dict, Any
+import queue
+import sys
+import threading
+from typing import Any, Callable, Dict
 
 from .utils import resolve_native_bridge
 

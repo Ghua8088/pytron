@@ -1,9 +1,10 @@
-import pytest
 from unittest.mock import MagicMock, patch
 
-from pytron.webview import Webview
+import pytest
+
 from pytron.engines.chrome.engine import ChromeWebView
 from pytron.engines.servo.engine import ServoWebView
+from pytron.webview import Webview
 
 # Mark all tests in this file as functional/webview tests
 pytestmark = [pytest.mark.webview, pytest.mark.functional]

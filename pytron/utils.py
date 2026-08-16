@@ -1,9 +1,9 @@
-import sys
-import os
-import threading
-import tempfile
 import importlib
 import importlib.util
+import os
+import sys
+import tempfile
+import threading
 
 # --- SINGLE ORIGIN LOCKDOWN ---
 # We store the resolved native module here to ensure

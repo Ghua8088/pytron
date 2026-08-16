@@ -1,6 +1,8 @@
 import os
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from pytron.apputils.extras import ExtrasComponent
 
 # Mock PluginError since we can't easily import it if it's inside a function in the mixin

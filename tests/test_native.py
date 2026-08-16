@@ -1,8 +1,10 @@
 """Tests for NativeComponent (pytron.apputils.native)."""
 
 import sys
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from pytron.apputils.native import NativeComponent
 
 # ---------------------------------------------------------------------------

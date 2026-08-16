@@ -1,10 +1,11 @@
-import os
-import sys
+import ctypes
 import json
 import logging
-import ctypes
+import os
 import subprocess
+import sys
 from typing import Optional
+
 from ...webview import Webview
 from .adapter import ChromeAdapter
 

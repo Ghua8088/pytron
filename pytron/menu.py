@@ -1,5 +1,5 @@
 import ctypes
-from typing import List, Optional, Callable
+from typing import Callable, List, Optional
 
 
 class Menu:
@@ -68,11 +68,11 @@ class MenuBar:
         """Creates and attaches a Win32 menu to the given HWND."""
         user32 = ctypes.windll.user32
         from .platforms.windows_ops.constants import (
-            MF_STRING,
+            MF_CHECKED,
+            MF_GRAYED,
             MF_POPUP,
             MF_SEPARATOR,
-            MF_GRAYED,
-            MF_CHECKED,
+            MF_STRING,
         )
 
         h_menubar = user32.CreateMenu()

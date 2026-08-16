@@ -1,11 +1,12 @@
+import json
 import os
-import sys
-import shutil
-import subprocess
 import platform
 import re
-import json
+import shutil
+import subprocess
+import sys
 from pathlib import Path
+
 from ..console import log
 
 

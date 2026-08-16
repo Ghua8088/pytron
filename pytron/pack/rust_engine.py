@@ -1,11 +1,12 @@
 import os
-import sys
 import shutil
+import sys
 from pathlib import Path
-from .pipeline import BuildModule, BuildContext
+
+from ..commands.helpers import get_python_executable
 from ..console import log
 from ..exceptions import ModuleError
-from ..commands.helpers import get_python_executable
+from .pipeline import BuildContext, BuildModule
 
 
 class RustEngine(BuildModule):

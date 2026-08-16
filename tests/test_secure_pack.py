@@ -1,6 +1,7 @@
 import os
-import pytest
 import secrets
+
+import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 # Use a fixed key for tests instead of trying to import it
@@ -51,8 +52,9 @@ def test_cross_platform_path_logic():
     """
     Verifies that the packager generates valid cross-platform binary names.
     """
-    from pytron.pack.utils import get_native_engine_binaries
     import sys
+
+    from pytron.pack.utils import get_native_engine_binaries
 
     libs = get_native_engine_binaries()
     if sys.platform == "win32":

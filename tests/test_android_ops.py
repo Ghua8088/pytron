@@ -1,12 +1,14 @@
 import os
-import pytest
 from unittest.mock import patch
+
+import pytest
+
+from pytron.platforms.android.ops.build import build_android_project
 
 # Import the modules to test
 from pytron.platforms.android.ops.init import (
     init_android_project,
 )
-from pytron.platforms.android.ops.build import build_android_project
 from pytron.platforms.android.ops.run import run_android_project
 from pytron.platforms.android.ops.sync import sync_android_project
 

@@ -1,7 +1,8 @@
 import os
-import sys
 import shutil
+import sys
 from pathlib import Path
+
 from ..console import log, run_command_with_output
 
 

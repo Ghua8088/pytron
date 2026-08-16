@@ -1,5 +1,7 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 from pytron.apputils.codegen import CodegenComponent
 
 
@@ -29,7 +31,7 @@ def test_python_type_to_ts_basics(app):
 
 
 def test_python_type_to_ts_generics(app):
-    from typing import List, Dict, Union, Optional
+    from typing import Dict, List, Optional, Union
 
     assert app._python_type_to_ts(List[str]) == "string[]"
     assert app._python_type_to_ts(Dict[str, int]) == "Record<string, number>"

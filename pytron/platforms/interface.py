@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, List, TypeAlias
+from typing import Dict, List, Optional, TypeAlias
 
 # Defines a "Handle" type for clarity -> Zero runtime cost, high readability.
 WindowHandle: TypeAlias = int

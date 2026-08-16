@@ -1,5 +1,7 @@
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from pytron.pack.nuitka import run_nuitka_build
 from pytron.pack.pyinstaller import run_pyinstaller_build
 

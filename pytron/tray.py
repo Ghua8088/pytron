@@ -1,11 +1,12 @@
+import ctypes
+import logging
 import os
 import sys
-import ctypes
 import threading
-import logging
 from typing import Callable, List, Optional
+
 from .exceptions import TrayError
-from .utils import get_resource_path, resolve_native_bridge, com_thread_initializer
+from .utils import com_thread_initializer, get_resource_path, resolve_native_bridge
 
 
 def _get_native_bridge():
@@ -19,6 +20,7 @@ def _get_native_bridge():
 # Platform-specific imports
 if sys.platform == "win32":
     import ctypes.wintypes
+
     from .platforms.windows_ops.constants import NOTIFYICONDATAW
 
 # Windows Constants
@@ -125,11 +127,11 @@ class SystemTray:
     def _start_darwin(self, app):
         try:
             from AppKit import (
-                NSStatusBar,
-                NSVariableStatusItemLength,
+                NSImage,
                 NSMenu,
                 NSMenuItem,
-                NSImage,
+                NSStatusBar,
+                NSVariableStatusItemLength,
             )
 
             self._status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(
@@ -191,7 +193,7 @@ class SystemTray:
 
             gi.require_version("Gtk", "3.0")
             gi.require_version("AppIndicator3", "0.1")
-            from gi.repository import Gtk, AppIndicator3
+            from gi.repository import AppIndicator3, Gtk
 
             ind_id = f"pytron.tray.{id(self)}"
             icon = self.icon_path if self.icon_path else "help-about"

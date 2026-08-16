@@ -1,8 +1,10 @@
-import pytest
 import json
-from unittest.mock import patch, MagicMock, mock_open
-from pytron.updater import Updater
+from unittest.mock import MagicMock, mock_open, patch
+
+import pytest
+
 from pytron.exceptions import UpdateError
+from pytron.updater import Updater
 
 
 @pytest.fixture

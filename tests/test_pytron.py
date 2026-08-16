@@ -1,8 +1,10 @@
-import pytest
 import os
 import tempfile
+
+import pytest
+
 from pytron.application import App
-from pytron.exceptions import PytronError, ConfigError
+from pytron.exceptions import ConfigError, PytronError
 
 
 class TestExceptions:

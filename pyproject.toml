@@ -149,3 +149,7 @@ extend-exclude = [
     "build",
     "dist"
 ]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]

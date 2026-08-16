@@ -1,25 +1,24 @@
+import asyncio
+import inspect
 import os
 import sys
-import asyncio
-from typing import Any, List, Optional, Dict, Callable
 from concurrent.futures import ThreadPoolExecutor
-
-from .state import ReactiveState
-from .router import Router
-from .shortcuts import ShortcutManager
-from .inspector import Inspector
-import inspect
+from typing import Any, Callable, Dict, List, Optional
 
 # Component Imports
 from .apputils.codegen import CodegenComponent
-from .apputils.native import NativeComponent
 from .apputils.config import ConfigComponent
-from .apputils.window_mixin import WindowComponent
+from .apputils.docgen import DocgenComponent
 from .apputils.extras import ExtrasComponent
-from .apputils.shell import ShellComponent
+from .apputils.native import NativeComponent
 from .apputils.plugins import PluginComponent
 from .apputils.reporter import CrashReporter
-from .apputils.docgen import DocgenComponent
+from .apputils.shell import ShellComponent
+from .apputils.window_mixin import WindowComponent
+from .inspector import Inspector
+from .router import Router
+from .shortcuts import ShortcutManager
+from .state import ReactiveState
 
 
 class App:

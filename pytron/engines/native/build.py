@@ -1,6 +1,6 @@
-import subprocess
-import shutil
 import os
+import shutil
+import subprocess
 import sys
 
 # Paths

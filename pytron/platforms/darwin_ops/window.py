@@ -1,5 +1,5 @@
 from . import libs
-from .utils import get_window, call, get_class, str_to_nsstring, msg_send
+from .utils import call, get_class, get_window, msg_send, str_to_nsstring
 
 
 def minimize(w):

@@ -1,7 +1,9 @@
-import pytest
 import asyncio
-from pytron.application import App
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+from pytron.application import App
 
 
 class TestAppLifecycle:

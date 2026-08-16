@@ -1,8 +1,9 @@
 import argparse
 import shutil
 from pathlib import Path
-from .helpers import locate_frontend_dir, get_config
-from ..console import log, run_command_with_output, get_progress
+
+from ..console import get_progress, log, run_command_with_output
+from .helpers import get_config, locate_frontend_dir
 
 
 def cmd_frontend(args: argparse.Namespace) -> int:

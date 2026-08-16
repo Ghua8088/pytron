@@ -1,11 +1,10 @@
 import os
-import sys
 import shutil
 import subprocess  # nosec B404
-from ..console import log, run_command_with_output
+import sys
+
 from ..commands.helpers import get_python_executable
-
-
+from ..console import log, run_command_with_output
 from .pipeline import BuildContext
 
 

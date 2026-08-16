@@ -8,8 +8,8 @@ elif sys.platform == "darwin":
     from .darwin import DarwinImplementation as MacOSImplementation
 else:
     # Generic or unsupported platform fallback
-    from .interface import PlatformInterface as WindowsImplementation
     from .interface import PlatformInterface as LinuxImplementation
     from .interface import PlatformInterface as MacOSImplementation
+    from .interface import PlatformInterface as WindowsImplementation
 
 __all__ = ["WindowsImplementation", "LinuxImplementation", "MacOSImplementation"]

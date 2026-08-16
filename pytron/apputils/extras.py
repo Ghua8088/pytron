@@ -1,8 +1,7 @@
-import os
 import importlib
+import os
+
 from ..tray import SystemTray
-
-
 from .component import AppComponent
 
 

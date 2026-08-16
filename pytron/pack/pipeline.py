@@ -1,7 +1,8 @@
-from pathlib import Path
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
-from ..console import log, console
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from ..console import console, log
 from ..exceptions import BuildError, ModuleError
 
 
