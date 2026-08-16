@@ -1,4 +1,3 @@
-from rich.markup import escape
 from ....console import console, run_command_with_output
 
 

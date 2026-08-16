@@ -1,11 +1,11 @@
-import json
-import inspect
 import asyncio
-import logging
+import inspect
+import json
 from typing import Any, Callable
-from .base import WebviewComponent
+
 from ..serializer import pytron_serialize
 from ..utils import com_thread_initializer
+from .base import WebviewComponent
 
 
 class IPCComponent(WebviewComponent):

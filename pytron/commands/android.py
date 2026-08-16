@@ -1,9 +1,10 @@
-import os
 import argparse
-from ..platforms.android.ops.init import init_android_project, reset_android_project
-from ..platforms.android.ops.sync import sync_android_project
+import os
+
 from ..platforms.android.ops.build import build_android_project
+from ..platforms.android.ops.init import init_android_project, reset_android_project
 from ..platforms.android.ops.run import run_android_project, run_logcat
+from ..platforms.android.ops.sync import sync_android_project
 
 
 def cmd_android(args: argparse.Namespace) -> None:

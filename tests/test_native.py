@@ -1,9 +1,10 @@
 """Tests for NativeComponent (pytron.apputils.native)."""
 
 import sys
-import platform
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, call
+
 from pytron.apputils.native import NativeComponent
 
 # ---------------------------------------------------------------------------
@@ -141,7 +142,7 @@ def test_set_start_on_boot_falls_through_when_pytron_native_raises(app):
             with patch("sys.platform", "win32"):
                 with patch("pytron.platforms.windows.WindowsImplementation") as MockWin:
                     MockWin.return_value.set_launch_on_boot.return_value = True
-                    result = app.set_start_on_boot(True)  # must not raise
+                    app.set_start_on_boot(True)  # must not raise
     MockWin.return_value.set_launch_on_boot.assert_called_once()
 
 

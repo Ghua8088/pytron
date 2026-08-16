@@ -24,24 +24,25 @@ if sys.platform.startswith("linux"):
     os.environ["WINIT_UNIX_BACKEND"] = "x11"
 
 import argparse
-from .commands.init import cmd_init
-from .commands.run import cmd_run
-from .commands.package import cmd_package
-from .commands.build import cmd_build_frontend
-from .commands.info import cmd_info
-from .commands.install import cmd_install
-from .commands.uninstall import cmd_uninstall
-from .commands.show import cmd_show
-from .commands.plugin import cmd_plugin
-from .commands.frontend import cmd_frontend
-from .commands.login import cmd_login, cmd_logout
+
 from .commands.android import cmd_android
-from .commands.engine import cmd_engine
-from .commands.doctor import cmd_doctor
-from .commands.workflow import cmd_workflow
+from .commands.build import cmd_build_frontend
 from .commands.docs import cmd_docs
+from .commands.doctor import cmd_doctor
+from .commands.engine import cmd_engine
+from .commands.frontend import cmd_frontend
+from .commands.info import cmd_info
+from .commands.init import cmd_init
+from .commands.install import cmd_install
+from .commands.login import cmd_login, cmd_logout
+from .commands.package import cmd_package
+from .commands.plugin import cmd_plugin
+from .commands.run import cmd_run
+from .commands.show import cmd_show
+from .commands.uninstall import cmd_uninstall
+from .commands.workflow import cmd_workflow
 from .console import log
-import os
+from .exceptions import PytronError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -374,9 +375,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_docs.set_defaults(func=cmd_docs)
 
     return parser
-
-
-from .exceptions import PytronError
 
 
 def main(argv: list[str] | None = None) -> int:

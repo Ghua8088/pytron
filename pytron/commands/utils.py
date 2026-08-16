@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Tuple, Dict, Any
+from typing import Any, Dict, Tuple
 
 
 def resolve_package_metadata(

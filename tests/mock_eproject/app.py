@@ -1,6 +1,7 @@
-from pytron import App
-import sys
 import os
+import sys
+
+from pytron import App
 
 # Mock relative imports
 sys.path.append(os.path.dirname(__file__))

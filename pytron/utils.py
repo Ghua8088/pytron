@@ -1,9 +1,9 @@
-import sys
-import os
-import threading
-import tempfile
 import importlib
 import importlib.util
+import os
+import sys
+import tempfile
+import threading
 
 # --- SINGLE ORIGIN LOCKDOWN ---
 # We store the resolved native module here to ensure
@@ -136,7 +136,8 @@ def resolve_native_module():
                 if os.path.exists(p):
                     try:
                         os.add_dll_directory(p)
-                    except:
+                    except Exception:
+                        # Silently ignore if directory cannot be added as DLL search path
                         pass
 
         # 2. DISCOVERY
@@ -190,7 +191,6 @@ def resolve_native_module():
         if not candidate_modules:
             try:
                 # Import without crashing
-                from . import dependencies
 
                 try:
                     native_pkg = importlib.import_module(
@@ -200,9 +200,11 @@ def resolve_native_module():
                     candidate_modules.append(
                         (PRIORITY_PACKAGE_FALLBACK, path, native_pkg)
                     )
-                except:
+                except Exception:
+                    # Silently ignore failure to import native package fallback
                     pass
-            except:
+            except Exception:
+                # Silently ignore general import fallback failure
                 pass
 
         # 3. SELECTION & LOCKDOWN

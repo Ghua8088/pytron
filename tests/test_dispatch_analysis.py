@@ -1,8 +1,9 @@
-import pytest
 import asyncio
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from pytron.application import App
-import os
 
 
 @pytest.fixture

@@ -1,19 +1,12 @@
+import hashlib
 import os
 import sys
-import subprocess  # nosec B404
-import platform
 from pathlib import Path
-from ..console import log, run_command_with_output, console, Rule
-from ..commands.helpers import get_python_executable, get_venv_site_packages
-from ..commands.harvest import generate_nuclear_hooks
-from .installers import build_installer
-from .utils import cleanup_dist
 
-from .metadata import MetadataEditor
+from ..commands.helpers import get_python_executable
+from ..console import log, run_command_with_output
 from .pipeline import BuildContext
-
-
-import hashlib
+from .utils import cleanup_dist
 
 
 def _compute_spec_hash(context: BuildContext, makespec_cmd: list) -> str:

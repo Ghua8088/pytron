@@ -1,11 +1,13 @@
-import os
-import zipfile
-import shutil
-import requests
-import sys
-import platform
 import logging
+import os
+import platform
+import shutil
 import stat
+import sys
+import zipfile
+
+import requests
+
 from ...exceptions import ForgeError
 
 logger = logging.getLogger("Pytron.ChromeForge")
@@ -105,12 +107,12 @@ def download_electron(dest_path):
     temp_zip = os.path.join(dest_path, "electron.zip")
 
     from rich.progress import (
+        BarColumn,
+        DownloadColumn,
         Progress,
         SpinnerColumn,
-        TextColumn,
-        BarColumn,
         TaskProgressColumn,
-        DownloadColumn,
+        TextColumn,
         TransferSpeedColumn,
     )
 

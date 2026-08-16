@@ -1,9 +1,9 @@
-import pytest
 import argparse
 from pathlib import Path
-from pytron.commands.run import PytronFilter, cmd_run, run_dev_mode
-from pytron.commands.helpers import locate_frontend_dir
 from unittest.mock import MagicMock, patch
+
+from pytron.commands.helpers import locate_frontend_dir
+from pytron.commands.run import PytronFilter, cmd_run, run_dev_mode
 
 
 class TestPytronFilter:

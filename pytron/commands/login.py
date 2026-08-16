@@ -1,7 +1,9 @@
 import argparse
 import time
 import webbrowser
+
 import requests
+
 from ..console import log
 
 SERVICE_NAME = "pytron-kit"

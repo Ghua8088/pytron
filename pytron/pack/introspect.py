@@ -1,11 +1,10 @@
+import importlib.metadata
+import json
 import os
 import sys
-import ast
-import shutil
-import json
-import importlib.metadata
 from pathlib import Path
-from typing import List, Set, Dict, Any, Optional
+from typing import List, Optional, Set
+
 from ..console import log
 
 
@@ -258,7 +257,8 @@ class DependencyIntrospector:
             # Cleanup
             try:
                 os.remove(c_file)
-            except:
+            except Exception:
+                # Silently ignore failure to remove temporary C file
                 pass
 
             # Scan for standard C-API import calls
@@ -275,7 +275,7 @@ class DependencyIntrospector:
 
             return found_imports
 
-        except Exception as e:
+        except Exception:
             # log(f"Transpilation failed: {e}", style="dim")
             return []
 

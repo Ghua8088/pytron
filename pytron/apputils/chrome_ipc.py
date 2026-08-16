@@ -1,12 +1,11 @@
-import os
-import sys
 import json
 import logging
-import threading
-import subprocess
+import os
 import struct
+import subprocess
+import sys
 import tempfile
-import platform
+import threading
 import uuid
 
 logger = logging.getLogger("Pytron.ChromeIPC")
@@ -102,7 +101,7 @@ class ChromeIPCServer:
         self.connected = False
 
     def _raw_read(self, n):
-        from ctypes import windll, byref, c_ulong, create_string_buffer
+        from ctypes import byref, c_ulong, create_string_buffer, windll
 
         if sys.platform == "win32":
             buf = create_string_buffer(n)
@@ -124,7 +123,7 @@ class ChromeIPCServer:
             full_msg = header + body
 
             if sys.platform == "win32":
-                from ctypes import windll, byref, c_ulong
+                from ctypes import byref, c_ulong, windll
 
                 bytes_written = c_ulong(0)
                 windll.kernel32.WriteFile(

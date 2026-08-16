@@ -1,10 +1,10 @@
 # Re-export everything to maintain backward compatibility
-from .utils import get_resource_path
+from .application import App
+from .menu import Menu, MenuBar
 from .serializer import PytronJSONEncoder, pytron_serialize
 from .state import ReactiveState
-from .application import App
+from .utils import get_resource_path
 from .webview import Webview
-from .menu import Menu, MenuBar
 
 __all__ = [
     "get_resource_path",

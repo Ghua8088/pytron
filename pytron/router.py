@@ -1,7 +1,8 @@
-import re
-import urllib.parse
 import inspect
 import logging
+import re
+import urllib.parse
+
 from .exceptions import RoutingError
 
 

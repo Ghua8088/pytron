@@ -1,22 +1,22 @@
-import sys
-import json
-import time
-import threading
 import asyncio
-import pathlib
+import json
 import logging
-from typing import Callable, Optional, Any, TYPE_CHECKING, Dict
+import pathlib
+import sys
+import threading
+import time
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 if TYPE_CHECKING:
     from concurrent.futures import ThreadPoolExecutor
 
 # Import Webview Components
-from .webview_components.ipc import IPCComponent
-from .webview_components.routing import RoutingComponent
+from .exceptions import NativeEngineError
+from .utils import resolve_native_module
 from .webview_components.assets import AssetComponent
 from .webview_components.dialogs import DialogComponent
-from .utils import resolve_native_module, resolve_native_bridge
-from .exceptions import NativeEngineError
+from .webview_components.ipc import IPCComponent
+from .webview_components.routing import RoutingComponent
 
 # Initialize Native Engine via Canonical Resolver
 pytron_native = resolve_native_module()
@@ -91,8 +91,9 @@ class Webview:
         if self.app:
             self.thread_pool = self.app.thread_pool
         else:
-            from .utils import com_thread_initializer
             from concurrent.futures import ThreadPoolExecutor
+
+            from .utils import com_thread_initializer
 
             self.thread_pool = ThreadPoolExecutor(
                 max_workers=5, initializer=com_thread_initializer

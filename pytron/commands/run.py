@@ -1,22 +1,24 @@
 import argparse
-import sys
-import shutil
-import subprocess
 import json
 import os
+import shutil
+import subprocess
+import sys
 import types
 from pathlib import Path
+
 from rich.text import Text
-from ..console import log, console
+
+from ..console import console, log
 
 # Removed rich.text import previously but needed for Text.from_ansi correctly
 from .helpers import (
-    locate_frontend_dir,
-    run_frontend_build,
-    get_python_executable,
     ensure_next_config,
     get_config,
+    get_python_executable,
     get_sanitized_env,
+    locate_frontend_dir,
+    run_frontend_build,
 )
 
 try:
@@ -198,8 +200,8 @@ def run_dev_mode(script: Path, extra_args: list[str], engine: str = None) -> int
                 )  # nosec B603
 
                 # Scan for URL in a background thread
-                import threading
                 import re
+                import threading
 
                 url_found_event = threading.Event()
 

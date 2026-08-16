@@ -92,7 +92,7 @@ def sync_android_project(project_root: str, native: bool = False) -> None:
             f"  [Frontend] Found at {escape(os.path.relpath(frontend_src, project_root))}",
             style="dim",
         )
-        console.print(f"  [Frontend] Copying to assets/www...", style="dim")
+        console.print("  [Frontend] Copying to assets/www...", style="dim")
         shutil.copytree(frontend_src, www_dir)
     else:
         console.print(
@@ -563,7 +563,7 @@ def sync_android_project(project_root: str, native: bool = False) -> None:
             os.makedirs(jni_libs_dir, exist_ok=True)
 
             console.print(
-                f"  [Native]   Finalizing Dependency Flattening (Syncing jniLibs)...",
+                "  [Native]   Finalizing Dependency Flattening (Syncing jniLibs)...",
                 style="dim",
             )
             # 6a. Copy flattened libraries from builder cache

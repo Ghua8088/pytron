@@ -1,7 +1,8 @@
-import sys
 import pathlib
+import sys
 import urllib.parse
 from typing import Any
+
 from .base import WebviewComponent
 
 

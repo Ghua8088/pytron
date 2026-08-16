@@ -1,15 +1,15 @@
-import os
-import sys
+import ctypes
 import json
 import logging
-import threading
+import os
 import socket
-import uuid
+import stat
 import struct
 import subprocess
+import sys
 import tempfile
-import ctypes
-import stat
+import threading
+import uuid
 from collections import deque
 
 try:
@@ -118,7 +118,7 @@ class ChromeIPCServer:
             self._win_in_handle == INVALID_HANDLE_VALUE
             or self._win_out_handle == INVALID_HANDLE_VALUE
         ):
-            raise RuntimeError(f"Failed to create Dual Named Pipes")
+            raise RuntimeError("Failed to create Dual Named Pipes")
 
         # SIGNAL READY
         self.listening_event.set()
@@ -216,7 +216,8 @@ class ChromeIPCServer:
         if not self.is_windows and self.pipe_path_base:
             try:
                 os.remove(self.pipe_path_base)
-            except:
+            except Exception:
+                # Silently ignore if pipe file was already cleaned up
                 pass
 
     def _recv_bytes(self, n):

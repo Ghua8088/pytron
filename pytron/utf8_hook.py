@@ -6,11 +6,11 @@ platforms. It is best-effort and will not crash the application if any step
 fails.
 """
 
-import os
-import sys
 import io
 import locale
 import logging
+import os
+import sys
 
 
 def _set_utf8_mode():

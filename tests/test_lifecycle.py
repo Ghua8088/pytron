@@ -1,7 +1,9 @@
-import pytest
 import asyncio
-from pytron.application import App
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+from pytron.application import App
 
 
 class TestAppLifecycle:
@@ -11,7 +13,6 @@ class TestAppLifecycle:
         app.on_exit(mock_func)
 
         # Simulate app exit
-        from pytron.apputils.window_mixin import WindowComponent
 
         # The exit logic usually runs through _on_exit_cleanup which we should verify
         # or simulate the callback execution.
@@ -69,7 +70,7 @@ class TestAppLifecycle:
         app.state.count = 0
 
         # Mock app.broadcast (which is called by ReactiveState via app.windows)
-        with patch.object(app, "broadcast") as mock_broadcast:
+        with patch.object(app, "broadcast"):
             app.state.count = 1
             # Note: ReactiveState calls window.emit directly in the current implementation
             # so we'll check if broadcast or window.emit was called.

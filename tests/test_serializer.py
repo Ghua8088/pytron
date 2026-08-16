@@ -1,11 +1,13 @@
-import pytest
-import datetime
-import uuid
-import decimal
-import pathlib
-import enum
 import dataclasses
-from pytron.serializer import pytron_serialize, PytronJSONEncoder
+import datetime
+import decimal
+import enum
+import pathlib
+import uuid
+
+import pytest
+
+from pytron.serializer import pytron_serialize
 
 # Optional dependencies
 try:

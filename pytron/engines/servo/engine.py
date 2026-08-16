@@ -1,19 +1,14 @@
-import os
-import sys
+import asyncio
+import ctypes
 import json
 import logging
-import ctypes
-import subprocess
-import urllib.parse
+import os
+import sys
 import threading
-import asyncio
-import inspect
-import pathlib
-import time
-from typing import Optional, Any, Dict, List
+
 from ...webview import Webview
 from .adapter import ServoAdapter
-from ...serializer import pytron_serialize
+from .forge import ServoForge
 
 try:
     from ...dependencies import pytron_servo
@@ -138,7 +133,7 @@ class ServoBridge:
                 res_obj = None
             else:
                 res_obj = json.loads(_to_str(result))
-        except:
+        except Exception:
             res_obj = _to_str(result)
 
         self.adapter.send(
@@ -203,11 +198,9 @@ class ServoBridge:
         try:
             js_code = _to_str(ctypes.cast(arg, ctypes.c_char_p))
             self.eval(js_code)
-        except:
+        except Exception:
+            # Silently ignore invalid dispatch payloads
             pass
-
-
-from .forge import ServoForge
 
 
 class ServoWebView(Webview):
@@ -293,13 +286,13 @@ class ServoWebView(Webview):
             }} catch (e) {{
                 // Already read-only or handled by bridge
             }}
-            
+
             window.pytron_is_native = true;
 
             // --- DE-BROWSERIFY CORE ---
             (function() {{
                 const isDebug = {str(self.config.get("debug", False)).lower()};
-                
+
                 // 1. Kill Context Menu (Unless debugging)
                 if (!isDebug) {{
                     document.addEventListener('contextmenu', e => e.preventDefault());
@@ -322,15 +315,15 @@ class ServoWebView(Webview):
                 // 4. Kill System UI Styles (Selection, Outlines, Rubber-banding)
                 const style = document.createElement('style');
                 style.textContent = `
-                    * {{ 
-                        -webkit-user-select: none; 
+                    * {{
+                        -webkit-user-select: none;
                         user-select: none;
-                        -webkit-user-drag: none; 
+                        -webkit-user-drag: none;
                         -webkit-tap-highlight-color: transparent;
                         outline: none !important;
                     }}
-                    input, textarea, [contenteditable], [contenteditable] * {{ 
-                        -webkit-user-select: text !important; 
+                    input, textarea, [contenteditable], [contenteditable] * {{
+                        -webkit-user-select: text !important;
                         user-select: text !important;
                     }}
                     html, body {{
@@ -371,16 +364,16 @@ class ServoWebView(Webview):
             }} catch (e) {{
                 // Skip proxy if window.pytron is read-only
             }}
-            
+
             // Standard Pollys & Asset Bridge
             window.pytron_drag = () => window.__pytron_native_bridge('pytron_drag', []);
             window.pytron_minimize = () => window.__pytron_native_bridge('pytron_minimize', []);
             window.pytron_get_asset = (key) => window.__pytron_native_bridge('pytron_get_asset', [key]);
-            
+
             window['pytron_drag'] = window.pytron_drag;
             window['pytron_minimize'] = window.pytron_minimize;
             window['pytron_get_asset'] = window.pytron_get_asset;
-            window['__pytron_vap_get'] = window.pytron_get_asset; 
+            window['__pytron_vap_get'] = window.pytron_get_asset;
 
         }})();
         """
@@ -427,7 +420,8 @@ class ServoWebView(Webview):
             try:
                 self.bridge.real_hwnd = int(hwnd_str)
                 self.logger.info(f"Acquired Electron HWND: {self.bridge.real_hwnd}")
-            except:
+            except Exception:
+                # Silently ignore invalid HWND parse
                 pass
             return
 
@@ -515,9 +509,6 @@ class ServoWebView(Webview):
 
     def reload(self):
         self.eval("location.reload()")
-
-    def toggle_maximize(self):
-        self.bridge.adapter.send({"action": "toggle_maximize"})
 
     def set_fullscreen(self, enable):
         self.bridge.set_fullscreen(enable)

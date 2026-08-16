@@ -1,8 +1,7 @@
-import sys
-import os
-import time
 import logging
+import os
 import pathlib
+import sys
 
 # Ensure pytron is in path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -60,11 +59,11 @@ def main():
                         return (...args) => {
                             const internalName = "pytron_" + prop;
                             const directName = prop;
-                            
+
                             // In our Mojo shell, we dynamically define these
                             if (typeof window[internalName] === 'function') return window[internalName](...args);
                             if (typeof window[directName] === 'function') return window[directName](...args);
-                            
+
                             console.error("Method " + prop + " not found locally. Ensure app.expose() was called.");
                             return Promise.reject("Method not found");
                         }

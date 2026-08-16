@@ -1,6 +1,8 @@
-from pytron import App
-from PIL import Image, ImageDraw, ImageFilter
 import random
+
+from PIL import Image, ImageDraw, ImageFilter
+
+from pytron import App
 
 app = App()
 

@@ -1,8 +1,9 @@
-import sys
 import ctypes
-import threading
 import logging
-from typing import Callable, Dict, Any
+import queue
+import sys
+import threading
+from typing import Any, Callable, Dict
 
 from .utils import resolve_native_bridge
 
@@ -35,8 +36,6 @@ except (ImportError, AttributeError):
             _fields_ = [("hwnd", ctypes.c_void_p), ("message", ctypes.c_uint)]
 
     ctypes.wintypes = MockWintypes
-import queue
-from .exceptions import ShortcutRegistrationError
 
 # Windows Constants
 MOD_ALT = 0x0001

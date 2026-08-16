@@ -1,11 +1,10 @@
-import os
-import sys
-import shutil
-import inspect
 import asyncio
+import inspect
+import os
+import shutil
+import sys
+
 from ..webview import Webview
-
-
 from .component import AppComponent
 
 

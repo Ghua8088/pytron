@@ -1,17 +1,16 @@
-import os
-import json
-import sys
 import importlib
 import importlib.util
+import json
 import logging
+import os
+import shutil
 import subprocess
+import sys
 import threading
 import traceback
-import shutil
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
-
-from .exceptions import PluginError, PluginLoadError, PluginDependencyError
+from .exceptions import PluginDependencyError, PluginError, PluginLoadError
 
 
 class PluginStorage:
@@ -51,7 +50,7 @@ class PluginStorage:
         try:
             with open(self._file, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except:
+        except Exception:
             return {}
 
     def _write(self, data):

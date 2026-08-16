@@ -1,10 +1,12 @@
-import os
-import sys
 import json
-import pytest
-import tempfile
+import os
 import shutil
+import sys
+import tempfile
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from pytron.plugin import Plugin, PluginError, discover_plugins
 
 
@@ -77,10 +79,10 @@ class MyPlugin:
     def __init__(self, app):
         self.app = app
         self.started = False
-        
+
     def setup(self):
         self.started = True
-        
+
     def teardown(self):
         self.started = False
 """

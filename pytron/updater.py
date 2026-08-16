@@ -1,15 +1,17 @@
-import os
-import sys
-import json
 import hashlib
-import urllib.request
-import urllib.error
-import subprocess
-import tempfile
+import json
 import logging
-from pathlib import Path
-from packaging.version import parse as parse_version
+import os
 import stat
+import subprocess
+import sys
+import tempfile
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+from packaging.version import parse as parse_version
+
 from .exceptions import UpdateError
 
 
@@ -35,7 +37,8 @@ class Updater:
                 data = json.loads(settings_path.read_text())
                 if "version" in data:
                     self.current_version = data["version"]
-        except:
+        except Exception:
+            # Silently ignore if settings.json is missing or unparseable
             pass
 
     def check(self, url: str) -> dict | None:

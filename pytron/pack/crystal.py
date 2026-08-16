@@ -1,11 +1,10 @@
-import sys
 import json
-import subprocess
-import time
 import os
-import signal
+import subprocess
+import sys
 from pathlib import Path
-from typing import Set, Dict, List, Optional
+from typing import Dict, Optional
+
 from ..console import log
 
 
@@ -55,17 +54,17 @@ def _defang():
         shutil.rmtree = MagicMock()
         shutil.copy = MagicMock()
         shutil.move = MagicMock()
-        
+
         # Mock subprocess execution to prevent running external commands
         subprocess.run = MagicMock()
         subprocess.Popen = MagicMock()
         subprocess.call = MagicMock()
         subprocess.check_call = MagicMock()
         subprocess.check_output = MagicMock()
-        
+
         # Mock network/socket to prevent real network calls
         socket.socket = MagicMock()
-        
+
         # Try to mock popular 3rd party libs if they exist
         try:
             import requests
@@ -73,12 +72,12 @@ def _defang():
             requests.post = MagicMock()
             requests.request = MagicMock()
         except ImportError: pass
-        
+
         try:
             import sqlite3
             sqlite3.connect = MagicMock()
         except ImportError: pass
-        
+
         print("[Crystal] Side-effects defanged for audit.")
     except Exception:
         pass
@@ -130,7 +129,7 @@ def recursive_inspect(obj, depth=0):
 
         if hasattr(obj, "__module__") and obj.__module__:
             _report(obj.__module__)
-        
+
         if inspect.isfunction(obj) or inspect.ismethod(obj):
             try:
                 closures = inspect.getclosurevars(obj)

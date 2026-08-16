@@ -1,12 +1,13 @@
-import os
-import sys
 import json
+import os
 import shutil
+import sys
 from pathlib import Path
-from .pipeline import BuildModule, BuildContext
-from ..console import log, console
+
+from ..console import console, log
 from .assets import get_smart_assets
 from .metadata import MetadataEditor
+from .pipeline import BuildContext, BuildModule
 
 
 class FrontendModule(BuildModule):
@@ -203,7 +204,7 @@ class EngineModule(BuildModule):
         # Global engine path
         global_engine_path = Path.home() / ".pytron" / "engines" / "chrome"
         if global_engine_path.exists():
-            log(f"Auto-bundling Chrome Engine binaries", style="dim")
+            log("Auto-bundling Chrome Engine binaries", style="dim")
             # Bundle into pytron/dependencies/chrome
             dest_dep = os.path.join("pytron", "dependencies", "chrome")
             context.add_data.append(f"{global_engine_path}{os.pathsep}{dest_dep}")
@@ -411,7 +412,7 @@ class PluginModule(BuildModule):
         context.out_name = package_context["out_name"]
         context.app_icon = package_context["app_icon"]
         context.settings = package_context["settings"]
-        log(f"Build context updated by plugins", style="dim")
+        log("Build context updated by plugins", style="dim")
 
 
 class HookModule(BuildModule):
@@ -428,9 +429,9 @@ class HookModule(BuildModule):
         if not should_run or context.is_archive_only:
             return
 
-        from .pipeline import log
         from ..commands.harvest import generate_nuclear_hooks
         from ..commands.helpers import get_python_executable, get_venv_site_packages
+        from .pipeline import log
 
         log("Generating nuclear build hooks...", style="info")
         temp_hooks_dir = context.build_dir / "nuclear_hooks"
@@ -701,7 +702,7 @@ class PackModule(BuildModule):
         with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
             # 1. Pack Frontend Dist if available
             if frontend_src:
-                log(f"  + Packing frontend assets...", style="dim")
+                log("  + Packing frontend assets...", style="dim")
                 for root, _, files in os.walk(frontend_src):
                     for file in files:
                         full_path = Path(root) / file
@@ -712,7 +713,7 @@ class PackModule(BuildModule):
 
             # 2. Pack Python logic and project assets (if is_archive_only)
             if context.is_archive_only:
-                log(f"  + Packing python logic and project files...", style="dim")
+                log("  + Packing python logic and project files...", style="dim")
                 for root, dirs, files in os.walk(context.script_dir):
                     # Filter dirs in-place to avoid walking into excluded ones
                     dirs[:] = [
@@ -835,7 +836,7 @@ class IconModule(BuildModule):
                         # Pillow supports ICNS saving
                         img.save(icns_path, format="ICNS")
                         context.app_icon = str(icns_path.resolve())
-                        log(f"Generated high-res ICNS for macOS", style="dim")
+                        log("Generated high-res ICNS for macOS", style="dim")
                     except Exception as e:
                         log(f"Warning: ICNS conversion failed: {e}", style="warning")
 

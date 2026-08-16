@@ -1,6 +1,8 @@
 import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from pytron.platforms.windows import WindowsImplementation
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows only tests")

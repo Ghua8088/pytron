@@ -1,9 +1,10 @@
-import re
-import subprocess
 import argparse
 import json
+import re
+import subprocess
 from pathlib import Path
-from ..console import log, get_progress, run_command_with_output
+
+from ..console import get_progress, log, run_command_with_output
 from .helpers import get_venv_python_path
 
 REQUIREMENTS_JSON = Path("requirements.json")

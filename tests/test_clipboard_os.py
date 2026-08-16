@@ -3,7 +3,6 @@ import time
 
 def test_clipboard_integrity():
     import sys
-    import time
 
     test_text = f"Pytron Rust Clipboard Test {time.time()}"
 

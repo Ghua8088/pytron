@@ -1,10 +1,8 @@
-import pytest
-from unittest.mock import MagicMock, patch, mock_open
-import sys
 import os
+from unittest.mock import mock_open, patch
 
-from pytron.platforms.linux import LinuxImplementation
 from pytron.platforms.darwin import DarwinImplementation
+from pytron.platforms.linux import LinuxImplementation
 
 
 class TestLinuxImplementation:
@@ -19,7 +17,7 @@ class TestLinuxImplementation:
 
         # Check if desktop file was written
         # It should go to ~/.local/share/applications/pytron-handler-pytron.desktop
-        expected_path = os.path.join(
+        os.path.join(
             os.path.expanduser("~/.local/share/applications"),
             "pytron-handler-pytron.desktop",
         )

@@ -1,7 +1,8 @@
+import argparse
+import importlib.util
 import os
 import sys
-import importlib.util
-import argparse
+
 from pytron.console import log
 
 
@@ -91,7 +92,7 @@ def cmd_docs(args: argparse.Namespace) -> int:
 
         app_instance.generate_docs(output_dir)
 
-        log(f"\n✨ [bold green]Pytron Documentation Ready![/]")
+        log("\n✨ [bold green]Pytron Documentation Ready![/]")
         log(f"   Path: [underline]{os.path.abspath(output_dir)}/index.html[/]")
         return 0
 

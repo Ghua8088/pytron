@@ -1,6 +1,7 @@
-import time
-import threading
 import random
+import threading
+import time
+
 from pytron import App
 
 app = App()

@@ -1,6 +1,7 @@
-import pytest
 import sys
-from unittest.mock import patch, MagicMock, ANY, PropertyMock
+from unittest.mock import ANY, MagicMock, PropertyMock, patch
+
+import pytest
 
 from pytron.exceptions import NativeEngineError
 
@@ -191,5 +192,5 @@ def test_webview_windows_specific(webview_config):
         patch("pytron.platforms.windows.WindowsImplementation") as mock_win,
         patch.object(Webview, "hwnd", new_callable=PropertyMock, return_value=12345),
     ):
-        wv = Webview(cfg)
+        Webview(cfg)
         mock_win.return_value.set_utility_window.assert_called_with(12345, True)

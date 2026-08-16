@@ -1,9 +1,6 @@
 import os
 import subprocess
-import json
-import pathlib
 import xml.etree.ElementTree as ET
-from .utils import get_hwnd
 
 
 def show_toast(w, config):
@@ -92,14 +89,14 @@ try {{
     $xml.LoadXml($xmlString)
 
     $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
-    
+
     # We'll try common IDs. PowerShell's own ID is very reliable for showing toasts from a script.
     $idsToTry = @(
-        "{safe_app_id}", 
+        "{safe_app_id}",
         "{{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}}\\WindowsPowerShell\\v1.0\\powershell.exe",
         "Microsoft.Windows.Explorer"
     )
-    
+
     $notifier = $null
     foreach ($id in $idsToTry) {{
         try {{

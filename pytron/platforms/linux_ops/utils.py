@@ -1,5 +1,6 @@
-from . import libs
 import ctypes
+
+from . import libs
 
 # In Native Engine architecture, 'w' is passed as the HWND/XID integer directly.
 

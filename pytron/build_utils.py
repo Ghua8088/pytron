@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 
 
 def get_safe_linker_flags(module_name, build_dir):

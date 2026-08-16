@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, List, TypeAlias
+from typing import Dict, List, Optional, TypeAlias
 
 # Defines a "Handle" type for clarity -> Zero runtime cost, high readability.
 WindowHandle: TypeAlias = int
@@ -75,18 +75,6 @@ class PlatformInterface(ABC):
 
     @abstractmethod
     def center(self, w: WindowHandle) -> None:
-        pass
-
-    @abstractmethod
-    def minimize(self, w: WindowHandle) -> None:
-        pass
-
-    @abstractmethod
-    def maximize(self, w: WindowHandle) -> None:
-        pass
-
-    @abstractmethod
-    def restore(self, w: WindowHandle) -> None:
         pass
 
     # --- Essential extensions (Should interpret 'w') ---

@@ -1,7 +1,7 @@
-import time
+import logging
 import os
 import threading
-import logging
+import time
 
 
 class DeadMansSwitch:

@@ -10,7 +10,7 @@ def cmd_engine(args):
 
     if args.engine_command == "install":
         if args.name == "chrome":
-            log(f"Installing Chrome Mojo Engine...", style="info")
+            log("Installing Chrome Mojo Engine...", style="info")
             try:
                 target = setup_engine()
                 log(f"Engine Forge Successful: {target}", style="success")
@@ -18,7 +18,7 @@ def cmd_engine(args):
                 log(f"Engine Forge Failed: {e}", style="error")
                 return 1
         elif args.name == "native":
-            log(f"Building Native Iron Engine from source...", style="info")
+            log("Building Native Iron Engine from source...", style="info")
             try:
                 from ..engines.native.build import build as build_native
 

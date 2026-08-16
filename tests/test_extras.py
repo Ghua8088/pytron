@@ -1,8 +1,9 @@
 import os
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from pytron.apputils.extras import ExtrasComponent
-from pytron.exceptions import PytronError
 
 # Mock PluginError since we can't easily import it if it's inside a function in the mixin
 # Wait, the mixin imports it from ..plugin. Let's mock that module.
@@ -77,7 +78,7 @@ def test_load_plugin_failure(app):
 
 def test_setup_tray(app):
     with patch("pytron.apputils.extras.SystemTray") as MockTray:
-        tray = app.setup_tray()
+        app.setup_tray()
 
         MockTray.assert_called()
         args = MockTray.call_args[0]

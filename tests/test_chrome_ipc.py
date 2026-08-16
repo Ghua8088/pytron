@@ -1,10 +1,8 @@
-import pytest
-import sys
-import struct
 import json
-from unittest.mock import patch, MagicMock
+import struct
+from unittest.mock import MagicMock, patch
 
-from pytron.apputils.chrome_ipc import ChromeIPCServer, ChromeAdapter
+from pytron.apputils.chrome_ipc import ChromeAdapter, ChromeIPCServer
 
 
 @patch("sys.platform", "win32")

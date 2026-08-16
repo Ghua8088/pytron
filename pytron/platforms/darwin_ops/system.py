@@ -1,8 +1,8 @@
-import subprocess
 import os
-import ctypes
+import subprocess
+
 from . import libs
-from .utils import get_class, str_to_nsstring, msg_send, call
+from .utils import get_class, msg_send, str_to_nsstring
 
 
 def message_box(w, title, message, style=0):

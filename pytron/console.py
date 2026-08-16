@@ -1,16 +1,17 @@
+import datetime
+import os
+import subprocess
+
+from rich.console import Console
 from rich.progress import (
+    BarColumn,
     Progress,
     SpinnerColumn,
     TextColumn,
-    BarColumn,
     TimeElapsedColumn,
 )
 from rich.rule import Rule
-from rich.console import Console
 from rich.theme import Theme
-import subprocess
-import os
-import datetime
 
 # Export Rule so commands can use it directly
 __all__ = [

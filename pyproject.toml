@@ -13,10 +13,10 @@ namespaces = false
 
 [project]
 name = "pytron-kit"
-version = "0.3.15"
+version = "0.3.15.post8"
 description = "An Electron-like library for Python to build Cross Platform Apps"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
 keywords = ["electron", "app", "desktop", "android", "webview"]
 authors = [
@@ -138,16 +138,18 @@ pytron = [
     "**/*.d",
     "**/*.obj",
 ]
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ['py310']
-force-exclude = '''
-/(
-    android
-  | node_modules
-  | env
-  | venv
-  | build
-  | dist
-)/
-'''
+target-version = "py310"
+extend-exclude = [
+    "android",
+    "node_modules",
+    "env",
+    "venv",
+    "build",
+    "dist"
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]

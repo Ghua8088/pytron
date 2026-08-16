@@ -109,7 +109,7 @@ INSPECTOR_HTML = r"""
         }
         .tree-row:hover { background: var(--surface); }
         .tree-row.selected { background: #373940; border-left: 2px solid var(--accent); }
-        
+
         .toggle-icon {
             width: 16px; height: 16px;
             display: flex; align-items: center; justify-content: center;
@@ -120,7 +120,7 @@ INSPECTOR_HTML = r"""
 
         .tag-bracket { color: var(--text-dim); }
         .tag-name { color: var(--accent); }
-        
+
         /* --- Props Inspector --- */
         .props-section { margin-bottom: 24px; }
         .props-title {
@@ -163,10 +163,10 @@ INSPECTOR_HTML = r"""
         }
         .line-meta { color: var(--text-dim); width: 80px; font-size: 10px; flex-shrink: 0; }
         .line-content { flex: 1; white-space: pre-wrap; }
-        
+
         .level-ERROR { color: var(--error); border-left: 3px solid var(--error); background: rgba(244, 67, 54, 0.05); }
         .level-WARNING { color: var(--warning); border-left: 3px solid var(--warning); }
-        
+
         .console-input-area {
             height: 40px;
             background: var(--sidebar);
@@ -191,13 +191,13 @@ INSPECTOR_HTML = r"""
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
         th { text-align: left; padding: 12px 8px; color: var(--text-dim); border-bottom: 2px solid var(--border); text-transform: uppercase; font-size: 10px; }
         td { padding: 10px 8px; border-bottom: 1px solid var(--border); font-family: var(--font-code); }
-        
+
         /* --- Stats Widgets --- */
         .dashboard-view { padding: 16px; overflow-y: auto; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
         .card { background: var(--sidebar); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
         .card-header { font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-bottom: 16px; }
-        
+
         .progress-bg { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin: 8px 0; }
         .progress-fill { height: 100%; background: var(--accent); transition: 0.3s; }
 
@@ -298,11 +298,11 @@ INSPECTOR_HTML = r"""
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.getElementById(name).classList.add('active');
-            
+
             // Highlight nav
             const navs = document.querySelectorAll('.nav-item');
             navs.forEach(n => { if(n.innerText.toLowerCase() === name) n.classList.add('active'); });
-            
+
             refreshData();
         }
 
@@ -310,7 +310,7 @@ INSPECTOR_HTML = r"""
             try {
                 const data = await pytron.inspector_get_data();
                 fullData = data;
-                
+
                 document.getElementById('uptime-display').innerText = `PID: ${data.stats.pid} | Uptime: ${data.stats.uptime}s`;
 
                 if (currentView === 'elements') renderState();
@@ -331,7 +331,7 @@ INSPECTOR_HTML = r"""
         function createTreeNode(val, key, path) {
             const wrap = document.createElement('div');
             wrap.className = 'tree-node-wrap';
-            
+
             const isObj = typeof val === 'object' && val !== null;
             const expanded = expandedPaths.has(path);
             const isSelected = selectedPath === path;
@@ -339,7 +339,7 @@ INSPECTOR_HTML = r"""
             const row = document.createElement('div');
             row.className = `tree-row ${isSelected ? 'selected' : ''}`;
             row.style.paddingLeft = (path.split('.').length * 12) + 'px';
-            
+
             row.onclick = (e) => {
                 e.stopPropagation();
                 selectedPath = path;
@@ -357,11 +357,11 @@ INSPECTOR_HTML = r"""
             };
 
             row.appendChild(toggle);
-            
+
             const label = document.createElement('span');
             label.innerHTML = `<span class="tag-bracket">&lt;</span><span class="tag-name">${key}</span><span class="tag-bracket">&gt;</span>`;
             row.appendChild(label);
-            
+
             wrap.appendChild(row);
 
             if (isObj && expanded) {
@@ -376,7 +376,7 @@ INSPECTOR_HTML = r"""
             const container = document.getElementById('props-content');
             let target = fullData.state;
             const parts = selectedPath.split('.').slice(1);
-            
+
             for (let p of parts) {
                 if (target && target[p] !== undefined) target = target[p];
             }
@@ -401,14 +401,14 @@ INSPECTOR_HTML = r"""
             const logs = await pytron.inspector_get_logs();
             const out = document.getElementById('console-output');
             const atBottom = out.scrollHeight - out.scrollTop <= out.clientHeight + 50;
-            
+
             out.innerHTML = logs.map(l => `
                 <div class="console-line level-${l.level}">
                     <div class="line-meta">${l.time}</div>
                     <div class="line-content">${escapeHtml(l.msg)}</div>
                 </div>
             `).join('');
-            
+
             if (atBottom) out.scrollTop = out.scrollHeight;
         }
 
@@ -467,7 +467,7 @@ INSPECTOR_HTML = r"""
             isTraceOn = !isTraceOn;
             document.getElementById('trace-toggle').innerText = `Trace IPC: ${isTraceOn ? 'ON' : 'OFF'}`;
             document.getElementById('trace-toggle').style.borderColor = isTraceOn ? 'var(--accent)' : 'var(--border)';
-            
+
             // Tell ALL windows to enable verbose logging
             await pytron.publish('pytron:set-verbose', isTraceOn);
         }

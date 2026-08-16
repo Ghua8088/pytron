@@ -1,7 +1,9 @@
 import sys
-import pytest
 from unittest.mock import MagicMock, patch
-from pytron.platforms.linux_ops import window, system, libs
+
+import pytest
+
+from pytron.platforms.linux_ops import system, window
 
 pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Linux only tests")
 

@@ -1,11 +1,12 @@
+import json
 import os
-import sys
 import shutil
 import subprocess
-import json
+import sys
 from pathlib import Path
-from ..console import log, run_command_with_output
+
 from ..commands.helpers import get_python_executable
+from ..console import log, run_command_with_output
 
 
 def find_makensis() -> str | None:
@@ -161,7 +162,7 @@ def build_windows_installer(
         cmd_nsis.append(f"/DMUI_UNICON={abs_icon}")
     # NSIS expects switches (like /V4) before the script filename; place verbosity
     # flag before the script so it's honored.
-    cmd_nsis.append(f"/V4")
+    cmd_nsis.append("/V4")
     cmd_nsis.append(str(nsi_script))
     log(f"Running NSIS: {' '.join(cmd_nsis)}", style="dim")
 

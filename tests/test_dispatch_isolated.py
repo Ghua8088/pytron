@@ -1,6 +1,8 @@
-import pytest
 import asyncio
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from pytron.application import App
 
 
@@ -17,7 +19,7 @@ def mock_app(tmp_path):
     # We use the event loop provided by the test if available
     try:
         loop = asyncio.get_event_loop()
-    except:
+    except Exception:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 

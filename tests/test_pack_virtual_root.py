@@ -1,7 +1,4 @@
-import pytest
-from pathlib import Path
 from pytron.pack.virtual_root import VirtualRootGenerator
-import os
 
 
 def test_virtual_root_scan(tmp_path):

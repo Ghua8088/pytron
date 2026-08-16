@@ -1,8 +1,8 @@
 import os
-import sys
 import shutil
-import subprocess
+import sys
 from pathlib import Path
+
 from ..console import log, run_command_with_output
 
 
@@ -19,12 +19,9 @@ class MetadataEditor:
 
         self.rcedit = self.package_dir / "pytron" / "rcedit-x64.exe"
 
-        try:
-            import metaedit
+        import importlib.util
 
-            self.has_metaedit = True
-        except ImportError:
-            self.has_metaedit = False
+        self.has_metaedit = importlib.util.find_spec("metaedit") is not None
 
     def update(self, binary_path, icon_path, settings, dist_dir=None):
         binary_path = Path(binary_path)

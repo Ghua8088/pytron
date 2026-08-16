@@ -1,8 +1,8 @@
+import datetime
 import os
 import sys
-import datetime
 import traceback
-from typing import Any
+
 from .component import AppComponent
 
 

@@ -6,11 +6,11 @@ taken.  Win32 message structs are written via ctypes.memmove so that the
 loop sees correct msg.message / msg.wParam values.
 """
 
-import pytest
-import sys
-import threading
 import ctypes
-from unittest.mock import MagicMock, patch, call
+import sys
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Provide stubs on non-Windows so the module can be imported
 if not hasattr(ctypes, "windll"):
@@ -19,15 +19,15 @@ if not hasattr(ctypes, "wintypes"):
     ctypes.wintypes = MagicMock()
 
 from pytron.shortcuts import (
-    ShortcutManager,
     MOD_ALT,
     MOD_CONTROL,
+    MOD_NOREPEAT,
     MOD_SHIFT,
     MOD_WIN,
-    MOD_NOREPEAT,
-    WM_HOTKEY,
-    WM_APP_REGISTER,
     VK_MAP,
+    WM_APP_REGISTER,
+    WM_HOTKEY,
+    ShortcutManager,
 )
 
 # ---------------------------------------------------------------------------
@@ -143,7 +143,8 @@ def test_register_adds_shortcut_to_dict(manager):
         mock_ready.wait.return_value = True
         manager._thread_id = 1234
 
-        cb = lambda: None
+        def cb():
+            return None
         manager.register("Ctrl+A", cb)
 
     assert 1 in manager.shortcuts

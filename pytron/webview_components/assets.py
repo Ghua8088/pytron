@@ -1,8 +1,8 @@
-import os
-import pathlib
 import mimetypes
+import pathlib
 import zipfile
 from typing import Any, Optional, Tuple
+
 from .base import WebviewComponent
 
 

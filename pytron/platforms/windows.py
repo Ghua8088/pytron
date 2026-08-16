@@ -10,7 +10,7 @@ except ImportError:
 
     ctypes.wintypes = MockWintypes
 from .interface import PlatformInterface
-from .windows_ops import window, system, webview
+from .windows_ops import system, webview, window
 
 
 class WindowsImplementation(PlatformInterface):
