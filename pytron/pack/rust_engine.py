@@ -1,9 +1,6 @@
 import os
 import sys
 import shutil
-import subprocess
-import platform
-import re
 from pathlib import Path
 from .pipeline import BuildModule, BuildContext
 from ..console import log
@@ -162,7 +159,7 @@ class RustEngine(BuildModule):
         files = [Path(f).resolve() for f in files]
 
         # 1. Identify Environment Locations
-        from ..commands.helpers import get_python_executable, get_venv_site_packages
+        from ..commands.helpers import get_venv_site_packages
 
         python_exe = get_python_executable()
         site_packages = get_venv_site_packages(python_exe).resolve()

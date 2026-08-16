@@ -8,9 +8,8 @@ loop sees correct msg.message / msg.wParam values.
 
 import pytest
 import sys
-import threading
 import ctypes
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 # Provide stubs on non-Windows so the module can be imported
 if not hasattr(ctypes, "windll"):
@@ -143,7 +142,8 @@ def test_register_adds_shortcut_to_dict(manager):
         mock_ready.wait.return_value = True
         manager._thread_id = 1234
 
-        cb = lambda: None
+        def cb():
+            return None
         manager.register("Ctrl+A", cb)
 
     assert 1 in manager.shortcuts

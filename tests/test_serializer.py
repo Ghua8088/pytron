@@ -5,7 +5,7 @@ import decimal
 import pathlib
 import enum
 import dataclasses
-from pytron.serializer import pytron_serialize, PytronJSONEncoder
+from pytron.serializer import pytron_serialize
 
 # Optional dependencies
 try:

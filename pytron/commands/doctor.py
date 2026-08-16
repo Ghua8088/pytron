@@ -41,7 +41,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     # 1. Core Python Info
     py_ver, py_arch = get_python_info()
-    console.print(f"[bold]Python Environment[/bold]")
+    console.print("[bold]Python Environment[/bold]")
     console.print(f"  [success]✓[/success] Python: {py_ver} ({py_arch})")
     console.print(f"  [success]✓[/success] Platform: {sys.platform}")
 
@@ -49,23 +49,23 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     is_venv = sys.prefix != sys.base_prefix
     if is_venv:
         console.print(
-            f"  [success]✓[/success] Status: Running inside a virtual environment"
+            "  [success]✓[/success] Status: Running inside a virtual environment"
         )
     else:
         # Check for env/ in CWD
         if Path("env").exists() or Path(".venv").exists():
             console.print(
-                f"  [info]i[/info] Status: Global Python (local environment detected but not active)"
+                "  [info]i[/info] Status: Global Python (local environment detected but not active)"
             )
         else:
             console.print(
-                f"  [warning]![/warning] Status: Global Python (no local environment detected)"
+                "  [warning]![/warning] Status: Global Python (no local environment detected)"
             )
 
     console.print("")
 
     # 2. Web Application Dependencies
-    console.print(f"[bold]Web & Frontend Tools[/bold]")
+    console.print("[bold]Web & Frontend Tools[/bold]")
     from .helpers import get_config
 
     config = get_config()
@@ -76,7 +76,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         console.print(f"  [success]✓[/success] Node.js: {node_ver}")
     else:
         console.print(
-            f"  [error]✗[/error] Node.js: Not found (Only required for 'npm/yarn/pnpm')"
+            "  [error]✗[/error] Node.js: Not found (Only required for 'npm/yarn/pnpm')"
         )
 
     providers = ["npm", "yarn", "pnpm", "bun"]
@@ -96,7 +96,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     console.print("")
 
     # 3. Packaging Tools
-    console.print(f"[bold]Packaging Tools[/bold]")
+    console.print("[bold]Packaging Tools[/bold]")
     pi_path, pi_ver = check_command("pyinstaller")
     if pi_path:
         console.print(f"  [success]✓[/success] PyInstaller: {pi_ver}")
@@ -110,7 +110,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             )
         except Exception:
             console.print(
-                f"  [error]✗[/error] PyInstaller: Not found (Required for 'pytron package')"
+                "  [error]✗[/error] PyInstaller: Not found (Required for 'pytron package')"
             )
 
     if sys.platform == "win32":
@@ -122,7 +122,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             console.print(f"  [success]✓[/success] NSIS: Found ({makensis})")
         else:
             console.print(
-                f"  [warning]![/warning] NSIS: Not found (Required for creating installers)"
+                "  [warning]![/warning] NSIS: Not found (Required for creating installers)"
             )
 
         # Check SignTool
@@ -131,7 +131,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             console.print(f"  [success]✓[/success] SignTool: Found ({signtool})")
         else:
             console.print(
-                f"  [dim]i[/dim] SignTool: Not found (Optional: needed for code signing)"
+                "  [dim]i[/dim] SignTool: Not found (Optional: needed for code signing)"
             )
 
         # Check WebView2 Runtime
@@ -150,11 +150,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                         console.print(f"  [success]✓[/success] WebView2 Runtime: {v}")
                         found_wv2 = True
                         break
-                except:
+                except Exception:
                     continue
             if not found_wv2:
                 console.print(
-                    f"  [error]✗[/error] WebView2 Runtime: Not found (Required for Native Engine)"
+                    "  [error]✗[/error] WebView2 Runtime: Not found (Required for Native Engine)"
                 )
         except ImportError:
             pass
@@ -162,7 +162,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     console.print("")
 
     # 4. Android Development
-    console.print(f"[bold]Android Development[/bold]")
+    console.print("[bold]Android Development[/bold]")
     java_path, java_ver = check_command("java")
     adb_path, adb_ver = check_command("adb")
     android_home = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
@@ -171,14 +171,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         console.print(f"  [success]✓[/success] Java/JDK: {java_ver}")
     else:
         console.print(
-            f"  [error]✗[/error] Java/JDK: Not found (Required for 'pytron android')"
+            "  [error]✗[/error] Java/JDK: Not found (Required for 'pytron android')"
         )
 
     if android_home and os.path.exists(android_home):
         console.print(f"  [success]✓[/success] Android SDK: {android_home}")
     else:
         console.print(
-            f"  [error]✗[/error] Android SDK: ANDROID_HOME environment variable not set or invalid"
+            "  [error]✗[/error] Android SDK: ANDROID_HOME environment variable not set or invalid"
         )
 
     if adb_path:
@@ -187,25 +187,25 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         console.print(f"  [success]✓[/success] ADB: {v_clean}")
     else:
         console.print(
-            f"  [warning]![/warning] ADB: Not found (Needed to run on physical devices)"
+            "  [warning]![/warning] ADB: Not found (Needed to run on physical devices)"
         )
 
     console.print("")
 
     # 5. Project Integrity
     if Path("settings.json").exists():
-        console.print(f"[bold]Project Context[/bold]")
+        console.print("[bold]Project Context[/bold]")
         req_json = Path("requirements.json")
         if req_json.exists():
-            console.print(f"  [success]✓[/success] requirements.json: Found")
+            console.print("  [success]✓[/success] requirements.json: Found")
         else:
             console.print(
-                f"  [warning]![/warning] requirements.json: Missing (Run 'pytron init' or create it)"
+                "  [warning]![/warning] requirements.json: Missing (Run 'pytron init' or create it)"
             )
         console.print("")
 
     # 6. Pytron Bridge Check
-    console.print(f"[bold]Pytron Core[/bold]")
+    console.print("[bold]Pytron Core[/bold]")
     try:
         import pytron
 
@@ -236,10 +236,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         # Android Bundle Check
         android_deps = pkg_root / "dependencies" / "android"
         if android_deps.exists() and any(android_deps.iterdir()):
-            console.print(f"  [success]✓[/success] Android Assets: Found")
+            console.print("  [success]✓[/success] Android Assets: Found")
         else:
             console.print(
-                f"  [error]✗[/error] Android Assets: Missing or empty in dependencies/android"
+                "  [error]✗[/error] Android Assets: Missing or empty in dependencies/android"
             )
 
     except Exception as e:

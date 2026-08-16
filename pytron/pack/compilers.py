@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import platform
 import re
+import json
 from pathlib import Path
 from ..console import log
 
@@ -127,9 +128,6 @@ def cython_gen_c(script_path: Path, build_dir: Path, python_exe: str):
         log(f"Warning: Failed to append compatibility patch: {e}", style="warning")
 
     return c_file
-
-
-import json
 
 
 def clean_library_name(lib_val):

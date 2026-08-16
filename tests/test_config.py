@@ -2,7 +2,7 @@ import os
 import json
 import pytest
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from pytron.apputils.config import ConfigComponent
 from pytron.exceptions import ConfigError
 

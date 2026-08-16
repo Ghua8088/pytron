@@ -1,7 +1,5 @@
-import pytest
-import logging
 from unittest.mock import MagicMock
-from pytron.router import Router, DeepLink
+from pytron.router import Router
 
 
 def test_router_basic_match():
@@ -23,7 +21,7 @@ def test_router_param_match():
 
     handler.assert_called_once()
     # Check injection
-    call_kwargs = handler.call_args[1]
+    handler.call_args[1]
     # By default, _invoke_handler only injects if the function signature asks for it.
     # But MagicMock accepts anything. However, the logic in _invoke_handler uses inspect.signature(func).
     # Inspecting a mock signature can be tricky unless configured.

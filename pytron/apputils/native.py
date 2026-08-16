@@ -2,14 +2,12 @@ import sys
 import os
 from ..utils import resolve_native_bridge
 from typing import Optional
+from .component import AppComponent
 
 # Legacy compatibility symbol retained so older tests and patch points
 # can still intercept the bridge during migration.
 _AUTO_NATIVE_BRIDGE = object()
 pytron_native = _AUTO_NATIVE_BRIDGE
-
-
-from .component import AppComponent
 
 
 class NativeComponent(AppComponent):

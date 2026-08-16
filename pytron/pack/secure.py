@@ -1,17 +1,9 @@
 import os
 import sys
 import shutil
-import traceback
-import subprocess
-import re
-import sysconfig
-import platform
 from pathlib import Path
-from ..console import log, run_command_with_output, console, Rule
+from ..console import log
 from ..exceptions import ModuleError
-from .installers import build_installer
-from ..commands.helpers import get_python_executable, get_venv_site_packages
-from ..commands.harvest import generate_nuclear_hooks
 
 from .metadata import MetadataEditor
 from .pipeline import BuildModule, BuildContext
@@ -240,7 +232,7 @@ if __name__ == "__main__":
                     ):
                         try:
                             shutil.copy2(dll, final_dist / dll.name)
-                        except Exception as e:
+                        except Exception:
                             pass
 
         # 5. FUSE AND CLOAK LIBRARY (Optional via --bundled)
@@ -346,7 +338,6 @@ def get_native_engine_libs():
     return get_native_engine_binaries()
 
 
-from .utils import cleanup_dist as prune_junk_folders
 
 
 def apply_metadata_to_binary(

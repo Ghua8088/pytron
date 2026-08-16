@@ -39,7 +39,7 @@ DEST_PATH = os.path.join(DEPENDENCIES_DIR, EXT_NAME)
 
 
 def build():
-    print(f"\n[BUILD] Starting Iron Engine Build...")
+    print("\n[BUILD] Starting Iron Engine Build...")
     print(f"   Target OS: {'Android (arm64)' if is_android else 'Host System'}")
     print(f"   Source: {ENGINE_DIR}")
     print(f"   Target: {DEST_PATH}\n")
@@ -52,7 +52,7 @@ def build():
         sys.exit(1)
 
     # 2. Build Release
-    print(f"[INFO] Compiling (Release Mode)... This may take a minute.")
+    print("[INFO] Compiling (Release Mode)... This may take a minute.")
     env = os.environ.copy()
     env["PYO3_USE_ABI3_FORWARD_COMPATIBILITY"] = "1"
 
@@ -119,8 +119,8 @@ def build():
         sys.exit(1)
 
     # 4. Deploy
-    print(f"\n[SUCCESS] Build Successful!")
-    print(f"[INFO] Copying artifact to dependencies...")
+    print("\n[SUCCESS] Build Successful!")
+    print("[INFO] Copying artifact to dependencies...")
 
     os.makedirs(DEPENDENCIES_DIR, exist_ok=True)
 

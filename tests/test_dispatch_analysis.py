@@ -2,7 +2,6 @@ import pytest
 import asyncio
 from unittest.mock import MagicMock, patch
 from pytron.application import App
-import os
 
 
 @pytest.fixture

@@ -2,11 +2,8 @@ import os
 import sys
 import shutil
 import subprocess  # nosec B404
-import platform
-from pathlib import Path
-from ..console import log, run_command_with_output, console, Rule
-from ..commands.helpers import get_python_executable, get_venv_site_packages
-from .installers import build_installer
+from ..console import log, run_command_with_output
+from ..commands.helpers import get_python_executable
 
 
 from .pipeline import BuildContext

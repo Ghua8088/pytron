@@ -1,9 +1,6 @@
 import os
 import subprocess
-import json
-import pathlib
 import xml.etree.ElementTree as ET
-from .utils import get_hwnd
 
 
 def show_toast(w, config):

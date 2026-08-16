@@ -1,6 +1,4 @@
 import sys
-import os
-import json
 import threading
 from .exceptions import StateError
 
@@ -35,7 +33,7 @@ def json_safe_dump(obj):
     if hasattr(obj, "to_dict"):
         try:
             return json_safe_dump(obj.to_dict())
-        except:
+        except Exception:
             pass
     return str(obj)
 
@@ -46,7 +44,7 @@ def log_shield(msg):
             # In frozen apps, stderr might be captured or lost, but it's safe
             sys.stderr.write(f"[SHIELD] {msg}\n")
             sys.stderr.flush()
-    except:
+    except Exception:
         pass
 
 
@@ -277,7 +275,7 @@ class ReactiveState:
                 wrapped_val = _make_observable(val, update_cb)
                 return wrapped_val
             return val
-        except:
+        except Exception:
             return None
 
     def to_dict(self):
@@ -294,5 +292,5 @@ class ReactiveState:
         try:
             store = object.__getattribute__(self, "_store")
             store.update(json_safe_dump(mapping))
-        except:
+        except Exception:
             pass

@@ -1,7 +1,6 @@
 import os
 import shutil
 import sys
-import pytest
 from pathlib import Path
 from pytron.pack.modules import AssetModule
 from pytron.pack.pipeline import BuildContext
@@ -71,7 +70,6 @@ def test_asset_module_mandatory_resources(tmp_path):
 if __name__ == "__main__":
     # Manual run support
     try:
-        from pytron.pack.pipeline import BuildModule  # Check imports
 
         test_dir = Path("./tmp_test_res").resolve()
         if test_dir.exists():

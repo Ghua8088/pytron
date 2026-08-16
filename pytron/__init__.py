@@ -1,6 +1,7 @@
 import sys
 import os
 import io
+import types
 
 # --- Linux Stability Guards (Nuclear Edition) ---
 if sys.platform.startswith("linux"):
@@ -113,9 +114,6 @@ except ImportError:
     __version__ = "0.0.0-dev"
 
 # --- Plugin Configuration Namespace ---
-import types
-
-
 class PluginsNamespace(types.ModuleType):
     def __init__(self):
         super().__init__("plugins")
@@ -145,10 +143,10 @@ sys.modules["plugins"] = plugins
 # print(f"[Pytron] Injected plugins namespace into sys.modules: {sys.modules['plugins']}")
 # --------------------------------------
 
-from .core import App, Webview, get_resource_path, Menu, MenuBar
-from .plugin import Plugin
-from .updater import Updater
-from .testing import PytronTestClient
+from .core import App, Webview, get_resource_path, Menu, MenuBar  # noqa: E402
+from .plugin import Plugin  # noqa: E402
+from .updater import Updater  # noqa: E402
+from .testing import PytronTestClient  # noqa: E402
 
 __all__ = [
     "App",

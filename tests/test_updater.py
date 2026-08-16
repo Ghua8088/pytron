@@ -1,10 +1,6 @@
 import pytest
-import sys
 import json
-import io
-import os
 from unittest.mock import patch, MagicMock, mock_open
-from pathlib import Path
 from pytron.updater import Updater
 from pytron.exceptions import UpdateError
 

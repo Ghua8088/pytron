@@ -1,8 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from pytron.application import App
-from pytron.exceptions import ConfigError
-import os
 
 
 @pytest.fixture
@@ -78,7 +76,7 @@ def test_app_create_window(mock_webview, tmp_path):
         app = App(str(config_file))
         app.app_root = tmp_path
 
-        win = app.create_window(url="index.html", title="Window")
+        app.create_window(url="index.html", title="Window")
 
         assert len(app.windows) == 1
         assert app.windows[0] == mock_webview.return_value
@@ -111,7 +109,7 @@ def test_app_run_starts_windows(mock_webview, tmp_path):
         patch("pytron.application.App.load_plugins"),
     ):
         app = App(str(config_file))
-        win = app.create_window()
+        app.create_window()
 
         with patch("threading.Thread"):
             app.run = MagicMock()

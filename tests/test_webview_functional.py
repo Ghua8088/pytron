@@ -1,5 +1,4 @@
 import pytest
-import sys
 from unittest.mock import MagicMock, patch
 
 from pytron.webview import Webview
@@ -58,7 +57,7 @@ def test_servo_webview_init_no_attribute_error():
     """
     with (
         patch("pytron.engines.servo.engine.ServoAdapter"),
-        patch("pytron.engines.servo.engine.ServoBridge") as MockBridge,
+        patch("pytron.engines.servo.engine.ServoBridge"),
         patch("pytron.engines.servo.forge.ServoForge"),
         patch("pytron.webview.pytron_native", MagicMock()),
         patch("threading.Thread"),

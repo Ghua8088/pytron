@@ -1,9 +1,8 @@
 import pytest
 import os
-import json
 import tempfile
 from pytron.application import App
-from pytron.exceptions import PytronError, ConfigError, ResourceNotFoundError
+from pytron.exceptions import PytronError, ConfigError
 
 
 class TestExceptions:

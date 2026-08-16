@@ -58,9 +58,6 @@ class ShellComponent(AppComponent):
         Requires 'send2trash' library if available, else fails.
         """
         try:
-            import logging
-
-            logger = logging.getLogger("Pytron.Shell")
             from send2trash import send2trash
 
             send2trash(path)

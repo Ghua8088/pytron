@@ -1,7 +1,26 @@
 import ctypes
 import os
 import sys
-from .constants import *
+from .constants import (
+    BIF_NEWDIALOGSTYLE,
+    BIF_RETURNONLYFSDIRS,
+    BROWSEINFOW,
+    NIF_ICON,
+    NIF_INFO,
+    NIF_TIP,
+    NIIF_INFO,
+    NIM_ADD,
+    NIM_MODIFY,
+    NIM_SETVERSION,
+    NOTIFYICONDATAW,
+    NOTIFYICON_VERSION_4,
+    OFN_EXPLORER,
+    OFN_FILEMUSTEXIST,
+    OFN_NOCHANGEDIR,
+    OFN_OVERWRITEPROMPT,
+    OFN_PATHMUSTEXIST,
+    OPENFILENAMEW,
+)
 from .utils import get_hwnd
 from . import toasts
 from ...utils import resolve_native_bridge
@@ -387,7 +406,7 @@ def open_file_dialog(w, title, default_path=None, file_types=None):
             # Fallback for suspected parenting issues in multi-process (Chrome)
             if hwnd != 0:
                 print(
-                    f"[Pytron] Debug: Parented dialog returned None. Retrying WITHOUT parent..."
+                    "[Pytron] Debug: Parented dialog returned None. Retrying WITHOUT parent..."
                 )
                 res = native_bridge.open_file_dialog(0, title, default_path, file_types)
                 print(f"[Pytron] Debug: Parentless dialog result: {res}")
@@ -431,7 +450,7 @@ def save_file_dialog(w, title, default_path=None, default_name=None, file_types=
                 return res
             if hwnd != 0:
                 print(
-                    f"[Pytron] Debug: Parented save returned None. Retrying WITHOUT parent..."
+                    "[Pytron] Debug: Parented save returned None. Retrying WITHOUT parent..."
                 )
                 res = native_bridge.save_file_dialog(
                     0, title, default_path, default_name, file_types
@@ -481,7 +500,7 @@ def open_folder_dialog(w, title, default_path=None):
                 return res
             if hwnd != 0:
                 print(
-                    f"[Pytron] Debug: Parented folder returned None. Retrying WITHOUT parent..."
+                    "[Pytron] Debug: Parented folder returned None. Retrying WITHOUT parent..."
                 )
                 res = native_bridge.open_folder_dialog(0, title, default_path)
                 print(f"[Pytron] Debug: Parentless folder result: {res}")

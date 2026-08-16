@@ -3,17 +3,11 @@ import sys
 import json
 import logging
 import ctypes
-import subprocess
-import urllib.parse
 import threading
 import asyncio
-import inspect
-import pathlib
-import time
-from typing import Optional, Any, Dict, List
 from ...webview import Webview
 from .adapter import ServoAdapter
-from ...serializer import pytron_serialize
+from .forge import ServoForge
 
 try:
     from ...dependencies import pytron_servo
@@ -138,7 +132,7 @@ class ServoBridge:
                 res_obj = None
             else:
                 res_obj = json.loads(_to_str(result))
-        except:
+        except Exception:
             res_obj = _to_str(result)
 
         self.adapter.send(
@@ -203,11 +197,8 @@ class ServoBridge:
         try:
             js_code = _to_str(ctypes.cast(arg, ctypes.c_char_p))
             self.eval(js_code)
-        except:
+        except Exception:
             pass
-
-
-from .forge import ServoForge
 
 
 class ServoWebView(Webview):
@@ -427,7 +418,7 @@ class ServoWebView(Webview):
             try:
                 self.bridge.real_hwnd = int(hwnd_str)
                 self.logger.info(f"Acquired Electron HWND: {self.bridge.real_hwnd}")
-            except:
+            except Exception:
                 pass
             return
 
@@ -515,9 +506,6 @@ class ServoWebView(Webview):
 
     def reload(self):
         self.eval("location.reload()")
-
-    def toggle_maximize(self):
-        self.bridge.adapter.send({"action": "toggle_maximize"})
 
     def set_fullscreen(self, enable):
         self.bridge.set_fullscreen(enable)

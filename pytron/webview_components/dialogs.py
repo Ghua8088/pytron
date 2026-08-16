@@ -1,5 +1,5 @@
 import os
-from typing import Any, Optional, List, Tuple
+from typing import Optional, List
 from .base import WebviewComponent
 
 

@@ -15,7 +15,7 @@ from .webview_components.ipc import IPCComponent
 from .webview_components.routing import RoutingComponent
 from .webview_components.assets import AssetComponent
 from .webview_components.dialogs import DialogComponent
-from .utils import resolve_native_module, resolve_native_bridge
+from .utils import resolve_native_module
 from .exceptions import NativeEngineError
 
 # Initialize Native Engine via Canonical Resolver

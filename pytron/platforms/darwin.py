@@ -1,6 +1,5 @@
 import os
 import sys
-import shlex
 import subprocess
 from .interface import PlatformInterface
 from ..utils import resolve_native_bridge
@@ -209,15 +208,6 @@ class DarwinImplementation(PlatformInterface):
             except (ImportError, AttributeError):
                 pass
 
-    def minimize(self, w):
-        pass
-
-    def maximize(self, w):
-        pass
-
-    def restore(self, w):
-        pass
-
     def is_alive(self, w):
         return self.is_visible(w)
 
@@ -231,36 +221,6 @@ class DarwinImplementation(PlatformInterface):
             pass
 
     def start_drag(self, w):
-        native = self._get_native(w)
-        if native:
-            native.start_drag()
-        else:
-            pass
-
-    def message_box(self, w, title, message, style=0):
-        try:
-            import pytron_native
-
-            level = "informational"
-            if style in (4, 5):
-                level = "warning"
-            res = pytron_native.message_box(0, title, message, level)
-            if res is not None:
-                return res
-        except (ImportError, AttributeError):
-            pass
-
-        script = ""
-        if style == 4:
-            script = f'display alert "{title}" message "{message}" buttons {{"No", "Yes"}} default button "Yes"'
-        elif style == 1:
-            script = f'display alert "{title}" message "{message}" buttons {{"Cancel", "OK"}} default button "OK"'
-        else:
-            script = f'display alert "{title}" message "{message}" buttons {{"OK"}} default button "OK"'
-        output = self._run_osascript(script)
-        if output and ("Yes" in output or "OK" in output):
-            return 6 if style == 4 else 1
-        return 7 if style == 4 else 2
         native = self._get_native(w)
         if native:
             native.start_drag()

@@ -136,7 +136,7 @@ def resolve_native_module():
                 if os.path.exists(p):
                     try:
                         os.add_dll_directory(p)
-                    except:
+                    except Exception:
                         pass
 
         # 2. DISCOVERY
@@ -190,7 +190,6 @@ def resolve_native_module():
         if not candidate_modules:
             try:
                 # Import without crashing
-                from . import dependencies
 
                 try:
                     native_pkg = importlib.import_module(
@@ -200,9 +199,9 @@ def resolve_native_module():
                     candidate_modules.append(
                         (PRIORITY_PACKAGE_FALLBACK, path, native_pkg)
                     )
-                except:
+                except Exception:
                     pass
-            except:
+            except Exception:
                 pass
 
         # 3. SELECTION & LOCKDOWN

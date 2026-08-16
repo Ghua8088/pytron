@@ -1,6 +1,4 @@
 import os
-import pytest
-from pathlib import Path
 from pytron.pack.assets import get_smart_assets
 
 

@@ -4,11 +4,9 @@ import json
 import logging
 import ctypes
 import subprocess
-import urllib.parse
-from typing import Optional, List, Any
+from typing import Optional
 from ...webview import Webview
 from .adapter import ChromeAdapter
-from ...serializer import pytron_serialize
 
 
 def _to_str(b):
@@ -109,7 +107,7 @@ class ChromeBridge:
                 res_obj = None
             else:
                 res_obj = json.loads(_to_str(result))
-        except:
+        except Exception:
             res_obj = _to_str(result)
 
         self.adapter.send(
@@ -131,11 +129,10 @@ class ChromeBridge:
         try:
             js_code = _to_str(ctypes.cast(arg, ctypes.c_char_p))
             self.eval(js_code)
-        except:
+        except Exception:
             pass
 
 
-from .forge import ChromeForge
 
 
 class ChromeWebView(Webview):
@@ -438,8 +435,6 @@ class ChromeWebView(Webview):
         return 0
 
     def _handle_ipc_message(self, msg):
-        import inspect
-        import asyncio
 
         msg_type = msg.get("type")
         payload = msg.get("payload")

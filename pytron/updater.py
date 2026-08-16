@@ -35,7 +35,7 @@ class Updater:
                 data = json.loads(settings_path.read_text())
                 if "version" in data:
                     self.current_version = data["version"]
-        except:
+        except Exception:
             pass
 
     def check(self, url: str) -> dict | None:

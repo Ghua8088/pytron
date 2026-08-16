@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Any, List, Optional
+from typing import Any, List
 from .component import AppComponent
 from ..plugin import Plugin
 

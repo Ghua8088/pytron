@@ -1,6 +1,5 @@
 import logging
 import traceback
-import base64
 import time
 import os
 import sys
@@ -202,7 +201,6 @@ class Inspector:
     def _launch_inspector(self):
         """Internal: Runs the inspector window in specific thread."""
         from .inspector_ui import INSPECTOR_HTML
-        import threading
 
         try:
             # Creation must happen on the thread that runs the loop (Windows/Tao requirement)

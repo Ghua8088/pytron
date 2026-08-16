@@ -41,7 +41,7 @@ from .commands.doctor import cmd_doctor
 from .commands.workflow import cmd_workflow
 from .commands.docs import cmd_docs
 from .console import log
-import os
+from .exceptions import PytronError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -374,9 +374,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_docs.set_defaults(func=cmd_docs)
 
     return parser
-
-
-from .exceptions import PytronError
 
 
 def main(argv: list[str] | None = None) -> int:

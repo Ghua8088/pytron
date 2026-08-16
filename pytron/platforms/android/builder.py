@@ -305,7 +305,7 @@ class AndroidBuilder:
             buf = ctypes.create_unicode_buffer(size)
             ctypes.windll.kernel32.GetShortPathNameW(long_path, buf, size)
             return buf.value
-        except:
+        except Exception:
             return long_path
 
     def _norm(self, path):
@@ -806,7 +806,7 @@ endian = 'little'
         if base_build_path and not os.path.exists(base_build_path):
             try:
                 os.makedirs(base_build_path, exist_ok=True)
-            except:
+            except Exception:
                 base_build_path = None
 
         temp_dir = tempfile.mkdtemp(prefix="pb_", dir=base_build_path)
@@ -865,7 +865,7 @@ endian = 'little'
                     [sys.executable, "-m", "pip", "install"] + build_deps,
                     env=os.environ.copy(),
                 )  # nosec B603
-            except:
+            except Exception:
                 pass
 
             # 2. Setup Spoofed Environment

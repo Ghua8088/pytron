@@ -1,8 +1,6 @@
 import ast
 import os
-import re
 from pathlib import Path
-from typing import List, Set
 from ..console import log
 
 
@@ -111,12 +109,12 @@ class VirtualRootGenerator:
         # (like dynamic imports in __init__.py) are triggered.
         for mod in sorted(list(self.discovered_modules)):
             lines.append(f"try: import {mod}")
-            lines.append(f"except Exception: pass")
+            lines.append("except Exception: pass")
 
         lines.append("\n# --- EXPOSED FUNCTIONS ---")
         for mod, func in self.exposed_functions:
             lines.append(f"try: from {mod} import {func}")
-            lines.append(f"except Exception: pass")
+            lines.append("except Exception: pass")
 
         lines.append("")
         lines.append("def main():")

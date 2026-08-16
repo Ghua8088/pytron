@@ -1,5 +1,3 @@
-import pytest
-import sys
 import struct
 import json
 from unittest.mock import patch, MagicMock

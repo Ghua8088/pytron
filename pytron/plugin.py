@@ -51,7 +51,7 @@ class PluginStorage:
         try:
             with open(self._file, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except:
+        except Exception:
             return {}
 
     def _write(self, data):

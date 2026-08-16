@@ -1,7 +1,7 @@
 import sys
 import ctypes
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 from pytron.platforms.windows_ops import window, system, constants
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows only tests")
@@ -324,7 +324,7 @@ def test_make_frameless_strips_caption(hwnd_window, no_pytron_native_window):
     with (
         patch.object(
             window.user32, "GetWindowLongW", return_value=0xCF0000
-        ) as mock_gwl,
+        ),
         patch.object(window.user32, "SetWindowLongW") as mock_swl,
         patch.object(window.user32, "SetWindowPos"),
     ):
@@ -486,13 +486,14 @@ def test_set_window_icon_skips_missing_file(hwnd_system, no_pytron_native_system
 
 
 def test_set_window_icon_ctypes_sends_wm_seticon(hwnd_system, no_pytron_native_system):
-    import tempfile, os
+    import tempfile
+    import os
 
     with tempfile.NamedTemporaryFile(suffix=".ico", delete=False) as f:
         ico_path = f.name
     try:
         with (
-            patch.object(system.user32, "LoadImageW", return_value=999) as mock_li,
+            patch.object(system.user32, "LoadImageW", return_value=999),
             patch.object(system.user32, "SendMessageW") as mock_sm,
         ):
             system.set_window_icon("w", ico_path)
@@ -558,7 +559,6 @@ def test_save_file_dialog_ctypes_returns_value(hwnd_system, no_pytron_native_sys
 def test_save_file_dialog_default_path_and_name_combined(
     hwnd_system, no_pytron_native_system
 ):
-    import os as _os
 
     with patch.object(system.comdlg32, "GetSaveFileNameW", return_value=False):
         system.save_file_dialog(
@@ -662,7 +662,6 @@ def test_register_protocol_returns_false_when_no_winreg():
 
 
 def test_register_protocol_success_mocked_winreg():
-    import types
 
     mock_winreg = MagicMock()
     mock_key = MagicMock()
@@ -972,14 +971,14 @@ def test_get_system_info_os_is_windows():
 
 
 def test_get_system_info_optional_psutil_keys():
-    try:
-        import psutil
+    import importlib.util
 
+    if importlib.util.find_spec("psutil") is not None:
         info = system.get_system_info()
         assert "ram_total" in info
         assert "ram_available" in info
         assert "cpu_usage" in info
-    except ImportError:
+    else:
         info = system.get_system_info()
         assert "ram_total" not in info
 
@@ -1023,7 +1022,7 @@ def test_set_utility_window_enable_sets_toolwindow(
     hwnd_window, no_pytron_native_window
 ):
     with (
-        patch.object(window.user32, "GetWindowLongW", return_value=0) as mock_gwl,
+        patch.object(window.user32, "GetWindowLongW", return_value=0),
         patch.object(window.user32, "SetWindowLongW") as mock_swl,
         patch.object(window.user32, "SetWindowPos"),
     ):

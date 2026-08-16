@@ -1,7 +1,6 @@
 import json
 import inspect
 import asyncio
-import logging
 from typing import Any, Callable
 from .base import WebviewComponent
 from ..serializer import pytron_serialize

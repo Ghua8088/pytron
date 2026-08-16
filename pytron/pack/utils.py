@@ -3,8 +3,6 @@ import sys
 import shutil
 from pathlib import Path
 from ..console import console, log
-import fnmatch
-from ..commands.helpers import get_config
 
 
 def cleanup_dist(dist_path: Path, preserve_tk: bool = False):

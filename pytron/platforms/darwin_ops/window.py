@@ -1,4 +1,3 @@
-import ctypes
 from . import libs
 from .utils import get_window, call, get_class, str_to_nsstring, msg_send
 

@@ -39,7 +39,7 @@ class ServoIPCServer:
         if pytron_native:
             try:
                 self._native = pytron_native.ServoIPC()
-            except:
+            except Exception:
                 pass
 
         # Windows Handles (Fallback)
@@ -118,7 +118,7 @@ class ServoIPCServer:
             self._win_in_handle == INVALID_HANDLE_VALUE
             or self._win_out_handle == INVALID_HANDLE_VALUE
         ):
-            raise RuntimeError(f"Failed to create Dual Named Pipes")
+            raise RuntimeError("Failed to create Dual Named Pipes")
 
         # SIGNAL READY
         self.listening_event.set()
@@ -216,7 +216,7 @@ class ServoIPCServer:
         if not self.is_windows and self.pipe_path_base:
             try:
                 os.remove(self.pipe_path_base)
-            except:
+            except Exception:
                 pass
 
     def _recv_bytes(self, n):
@@ -233,7 +233,7 @@ class ServoIPCServer:
                 if err != 109:
                     logger.error(f"ReadFile Failed. Error: {err}, Requested: {n}")
                 else:
-                    logger.warning(f"Pipe Disconnected (ERROR_BROKEN_PIPE).")
+                    logger.warning("Pipe Disconnected (ERROR_BROKEN_PIPE).")
                 return None
 
             if read.value != n:

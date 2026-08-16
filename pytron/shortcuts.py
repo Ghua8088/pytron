@@ -1,5 +1,6 @@
 import sys
 import ctypes
+import queue
 import threading
 import logging
 from typing import Callable, Dict, Any
@@ -35,8 +36,6 @@ except (ImportError, AttributeError):
             _fields_ = [("hwnd", ctypes.c_void_p), ("message", ctypes.c_uint)]
 
     ctypes.wintypes = MockWintypes
-import queue
-from .exceptions import ShortcutRegistrationError
 
 # Windows Constants
 MOD_ALT = 0x0001

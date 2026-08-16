@@ -77,18 +77,6 @@ class PlatformInterface(ABC):
     def center(self, w: WindowHandle) -> None:
         pass
 
-    @abstractmethod
-    def minimize(self, w: WindowHandle) -> None:
-        pass
-
-    @abstractmethod
-    def maximize(self, w: WindowHandle) -> None:
-        pass
-
-    @abstractmethod
-    def restore(self, w: WindowHandle) -> None:
-        pass
-
     # --- Essential extensions (Should interpret 'w') ---
 
     def is_alive(self, w: WindowHandle) -> bool:

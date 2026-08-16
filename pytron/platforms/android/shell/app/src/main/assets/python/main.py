@@ -13,7 +13,7 @@ site_packages = os.path.join(current_dir, "site-packages")
 if site_packages not in sys.path:
     sys.path.append(site_packages)
 
-import _pytron_android
+import _pytron_android  # noqa: E402
 
 
 # --- HELPER: Send Logs to Android Logcat ---

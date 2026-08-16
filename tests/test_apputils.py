@@ -1,8 +1,3 @@
-import pytest
-import os
-import threading
-import time
-import sys
 from unittest.mock import patch, MagicMock
 from pytron.apputils.deadmansswitch import DeadMansSwitch
 from pytron.apputils.shell import ShellComponent
@@ -74,7 +69,6 @@ def test_shell_show_item_windows(mock_run):
 def test_shell_trash_item():
     mock_s2t = MagicMock()
     with patch.dict("sys.modules", {"send2trash": MagicMock(send2trash=mock_s2t)}):
-        from send2trash import send2trash
 
         result = ShellComponent.trash_item("some_file.txt")
         assert result is True

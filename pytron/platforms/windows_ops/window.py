@@ -4,7 +4,27 @@ try:
     import ctypes.wintypes
 except ImportError:
     ctypes.wintypes = None
-from .constants import *
+from .constants import (
+    DWMWA_BORDER_COLOR,
+    DWMWA_WINDOW_CORNER_PREFERENCE,
+    DWMWCP_ROUND,
+    GWL_EXSTYLE,
+    GWL_STYLE,
+    HTCAPTION,
+    SWP_FRAMECHANGED,
+    SWP_NOACTIVATE,
+    SWP_NOMOVE,
+    SWP_NOSIZE,
+    SWP_NOZORDER,
+    SW_HIDE,
+    SW_SHOW,
+    WM_CLOSE,
+    WM_NCLBUTTONDOWN,
+    WS_CAPTION,
+    WS_EX_APPWINDOW,
+    WS_EX_TOOLWINDOW,
+    WS_THICKFRAME,
+)
 from .utils import get_hwnd
 from ...utils import resolve_native_bridge
 

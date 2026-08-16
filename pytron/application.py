@@ -35,7 +35,6 @@ class App:
         self._crash_comp = CrashReporter(self)
         self._docgen_comp = DocgenComponent(self)
 
-        from .utils import com_thread_initializer
 
         env_engine = os.environ.get("PYTRON_ENGINE")
         engine_explicit = env_engine is not None

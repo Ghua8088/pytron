@@ -1,14 +1,10 @@
 import os
-import sys
 import pytest
-from unittest.mock import MagicMock, patch, call
-from pathlib import Path
-from pytron.console import console
+from unittest.mock import patch
 
 # Import the modules to test
 from pytron.platforms.android.ops.init import (
     init_android_project,
-    reset_android_project,
 )
 from pytron.platforms.android.ops.build import build_android_project
 from pytron.platforms.android.ops.run import run_android_project
@@ -165,8 +161,8 @@ def test_sync_android_project_basic(tmp_path, mock_console_sync, mock_log_sync):
             "pytron.platforms.android.ops.sync.importlib.metadata.packages_distributions",
             return_value={},
         ),
-        patch("shutil.copytree") as mock_copytree,
-        patch("shutil.copy2") as mock_copy2,
+        patch("shutil.copytree"),
+        patch("shutil.copy2"),
     ):
 
         # Mock pytron location detection to avoid looking for system packages

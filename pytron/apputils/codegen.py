@@ -285,9 +285,9 @@ class CodegenComponent(AppComponent):
             return "boolean"
         if py_type is type(None):
             return "void"
-        if py_type == list:
+        if py_type is list:
             return "any[]"
-        if py_type == dict:
+        if py_type is dict:
             return "Record<string, any>"
 
         # Handle Pydantic Models
