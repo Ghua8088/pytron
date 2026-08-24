@@ -344,6 +344,34 @@ pub fn tray_v2_poll_event(py: Python<'_>) -> PyResult<Option<(String, String)>> 
         let m_recv = MenuEvent::receiver();
 
         loop {
+            // 1. Drain pending menu events first
+            while let Ok(event) = m_recv.try_recv() {
+                return Ok(Some(("menu".to_string(), event.id.0.clone())));
+            }
+
+            // 2. Drain tray icon events, filtering out non-actionable mouse move/hover/down events
+            while let Ok(event) = t_recv.try_recv() {
+                let kind = match &event {
+                    TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } => Some("left_click"),
+                    TrayIconEvent::Click {
+                        button: MouseButton::Right,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } => Some("right_click"),
+                    TrayIconEvent::DoubleClick { .. } => Some("double_click"),
+                    _ => None, // Discard Move, Enter, Leave, MouseButtonState::Down
+                };
+
+                if let Some(k) = kind {
+                    return Ok(Some((k.to_string(), String::new())));
+                }
+            }
+
+            // 3. Wait for the next Win32 message
             let mut msg = MSG::default();
             let got = unsafe { GetMessageW(&mut msg, None, 0, 0) };
             if !got.as_bool() {
@@ -353,27 +381,6 @@ pub fn tray_v2_poll_event(py: Python<'_>) -> PyResult<Option<(String, String)>> 
             unsafe {
                 let _ = TranslateMessage(&msg);
                 DispatchMessageW(&msg);
-            }
-
-            if let Ok(event) = t_recv.try_recv() {
-                let kind = match &event {
-                    TrayIconEvent::Click {
-                        button,
-                        button_state,
-                        ..
-                    } => match (button, button_state) {
-                        (MouseButton::Left, MouseButtonState::Up) => "left_click",
-                        (MouseButton::Right, MouseButtonState::Up) => "right_click",
-                        _ => "unknown",
-                    },
-                    TrayIconEvent::DoubleClick { .. } => "double_click",
-                    _ => "unknown",
-                };
-                return Ok(Some((kind.to_string(), String::new())));
-            }
-
-            if let Ok(event) = m_recv.try_recv() {
-                return Ok(Some(("menu".to_string(), event.id.0.clone())));
             }
         }
     })
