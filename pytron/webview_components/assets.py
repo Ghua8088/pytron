@@ -1,6 +1,7 @@
 import mimetypes
 import pathlib
 import zipfile
+from collections import OrderedDict
 from typing import Any, Optional, Tuple
 
 from .base import WebviewComponent
@@ -11,26 +12,26 @@ class AssetComponent(WebviewComponent):
 
     def __init__(self, webview: Any):
         super().__init__(webview)
-        self._served_data = {}
+        # OrderedDict preserves insertion order so popitem(last=False) evicts
+        # the oldest entry in O(1) instead of an O(n) list-slice.
+        self._served_data: OrderedDict = OrderedDict()
+        # Initialised here so hot-path checks are `is not None`, not hasattr.
+        self._zip_file = None
+        self._zip_contents: Optional[set] = None
 
     def serve_data(self, key: str, data: bytes, mime_type: str) -> str:
         """
         Callback for serializing binary data used by plugins/VAP.
         Stores the data in memory to be served via protocol handlers.
         """
-        # Ensure the key is clean (no leading slash or app/ prefix)
         clean_key = key.lstrip("/").replace("app/", "", 1)
 
-        # PERFORMANCE: Limit cache size to prevent memory leaks from generated assets
-        if len(self._served_data) > 500:
-            # Simple purge of oldest entries if it gets too large
-            keys_to_remove = list(self._served_data.keys())[:100]
-            for k in keys_to_remove:
-                del self._served_data[k]
-
+        # FIX #4: O(1) eviction via OrderedDict.popitem(last=False).
+        # The old code did list(dict.keys())[:100] which is O(n) every 500 inserts.
         self._served_data[clean_key] = (data, mime_type)
+        while len(self._served_data) > 500:
+            self._served_data.popitem(last=False)
 
-        # Use appropriate scheme and ensure '/app/' prefix for protocol routing
         scheme = self.webview._routing_comp.scheme
         return f"{scheme}/app/{clean_key}"
 
@@ -42,19 +43,14 @@ class AssetComponent(WebviewComponent):
         if clean_key in self._served_data:
             return self._served_data[clean_key]
 
-        # 2. Check mounted Zip Archive
-        if (
-            hasattr(self, "_zip_file")
-            and self._zip_file
-            and hasattr(self, "_zip_contents")
-        ):
-            if clean_key in self._zip_contents:
-                try:
-                    data = self._zip_file.read(clean_key)
-                    mime, _ = mimetypes.guess_type(clean_key)
-                    return data, mime or "application/octet-stream"
-                except Exception as e:
-                    self.logger.error(f"VAP: Failed to read {clean_key} from zip: {e}")
+        # 2. Check mounted Zip Archive (FIX #5: simple None check, not hasattr)
+        if self._zip_file is not None and clean_key in self._zip_contents:
+            try:
+                data = self._zip_file.read(clean_key)
+                mime, _ = mimetypes.guess_type(clean_key)
+                return data, mime or "application/octet-stream"
+            except Exception as e:
+                self.logger.error(f"VAP: Failed to read {clean_key} from zip: {e}")
         return None
 
     def load_vap_archive(self, archive_name: str):
@@ -94,20 +90,15 @@ class AssetComponent(WebviewComponent):
             raw = data.decode("latin-1")
             return {"raw": raw, "mime": mime}
 
-        # 2. Check mounted Zip Archive
-        if (
-            hasattr(self, "_zip_file")
-            and self._zip_file
-            and hasattr(self, "_zip_contents")
-        ):
-            if clean_key in self._zip_contents:
-                try:
-                    data = self._zip_file.read(clean_key)
-                    mime, _ = mimetypes.guess_type(clean_key)
-                    raw = data.decode("latin-1")
-                    return {"raw": raw, "mime": mime or "application/octet-stream"}
-                except Exception as e:
-                    self.logger.error(f"VAP: Failed to read {clean_key} from zip: {e}")
+        # 2. Check mounted Zip Archive (FIX #5: simple None check)
+        if self._zip_file is not None and clean_key in self._zip_contents:
+            try:
+                data = self._zip_file.read(clean_key)
+                mime, _ = mimetypes.guess_type(clean_key)
+                raw = data.decode("latin-1")
+                return {"raw": raw, "mime": mime or "application/octet-stream"}
+            except Exception as e:
+                self.logger.error(f"VAP: Failed to read {clean_key} from zip: {e}")
 
         # 3. Check File System (if key is a relative path)
         try:

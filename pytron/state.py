@@ -2,6 +2,7 @@ import sys
 import threading
 
 from .exceptions import StateError
+from .serializer import pytron_serialize
 
 
 def _get_global_store():
@@ -25,19 +26,19 @@ def _set_global_store(store):
 
 
 def json_safe_dump(obj):
-    if isinstance(obj, (str, int, float, bool, type(None))):
-        return obj
-    if isinstance(obj, dict):
-        return {str(k): json_safe_dump(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple, set)):
-        return [json_safe_dump(x) for x in obj]
-    if hasattr(obj, "to_dict"):
+    """
+    Convert obj to a JSON-safe primitive tree.
+
+    Thin wrapper around pytron_serialize so state serialization benefits from
+    the orjson fast path.  Preserves the ``to_dict()`` special-case so that
+    ReactiveState / custom store objects serialise via their own method first.
+    """
+    if hasattr(obj, "to_dict") and not isinstance(obj, (str, bytes, dict, list)):
         try:
             return json_safe_dump(obj.to_dict())
         except Exception:
-            # Silently fallback to str(obj) if to_dict fails
             pass
-    return str(obj)
+    return pytron_serialize(obj)
 
 
 def log_shield(msg):
@@ -207,6 +208,9 @@ class ReactiveState:
             log_shield("ReactiveState: Inherited Sovereign Anchor")
 
         object.__setattr__(self, "_store", store)
+        # Cache for observable wrappers: key -> (id(raw_val), wrapped_val).
+        # Avoids re-allocating _ObservableDict/_ObservableList on every read.
+        object.__setattr__(self, "_obs_cache", {})
 
     def _create_mock_store(self):
         class MockStore:
@@ -241,14 +245,17 @@ class ReactiveState:
         app_ref = object.__getattribute__(self, "_app")
 
         try:
-            safe_val = json_safe_dump(value)
-
-            # Deduplication Check
-            # Only emit if the value actually changed.
-            # We must be careful with types, but json_safe_dump normalizes mostly.
-            current_val = store.get(key)
-            if current_val == safe_val:
-                return
+            # FIX #1: Check dedup BEFORE serializing.
+            # Primitives skip serialization entirely — equality check is O(1).
+            # Complex objects are serialized only when the check can't be done cheaply.
+            if isinstance(value, (str, int, float, bool, type(None))):
+                if store.get(key) == value:
+                    return
+                safe_val = value
+            else:
+                safe_val = json_safe_dump(value)
+                if store.get(key) == safe_val:
+                    return
 
             store.set(key, safe_val)
             if app_ref and hasattr(app_ref, "config") and app_ref.config.get("debug"):
@@ -256,9 +263,6 @@ class ReactiveState:
         except Exception as e:
             raise StateError(f"Failed to set state for key '{key}': {e}") from e
 
-        # Optimized Propagation via app.post (Buffered Dispatch)
-        # This batches multiple state updates into a single 'pytron:batch' event
-        # every 16ms, saving massive IPC overhead.
         if app_ref:
             try:
                 app_ref.post("pytron:state-update", {"key": key, "value": safe_val})
@@ -271,11 +275,20 @@ class ReactiveState:
         try:
             val = object.__getattribute__(self, "_store").get(key)
             if isinstance(val, (dict, list)):
+                # FIX #2: Cache the observable wrapper by (key, id(val)).
+                # id(val) changes only when the underlying object is replaced,
+                # so repeated reads of the same state key return the same wrapper
+                # with zero allocation overhead.
+                cache = object.__getattribute__(self, "_obs_cache")
+                cached = cache.get(key)
+                if cached is not None and cached[0] == id(val):
+                    return cached[1]
 
                 def update_cb():
                     self.__setattr__(key, wrapped_val)
 
                 wrapped_val = _make_observable(val, update_cb)
+                cache[key] = (id(val), wrapped_val)
                 return wrapped_val
             return val
         except Exception:

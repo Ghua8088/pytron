@@ -247,6 +247,9 @@ def resolve_native_bridge():
     return resolve_native_module()
 
 
+_com_initialized = threading.local()
+
+
 def _log_shield(msg):
     # Internal logging helper
     try:
@@ -261,17 +264,17 @@ def _log_shield(msg):
             except Exception:
                 pass
 
-        # Determine a safe log path
-        if sys.platform == "win32":
-            log_path = "C:/pytron_debug.log"
-        else:
-            log_path = os.path.join(tempfile.gettempdir(), "pytron_debug.log")
+        if os.environ.get("PYTRON_DEBUG") or os.environ.get("PYTRON_DEBUG_SHIELD"):
+            if sys.platform == "win32":
+                log_path = os.path.join(tempfile.gettempdir(), "pytron_debug.log")
+            else:
+                log_path = os.path.join(tempfile.gettempdir(), "pytron_debug.log")
 
-        try:
-            with open(log_path, "a") as f:
-                f.write(f"[SHIELD] {msg}\n")
-        except Exception:
-            pass
+            try:
+                with open(log_path, "a") as f:
+                    f.write(f"[SHIELD] {msg}\n")
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -303,13 +306,17 @@ def com_thread_initializer():
     Initializes COM for background threads on Windows.
     This prevents 'CoInitialize has not been called' errors when using native Windows APIs
     (like pywintypes or pywin32) inside Pytron's background thread pool.
+    Uses a thread-local flag to ensure CoInitializeEx is called at most once per thread.
     """
     if sys.platform == "win32":
+        if getattr(_com_initialized, "initialized", False):
+            return
         try:
             import ctypes
 
             # 2 = COINIT_APARTMENTTHREADED (STA), which is safer for UI/pywintypes compatibility.
             # 0 = COINIT_MULTITHREADED (MTA)
             ctypes.windll.ole32.CoInitializeEx(None, 2)
+            _com_initialized.initialized = True
         except Exception:
             pass
