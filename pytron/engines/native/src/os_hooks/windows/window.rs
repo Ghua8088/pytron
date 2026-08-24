@@ -1,12 +1,10 @@
 use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
-use windows::Win32::Foundation::{HANDLE, HWND, LPARAM, RECT, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_BORDER_COLOR, DwmSetWindowAttribute};
-use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTOPRIMARY, MONITORINFO,
-    MonitorFromWindow,
-};
+use windows::Win32::Graphics::Gdi::
+    {GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow};
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoInitialize};
 use windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
 use windows::Win32::UI::Shell::{
@@ -158,6 +156,7 @@ pub fn set_title(hwnd_val: usize, title: String) -> PyResult<()> {
 }
 
 #[pyfunction]
+#[pyo3(signature = (hwnd_val, x, y, width, height, no_move=None, no_size=None))]
 pub fn set_bounds(hwnd_val: usize, x: i32, y: i32, width: i32, height: i32, no_move: Option<bool>, no_size: Option<bool>) -> PyResult<()> {
     let hwnd = HWND(hwnd_val as isize);
     unsafe {
@@ -264,6 +263,7 @@ pub fn show(hwnd_val: usize) -> PyResult<()> {
 }
 
 #[pyfunction]
+#[pyo3(signature = (hwnd_val, width=None, height=None))]
 pub fn center(hwnd_val: usize, width: Option<i32>, height: Option<i32>) -> PyResult<()> {
     let hwnd = HWND(hwnd_val as isize);
     unsafe {
@@ -330,6 +330,13 @@ pub fn set_window_icon(hwnd_val: usize, icon_path: String) -> PyResult<()> {
     let hwnd = HWND(hwnd_val as isize);
     let path_u16: Vec<u16> = icon_path.encode_utf16().chain(std::iter::once(0)).collect();
     unsafe {
+        // WM_SETICON ownership note: the window takes a *reference* to the icon; it
+        // does NOT own it. The caller is responsible for keeping the HICON alive for
+        // as long as the window may use it, and for calling DestroyIcon when done.
+        // Since this is a process-lifetime icon (set once at startup), we deliberately
+        // do NOT destroy the handles here — they live until the process exits.
+        // The LRESULT returned is the *previous* small/big icon handle; destroy it
+        // to avoid leaking the old icon when the icon is changed at runtime.
         if let Ok(h) = LoadImageW(
             None,
             windows::core::PCWSTR(path_u16.as_ptr()),
@@ -338,7 +345,12 @@ pub fn set_window_icon(hwnd_val: usize, icon_path: String) -> PyResult<()> {
             16,
             LR_LOADFROMFILE | LR_DEFAULTSIZE,
         ) {
-            let _ = SendMessageW(hwnd, WM_SETICON, WPARAM(ICON_SMALL as usize), LPARAM(h.0));
+            use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, HICON};
+            let prev = SendMessageW(hwnd, WM_SETICON, WPARAM(ICON_SMALL as usize), LPARAM(h.0));
+            if prev.0 != 0 {
+                // Destroy the icon that was previously set to avoid a GDI handle leak.
+                let _ = DestroyIcon(HICON(prev.0 as isize));
+            }
         }
         if let Ok(h) = LoadImageW(
             None,
@@ -348,7 +360,11 @@ pub fn set_window_icon(hwnd_val: usize, icon_path: String) -> PyResult<()> {
             32,
             LR_LOADFROMFILE | LR_DEFAULTSIZE,
         ) {
-            let _ = SendMessageW(hwnd, WM_SETICON, WPARAM(ICON_BIG as usize), LPARAM(h.0));
+            use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, HICON};
+            let prev = SendMessageW(hwnd, WM_SETICON, WPARAM(ICON_BIG as usize), LPARAM(h.0));
+            if prev.0 != 0 {
+                let _ = DestroyIcon(HICON(prev.0 as isize));
+            }
         }
     }
     Ok(())
@@ -377,7 +393,9 @@ pub fn set_fullscreen(hwnd_val: usize, enable: bool) -> PyResult<()> {
             let new_style = style & !(WS_CAPTION.0 | WS_THICKFRAME.0);
             let _ = SetWindowLongW(hwnd, GWL_STYLE, new_style as i32);
 
-            let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+            // FIX: Use MONITOR_DEFAULTTONEAREST so that a window on a secondary
+            // monitor goes fullscreen on *that* monitor, not the primary.
+            let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
             let mut info = MONITORINFO {
                 cbSize: std::mem::size_of::<MONITORINFO>() as u32,
                 ..Default::default()
@@ -429,7 +447,11 @@ pub fn show_notification(
         nid.hWnd = hwnd;
         nid.uID = 2000;
 
-        let mut h_icon = HANDLE::default();
+        // Track whether we loaded an icon so we can destroy it after use.
+        // Shell_NotifyIconW copies the icon data internally, so we are free to
+        // destroy our HICON handle once the notification has been dispatched.
+        let mut h_icon_to_destroy: Option<windows::Win32::UI::WindowsAndMessaging::HICON> = None;
+
         if let Some(path) = icon_path {
             let path_u16: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
             if let Ok(h) = LoadImageW(
@@ -440,10 +462,11 @@ pub fn show_notification(
                 16,
                 LR_LOADFROMFILE,
             ) {
-                h_icon = HANDLE(h.0);
+                let hicon = windows::Win32::UI::WindowsAndMessaging::HICON(h.0 as isize);
+                nid.hIcon = hicon;
+                h_icon_to_destroy = Some(hicon);
             }
         }
-        nid.hIcon = windows::Win32::UI::WindowsAndMessaging::HICON(h_icon.0);
         nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
 
         let title_u16: Vec<u16> = title.encode_utf16().collect();
@@ -465,6 +488,14 @@ pub fn show_notification(
 
         nid.dwInfoFlags = NIIF_INFO;
         let _ = Shell_NotifyIconW(NIM_MODIFY, &nid);
+
+        // FIX: Destroy the HICON we loaded — Shell_NotifyIconW has already
+        // copied the icon data, so this handle is no longer needed. Failing to
+        // do this leaks one GDI handle per notification with a custom icon.
+        if let Some(hicon) = h_icon_to_destroy {
+            use windows::Win32::UI::WindowsAndMessaging::DestroyIcon;
+            let _ = DestroyIcon(hicon);
+        }
     }
     Ok(())
 }

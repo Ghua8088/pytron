@@ -39,6 +39,20 @@ pub struct NativeWebview {
 unsafe impl Send for NativeWebview {}
 unsafe impl Sync for NativeWebview {}
 
+impl Drop for NativeWebview {
+    fn drop(&mut self) {
+        // If run() was never called, `state_ptr` still holds the raw Box<RuntimeState>
+        // pointer. We must free it here to avoid a memory and resource leak.
+        // If run() was called, take() returns None and we do nothing.
+        if let Some(ptr) = self.state_ptr.lock().unwrap().take() {
+            // SAFETY: ptr was created by Box::into_raw(Box::new(RuntimeState {...}))
+            // in NativeWebview::new(), and has not been reconstituted by run() yet.
+            // We are the sole owner here since run() takes the value.
+            unsafe { drop(Box::from_raw(ptr as *mut crate::state::RuntimeState)); }
+        }
+    }
+}
+
 #[cfg(target_os = "linux")]
 static TAO_INIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 

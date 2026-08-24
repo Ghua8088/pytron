@@ -45,7 +45,8 @@ impl NativeState {
         data.insert(key.clone(), value.clone_ref(py));
         
         // --- IRON BRIDGE: NATIVE PROPAGATION (BROADCAST) ---
-        if let Ok(proxies_lock) = self.proxies.lock() {
+        // Serialize before acquiring the proxies lock to minimize lock contention.
+        if let Ok(mut proxies_lock) = self.proxies.lock() {
             if !proxies_lock.is_empty() {
                 let mut json_val = String::from("null");
                 if let Ok(json_mod) = py.import("json") {
@@ -54,9 +55,12 @@ impl NativeState {
                     }
                 }
                 
-                for wrapped_proxy in proxies_lock.iter() {
-                    let _ = wrapped_proxy.0.send_event(UserEvent::StateUpdate(key.clone(), json_val.clone()));
-                }
+                // FIX: prune stale proxies (from closed windows) as we broadcast.
+                // `send_event` fails when the event loop has been dropped, so we
+                // remove those entries to prevent unbounded Vec growth.
+                proxies_lock.retain(|wrapped_proxy| {
+                    wrapped_proxy.0.send_event(UserEvent::StateUpdate(key.clone(), json_val.clone())).is_ok()
+                });
             }
         }
     }
@@ -76,28 +80,71 @@ impl NativeState {
     }
 
     pub fn update(&self, py: Python<'_>, mapping: Bound<'_, PyDict>) -> PyResult<()> {
-        let mut data = self.data.lock().unwrap();
-        let proxies_opt = self.proxies.lock().ok();
+        // --- LOCK ORDERING FIX ---
+        // We must NOT hold `self.data` while calling into Python (json.dumps),
+        // because Python code can re-enter NativeState::get/set which also lock
+        // `self.data`, deadlocking the process.
+        //
+        // Strategy:
+        //   1. Collect (key, val) pairs while briefly holding the data lock.
+        //   2. Release the data lock.
+        //   3. Serialize all values to JSON (Python call, no Rust lock held).
+        //   4. Re-acquire the data lock to insert everything at once.
+        //   5. Broadcast to proxies (pruning dead ones).
 
+        // Step 1: collect all pairs from the PyDict (mapping is a borrowed Python object,
+        // so the GIL is already held here — no extra locking needed for extraction).
+        let mut pairs: Vec<(String, Py<PyAny>)> = Vec::new();
         for (k, v) in mapping.iter() {
             let key = k.extract::<String>()?;
             let val = v.unbind();
-            
-            if let Some(proxies_lock) = proxies_opt.as_ref() {
-                if !proxies_lock.is_empty() {
-                    let mut json_val = String::from("null");
-                    if let Ok(json_mod) = py.import("json") {
-                        if let Ok(res) = json_mod.call_method1("dumps", (val.clone_ref(py),)) {
-                            if let Ok(s) = res.extract::<String>() { json_val = s; }
-                        }
-                    }
-                    for wrapped_proxy in proxies_lock.iter() {
-                        let _ = wrapped_proxy.0.send_event(UserEvent::StateUpdate(key.clone(), json_val.clone()));
-                    }
+            pairs.push((key, val));
+        }
+
+        // Step 2 & 3: Serialize values to JSON while holding NO Rust locks.
+        let mut serialized: Vec<(String, Py<PyAny>, String)> = Vec::with_capacity(pairs.len());
+        for (key, val) in pairs {
+            let mut json_val = String::from("null");
+            if let Ok(json_mod) = py.import("json") {
+                if let Ok(res) = json_mod.call_method1("dumps", (val.clone_ref(py),)) {
+                    if let Ok(s) = res.extract::<String>() { json_val = s; }
                 }
             }
-            data.insert(key, val);
+            serialized.push((key, val, json_val));
         }
+
+        // Step 4: Re-acquire data lock and insert all values at once.
+        {
+            let mut data = self.data.lock().unwrap();
+            for (key, val, _) in &serialized {
+                data.insert(key.clone(), val.clone_ref(py));
+            }
+        } // data lock released here
+
+        // Step 5: Broadcast state updates to all living event loops.
+        if let Ok(mut proxies_lock) = self.proxies.lock() {
+            if !proxies_lock.is_empty() {
+                // Collect all (key, json) pairs that need to be broadcast.
+                // We do the broadcast in a single pass and prune dead proxies.
+                let updates: Vec<(String, String)> = serialized
+                    .iter()
+                    .map(|(k, _, j)| (k.clone(), j.clone()))
+                    .collect();
+
+                proxies_lock.retain(|wrapped_proxy| {
+                    // A proxy is considered alive if at least one send succeeds.
+                    // We send all updates and only prune if EVERY send fails.
+                    let mut alive = false;
+                    for (key, json_val) in &updates {
+                        if wrapped_proxy.0.send_event(UserEvent::StateUpdate(key.clone(), json_val.clone())).is_ok() {
+                            alive = true;
+                        }
+                    }
+                    alive || updates.is_empty()
+                });
+            }
+        }
+
         Ok(())
     }
 
