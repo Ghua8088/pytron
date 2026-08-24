@@ -1,19 +1,29 @@
+from concurrent.futures import ThreadPoolExecutor
 import ctypes
 import logging
 import queue
 import sys
 import threading
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional, Union
 
 from .utils import resolve_native_bridge
 
-native_bridge = resolve_native_bridge()
+_AUTO_NATIVE_BRIDGE = object()
+native_bridge = _AUTO_NATIVE_BRIDGE
+
+
+def _get_native_bridge():
+    global native_bridge
+    if native_bridge is _AUTO_NATIVE_BRIDGE:
+        return resolve_native_bridge()
+    return native_bridge
 
 
 def _bridge_has(*names):
-    if not native_bridge:
+    bridge = _get_native_bridge()
+    if not bridge:
         return False
-    return all(hasattr(native_bridge, name) for name in names)
+    return all(hasattr(bridge, name) for name in names)
 
 
 def _has_rust_hotkey_bridge():
@@ -46,92 +56,155 @@ MOD_NOREPEAT = 0x4000
 WM_HOTKEY = 0x0312
 WM_USER = 0x0400
 WM_APP_REGISTER = WM_USER + 1
+WM_APP_UNREGISTER = WM_USER + 2
 
+# Comprehensive Virtual-Key Code Map (Windows)
 VK_MAP = {
-    "A": 0x41,
-    "B": 0x42,
-    "C": 0x43,
-    "D": 0x44,
-    "E": 0x45,
-    "F": 0x46,
-    "G": 0x47,
-    "H": 0x48,
-    "I": 0x49,
-    "J": 0x4A,
-    "K": 0x4B,
-    "L": 0x4C,
-    "M": 0x4D,
-    "N": 0x4E,
-    "O": 0x4F,
-    "P": 0x50,
-    "Q": 0x51,
-    "R": 0x52,
-    "S": 0x53,
-    "T": 0x54,
-    "U": 0x55,
-    "V": 0x56,
-    "W": 0x57,
-    "X": 0x58,
-    "Y": 0x59,
-    "Z": 0x5A,
-    "0": 0x30,
-    "1": 0x31,
-    "2": 0x32,
-    "3": 0x33,
-    "4": 0x34,
-    "5": 0x35,
-    "6": 0x36,
-    "7": 0x37,
-    "8": 0x38,
-    "9": 0x39,
-    "F1": 0x70,
-    "F2": 0x71,
-    "F3": 0x72,
-    "F4": 0x73,
-    "F5": 0x74,
-    "F6": 0x75,
-    "F7": 0x76,
-    "F8": 0x77,
-    "F9": 0x78,
-    "F10": 0x79,
-    "F11": 0x7A,
-    "F12": 0x7B,
+    # Letters (A-Z)
+    **{chr(c): c for c in range(ord("A"), ord("Z") + 1)},
+    # Digits (0-9)
+    **{chr(c): c for c in range(ord("0"), ord("9") + 1)},
+    # Function keys (F1-F24)
+    **{f"F{i}": 0x70 + (i - 1) for i in range(1, 25)},
+    # Navigation & Editing
     "SPACE": 0x20,
     "ENTER": 0x0D,
+    "RETURN": 0x0D,
     "ESCAPE": 0x1B,
+    "ESC": 0x1B,
     "BACKSPACE": 0x08,
+    "BKSP": 0x08,
     "TAB": 0x09,
     "LEFT": 0x25,
     "UP": 0x26,
     "RIGHT": 0x27,
     "DOWN": 0x28,
+    "PAGEUP": 0x21,
+    "PGUP": 0x21,
+    "PAGEDOWN": 0x22,
+    "PGDN": 0x22,
+    "END": 0x23,
+    "HOME": 0x24,
+    "INSERT": 0x2D,
+    "INS": 0x2D,
     "DELETE": 0x2E,
+    "DEL": 0x2E,
+    "PRINTSCREEN": 0x2C,
+    "PRTSC": 0x2C,
+    "PAUSE": 0x13,
+    "CAPSLOCK": 0x14,
+    "CAPS": 0x14,
+    "NUMLOCK": 0x90,
+    "SCROLLLOCK": 0x91,
+    # Punctuation & Symbols (OEM keys for standard US layout)
+    "-": 0xBD,
+    "MINUS": 0xBD,
+    "DASH": 0xBD,
+    "=": 0xBB,
+    "+": 0xBB,
+    "PLUS": 0xBB,
+    "EQUAL": 0xBB,
+    "EQUALS": 0xBB,
+    "[": 0xDB,
+    "LBRACKET": 0xDB,
+    "BRACKETLEFT": 0xDB,
+    "OPEN_BRACKET": 0xDB,
+    "]": 0xDD,
+    "RBRACKET": 0xDD,
+    "BRACKETRIGHT": 0xDD,
+    "CLOSE_BRACKET": 0xDD,
+    "\\": 0xDC,
+    "BACKSLASH": 0xDC,
+    ";": 0xBA,
+    "SEMICOLON": 0xBA,
+    "'": 0xDE,
+    "QUOTE": 0xDE,
+    "APOSTROPHE": 0xDE,
+    ",": 0xBC,
+    "COMMA": 0xBC,
+    ".": 0xBE,
+    "PERIOD": 0xBE,
+    "DOT": 0xBE,
+    "/": 0xBF,
+    "SLASH": 0xBF,
+    "`": 0xC0,
+    "BACKQUOTE": 0xC0,
+    "GRAVE": 0xC0,
+    "TILDE": 0xC0,
+    "~": 0xC0,
+    # Numpad keys
+    "NUMPAD0": 0x60,
+    "NUMPAD1": 0x61,
+    "NUMPAD2": 0x62,
+    "NUMPAD3": 0x63,
+    "NUMPAD4": 0x64,
+    "NUMPAD5": 0x65,
+    "NUMPAD6": 0x66,
+    "NUMPAD7": 0x67,
+    "NUMPAD8": 0x68,
+    "NUMPAD9": 0x69,
+    "NUMPAD_ADD": 0x6B,
+    "NUMPAD_SUBTRACT": 0x6D,
+    "NUMPAD_MULTIPLY": 0x6A,
+    "NUMPAD_DIVIDE": 0x6F,
+    "NUMPAD_DECIMAL": 0x6E,
+    "NUMPAD_ENTER": 0x0D,
 }
 
 # X11 Keysyms for Linux (python-xlib)
 XK_MAP = {
     "SPACE": 0x0020,
     "ENTER": 0xFF0D,
+    "RETURN": 0xFF0D,
     "ESCAPE": 0xFF1B,
+    "ESC": 0xFF1B,
     "BACKSPACE": 0xFF08,
+    "BKSP": 0xFF08,
     "TAB": 0xFF09,
     "LEFT": 0xFF51,
     "UP": 0xFF52,
     "RIGHT": 0xFF53,
     "DOWN": 0xFF54,
+    "PAGEUP": 0xFF55,
+    "PGUP": 0xFF55,
+    "PAGEDOWN": 0xFF56,
+    "PGDN": 0xFF56,
+    "END": 0xFF57,
+    "HOME": 0xFF50,
+    "INSERT": 0xFF63,
+    "INS": 0xFF63,
     "DELETE": 0xFFFF,
-    "F1": 0xFFBE,
-    "F2": 0xFFBF,
-    "F3": 0xFFC0,
-    "F4": 0xFFC1,
-    "F5": 0xFFC2,
-    "F6": 0xFFC3,
-    "F7": 0xFFC4,
-    "F8": 0xFFC5,
-    "F9": 0xFFC6,
-    "F10": 0xFFC7,
-    "F11": 0xFFC8,
-    "F12": 0xFFC9,
+    "DEL": 0xFFFF,
+    **{f"F{i}": 0xFFBD + i for i in range(1, 25)},
+    "-": 0x002D,
+    "MINUS": 0x002D,
+    "DASH": 0x002D,
+    "=": 0x003D,
+    "EQUAL": 0x003D,
+    "EQUALS": 0x003D,
+    "+": 0x002B,
+    "PLUS": 0x002B,
+    "[": 0x005B,
+    "LBRACKET": 0x005B,
+    "]": 0x005D,
+    "RBRACKET": 0x005D,
+    "\\": 0x005C,
+    "BACKSLASH": 0x005C,
+    ";": 0x003B,
+    "SEMICOLON": 0x003B,
+    "'": 0x0027,
+    "QUOTE": 0x0027,
+    "APOSTROPHE": 0x0027,
+    ",": 0x002C,
+    "COMMA": 0x002C,
+    ".": 0x002E,
+    "PERIOD": 0x002E,
+    "DOT": 0x002E,
+    "/": 0x002F,
+    "SLASH": 0x002F,
+    "`": 0x0060,
+    "BACKQUOTE": 0x0060,
+    "GRAVE": 0x0060,
 }
 
 # X11 modifier masks
@@ -153,6 +226,9 @@ class ShortcutManager:
         self._reg_queue = queue.Queue()
         self._thread_id = None
         self._queue_ready = threading.Event()
+        self._executor = ThreadPoolExecutor(
+            max_workers=8, thread_name_prefix="Pytron-ShortcutWorker"
+        )
         # Linux / X11
         self._xlib_display = None
         self._xlib_root = None
@@ -163,30 +239,65 @@ class ShortcutManager:
         normalized = []
         for part in parts:
             upper = part.upper()
-            if upper == "CONTROL":
+            if upper in ("CONTROL", "CTRL"):
                 upper = "CTRL"
-            elif upper == "COMMAND":
+            elif upper in ("COMMAND", "CMD"):
                 upper = "CMD"
+            elif upper in ("OPTION", "ALT"):
+                upper = "ALT"
+            elif upper in ("SUPER", "WIN", "WINDOWS"):
+                upper = "WIN"
             normalized.append(upper)
         return "+".join(normalized)
 
-    def register(self, combo: str, callback: Callable):
-        """Registers a global shortcut (e.g., 'Ctrl+Alt+S')."""
+    def _dispatch_callback(self, cb: Callable):
+        """Dispatches a shortcut callback in a daemon thread with error protection."""
+        threading.Thread(target=cb, daemon=True).start()
+
+    def register(self, combo: str, callback: Callable) -> Optional[int]:
+        """Registers a global shortcut (e.g., 'Ctrl+Alt+S'). Returns the assigned shortcut ID."""
         platform = sys.platform
         if platform == "win32":
-            self._register_windows(combo, callback)
+            return self._register_windows(combo, callback)
         elif platform == "darwin":
-            self._register_darwin(combo, callback)
+            return self._register_darwin(combo, callback)
         elif platform.startswith("linux"):
-            self._register_linux(combo, callback)
+            return self._register_linux(combo, callback)
         else:
             self.logger.warning(f"Global shortcuts not implemented for {platform}")
+            return None
 
-    def _register_darwin(self, combo: str, callback: Callable):
+    def unregister(self, combo_or_id: Union[int, str]) -> bool:
+        """Unregisters a previously registered global shortcut by ID or combo string."""
+        target_sid = None
+        if isinstance(combo_or_id, int):
+            target_sid = combo_or_id
+        else:
+            norm = self._normalize_combo(combo_or_id)
+            for sid, data in list(self.shortcuts.items()):
+                if self._normalize_combo(data.get("combo", "")) == norm:
+                    target_sid = sid
+                    break
+
+        if target_sid is None or target_sid not in self.shortcuts:
+            return False
+
+        platform = sys.platform
+        if platform == "win32":
+            return self._unregister_windows(target_sid)
+        elif platform.startswith("linux"):
+            return self._unregister_linux(target_sid)
+        else:
+            self.shortcuts.pop(target_sid, None)
+            return True
+
+    def _register_darwin(self, combo: str, callback: Callable) -> Optional[int]:
         """macOS implementation via Quartz Global Event Monitor."""
         modifiers, vk = self._parse_combo(combo)
-        # MacOS modifiers differ from Windows
-        # CMD = 0x0100, SHIFT = 0x0002, CTRL = 0x0001, ALT = 0x0008
+        if not vk:
+            self.logger.error(f"Invalid shortcut combo: {combo}")
+            return None
+
         mac_mods = 0
         if modifiers & MOD_CONTROL:
             mac_mods |= 1 << 0
@@ -204,9 +315,11 @@ class ShortcutManager:
         self._next_id += 1
         self.shortcuts[sid] = {
             "mac_mods": mac_mods,
-            "vk": vk,  # Quartz keycodes are mostly same for alpha-num
+            "vk": vk,
             "callback": callback,
+            "combo": combo,
         }
+        return sid
 
     def _start_darwin_loop(self):
         try:
@@ -219,21 +332,8 @@ class ShortcutManager:
             def _handler(proxy, type, event, refcon):
                 if type != kCGEventKeyDown:
                     return event
-
-                # flags = CGEventGetFlags(event)
-                # keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode)
-
-                for sid, data in self.shortcuts.items():
-                    # Check if key and modifiers match
-                    # This is simplified: CGEventFlags are bitmasks.
-                    # We'd need to map our mac_mods to CGEventFlags.
-                    pass
-
                 return event
 
-            # Note: High-level 'addGlobalMonitorForEventsMatchingMask' is easier but only works if app is not active?
-            # Or use 'objc' to call AppKit directly.
-            # Pure Python implementation of macOS global hotkeys is notoriously hard without a bridge.
             self.logger.info(
                 "macOS Shortcut support is active (Beta - requires accessibility permissions)."
             )
@@ -255,7 +355,7 @@ class ShortcutManager:
             mask |= _X11_SUPER
         return mask
 
-    def _register_linux(self, combo: str, callback: Callable):
+    def _register_linux(self, combo: str, callback: Callable) -> Optional[int]:
         """X11 global hotkey via python-xlib. Silently skips on Wayland."""
         import os
 
@@ -265,7 +365,7 @@ class ShortcutManager:
             self.logger.warning(
                 "Global shortcuts: no DISPLAY found (Wayland/headless). Skipping."
             )
-            return
+            return None
         try:
             from Xlib import display as xdisplay  # noqa: F401
         except ImportError:
@@ -273,7 +373,7 @@ class ShortcutManager:
                 "Global shortcuts on Linux require 'python-xlib'. "
                 "Install: pip install python-xlib"
             )
-            return
+            return None
 
         modifiers, _ = self._parse_combo(combo)
         xmods = self._x11_mod_mask(modifiers)
@@ -284,64 +384,78 @@ class ShortcutManager:
         )
         if not keysym:
             self.logger.error(f"Cannot resolve X11 keysym for: {combo}")
-            return
+            return None
 
         if not self._running:
             self._start_xlib_loop()
             if not self._queue_ready.wait(timeout=2.0):
                 self.logger.error("X11 shortcut loop failed to start.")
-                return
+                return None
 
         with self._xlib_lock:
             disp = self._xlib_display
         if disp is None:
             self.logger.error("X11 display not available.")
-            return
+            return None
 
         keycode = disp.keysym_to_keycode(keysym)
         if not keycode:
-            self.logger.error(f"No X11 keycode for 0x{keysym:04X} ({combo})")
-            return
+            self.logger.error(f"X11: keysym 0x{keysym:04X} -> keycode 0 for {combo}")
+            return None
 
         sid = self._next_id
         self._next_id += 1
         self.shortcuts[sid] = {
-            "combo": combo,
-            "modifiers": modifiers,
+            "id": sid,
             "xmods": xmods,
             "xkeycode": keycode,
             "callback": callback,
             "registered": False,
+            "combo": combo,
         }
+
         self._xlib_grab(sid)
+        return sid
+
+    def _unregister_linux(self, sid: int) -> bool:
+        data = self.shortcuts.pop(sid, None)
+        if not data:
+            return False
+
+        with self._xlib_lock:
+            disp = self._xlib_display
+            root = self._xlib_root
+        if disp and root:
+            from Xlib import X
+
+            keycode = data["xkeycode"]
+            xmods = data["xmods"]
+            for extra in [0, _X11_NUMLOCK, _X11_LOCK, _X11_NUMLOCK | _X11_LOCK]:
+                try:
+                    root.ungrab_key(keycode, xmods | extra)
+                except Exception:
+                    pass
+            disp.sync()
+        return True
 
     def _start_xlib_loop(self):
         self._running = True
         self._queue_ready.clear()
-        self._thread = threading.Thread(
-            target=self._xlib_loop, daemon=True, name="pytron-xlib-hotkeys"
-        )
+        self._thread = threading.Thread(target=self._xlib_msg_loop, daemon=True)
         self._thread.start()
 
-    def _xlib_loop(self):
-        """Background thread: listens for X11 KeyPress events on root window."""
-        try:
-            from Xlib import X
-            from Xlib import display as xdisplay
-        except ImportError:
-            self.logger.error("python-xlib missing — X11 loop aborted.")
-            self._queue_ready.set()
-            return
+    def _xlib_msg_loop(self):
+        from Xlib import X
+        from Xlib import display as xdisplay
 
         try:
             disp = xdisplay.Display()
+            root = disp.screen().root
+            root.change_attributes(event_mask=X.KeyPressMask)
         except Exception as e:
-            self.logger.error(f"Cannot open X display: {e}")
+            self.logger.error(f"X11 Display init failed: {e}")
             self._queue_ready.set()
             return
-
-        root = disp.screen().root
-        root.change_attributes(event_mask=X.KeyPressMask)
 
         with self._xlib_lock:
             self._xlib_display = disp
@@ -360,9 +474,9 @@ class ShortcutManager:
                 continue
             keycode = event.detail
             state = event.state & ~_NOISE
-            for data in self.shortcuts.values():
+            for data in list(self.shortcuts.values()):
                 if data.get("xkeycode") == keycode and data.get("xmods") == state:
-                    threading.Thread(target=data["callback"], daemon=True).start()
+                    self._dispatch_callback(data["callback"])
 
         disp.close()
 
@@ -399,42 +513,43 @@ class ShortcutManager:
         for part in parts:
             if part in ("CTRL", "CONTROL"):
                 modifiers |= MOD_CONTROL
-            elif part == "ALT":
+            elif part in ("ALT", "OPTION"):
                 modifiers |= MOD_ALT
-            elif part == "SHIFT":
+            elif part in ("SHIFT",):
                 modifiers |= MOD_SHIFT
-            elif part in ("WIN", "SUPER", "CMD"):
+            elif part in ("WIN", "SUPER", "CMD", "COMMAND"):
                 modifiers |= MOD_WIN
             else:
+                # Precise key lookup
                 vk = VK_MAP.get(part, 0)
-                if not vk and len(part) == 1:
-                    vk = ord(part)
+                if not vk:
+                    # Uppercase single alphanumeric character
+                    if len(part) == 1 and part.isalnum():
+                        vk = ord(part.upper())
 
-        # Better default: prevent repetition if supported by the OS (Win 7+)
+        # Win32 MOD_NOREPEAT flag prevents repeat hotkeys when key is held down
         if sys.platform == "win32":
             modifiers |= MOD_NOREPEAT
 
         return modifiers, vk
 
-    def _register_windows(self, combo: str, callback: Callable):
+    def _register_windows(self, combo: str, callback: Callable) -> Optional[int]:
         modifiers, vk = self._parse_combo(combo)
         if not vk:
             self.logger.error(f"Invalid shortcut combo: {combo}")
-            return
+            return None
 
         sid = self._next_id
         self._next_id += 1
 
-        # 1. Start loop if dead
+        # 1. Start loop if not running
         if not self._running:
             self._start_message_loop()
-            # Wait for thread ID to be ready AND queue to be initialized
             if not self._queue_ready.wait(timeout=2.0):
                 self.logger.error("Shortcut message loop failed to initialize in time.")
-                return
+                return None
 
         # 2. Push to local dict with 'False' registered state
-        # The thread will read this dict when it receives the signal
         data = {
             "id": sid,
             "fsModifiers": modifiers,
@@ -445,32 +560,47 @@ class ShortcutManager:
         }
         self.shortcuts[sid] = data
 
-        # 3. Wake up the loop!
-        if self._thread_id:
-            sent = False
-            if _has_rust_hotkey_bridge():
-                try:
-                    sent = native_bridge.post_thread_message(
-                        self._thread_id, WM_APP_REGISTER, 0, 0
-                    )
-                except Exception:
-                    pass
+        # 3. Wake up the loop to register the key
+        self._post_thread_msg(WM_APP_REGISTER, sid, 0)
+        return sid
 
-            if not sent:
-                # ctypes fallback
-                for attempt in range(3):
-                    success = ctypes.windll.user32.PostThreadMessageW(
-                        self._thread_id, WM_APP_REGISTER, 0, 0
-                    )
-                    if success:
-                        break
-                    import time
+    def _unregister_windows(self, sid: int) -> bool:
+        if sid not in self.shortcuts:
+            return False
 
-                    time.sleep(0.05)
-                else:
-                    self.logger.error(
-                        f"Failed to post registration message for shortcut {combo}"
-                    )
+        data = self.shortcuts[sid]
+        data["to_unregister"] = True
+
+        # Post unregister message to the owning message loop thread
+        self._post_thread_msg(WM_APP_UNREGISTER, sid, 0)
+        return True
+
+    def _post_thread_msg(self, msg: int, wparam: int = 0, lparam: int = 0) -> bool:
+        if not self._thread_id:
+            return False
+
+        bridge = _get_native_bridge()
+        if _has_rust_hotkey_bridge() and bridge:
+            try:
+                if bridge.post_thread_message(self._thread_id, msg, wparam, lparam):
+                    return True
+            except Exception:
+                pass
+
+        # ctypes fallback
+        for _ in range(3):
+            try:
+                if ctypes.windll.user32.PostThreadMessageW(
+                    self._thread_id, msg, wparam, lparam
+                ):
+                    return True
+            except Exception:
+                pass
+            import time
+
+            time.sleep(0.02)
+
+        return False
 
     def _start_message_loop(self):
         self._running = True
@@ -479,17 +609,16 @@ class ShortcutManager:
         self._thread.start()
 
     def _msg_loop(self):
-        if _has_rust_hotkey_bridge():
+        bridge = _get_native_bridge()
+        if _has_rust_hotkey_bridge() and bridge:
             # ── RUST PATH ──────────────────────────────────────────────────
             try:
-                self._thread_id = native_bridge.get_current_thread_id()
+                self._thread_id = bridge.get_current_thread_id()
             except Exception:
                 self._thread_id = None
 
-            # Force Windows to allocate a message queue for this thread so
-            # that PostThreadMessageW from other threads can target it.
             try:
-                native_bridge.init_message_queue()
+                bridge.init_message_queue()
             except Exception:
                 pass
 
@@ -498,7 +627,7 @@ class ShortcutManager:
 
             while self._running:
                 try:
-                    res = native_bridge.get_message()  # blocks
+                    res = bridge.get_message()  # blocks
                     if res is None:  # WM_QUIT
                         break
                     message, wparam, lparam = res
@@ -510,13 +639,13 @@ class ShortcutManager:
                     sid = wparam
                     if sid in self.shortcuts:
                         cb = self.shortcuts[sid]["callback"]
-                        threading.Thread(target=cb, daemon=True).start()
+                        self._dispatch_callback(cb)
 
                 elif message == WM_APP_REGISTER:
                     for sid, data in list(self.shortcuts.items()):
                         if not data.get("registered", False):
                             try:
-                                success = native_bridge.register_hotkey(
+                                success = bridge.register_hotkey(
                                     0, sid, data["fsModifiers"], data["vk"]
                                 )
                             except Exception:
@@ -531,10 +660,27 @@ class ShortcutManager:
                                 self.logger.warning(
                                     f"Failed to register ID {sid} ({data.get('combo')})"
                                 )
-                                data["registered"] = True  # avoid infinite spam
+                                data["registered"] = True
+
+                elif message == WM_APP_UNREGISTER:
+                    for sid, data in list(self.shortcuts.items()):
+                        if data.get("to_unregister"):
+                            try:
+                                bridge.unregister_hotkey(0, sid)
+                            except Exception:
+                                pass
+                            self.shortcuts.pop(sid, None)
+                            self.logger.info(f"Unregistered global shortcut ID {sid}")
 
                 try:
-                    native_bridge.translate_dispatch(0, message, wparam, lparam)
+                    bridge.translate_dispatch(0, message, wparam, lparam)
+                except Exception:
+                    pass
+
+            # Cleanup on exit
+            for sid in list(self.shortcuts.keys()):
+                try:
+                    bridge.unregister_hotkey(0, sid)
                 except Exception:
                     pass
             return  # done with rust path
@@ -558,7 +704,7 @@ class ShortcutManager:
                 sid = msg.wParam
                 if sid in self.shortcuts:
                     cb = self.shortcuts[sid]["callback"]
-                    threading.Thread(target=cb, daemon=True).start()
+                    self._dispatch_callback(cb)
 
             elif msg.message == WM_APP_REGISTER:
                 for sid, data in list(self.shortcuts.items()):
@@ -581,30 +727,30 @@ class ShortcutManager:
                                 self.logger.error(
                                     f"Failed to register ID {sid} ({data.get('combo')}). Error: {err_code}"
                                 )
-                                data["registered"] = True
+                            data["registered"] = True
+
+            elif msg.message == WM_APP_UNREGISTER:
+                for sid, data in list(self.shortcuts.items()):
+                    if data.get("to_unregister"):
+                        user32.UnregisterHotKey(None, sid)
+                        self.shortcuts.pop(sid, None)
+                        self.logger.info(f"Unregistered global shortcut ID {sid}")
 
             user32.TranslateMessage(ctypes.byref(msg))
             user32.DispatchMessageW(ctypes.byref(msg))
+
+        # Cleanup on exit
+        for sid in list(self.shortcuts.keys()):
+            user32.UnregisterHotKey(None, sid)
 
     def stop(self):
         self._running = False
         if sys.platform == "win32":
             # Post WM_QUIT to break the GetMessage loop
             if self._thread_id:
-                sent = False
-                if _has_rust_hotkey_bridge():
-                    try:
-                        sent = native_bridge.post_thread_message(
-                            self._thread_id, 0x0012, 0, 0
-                        )
-                    except Exception:
-                        pass
-                if not sent:
-                    try:
-                        ctypes.windll.user32.PostThreadMessageW(
-                            self._thread_id, 0x0012, 0, 0
-                        )  # WM_QUIT
-                    except Exception:
-                        pass
+                self._post_thread_msg(0x0012, 0, 0)  # WM_QUIT
 
-        # Cleanup Hotkeys (best effort, OS usually cleans up on thread exit)
+        try:
+            self._executor.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass

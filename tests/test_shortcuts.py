@@ -443,3 +443,89 @@ def test_stop_noop_when_no_thread_id():
     """stop() must not raise when the loop was never started."""
     mgr = ShortcutManager()
     mgr.stop()  # _thread_id is None — should be a no-op
+
+
+# ---------------------------------------------------------------------------
+# Punctuation, Navigation & unregister() tests
+# ---------------------------------------------------------------------------
+
+
+def test_parse_combo_punctuation_keys(manager):
+    with patch("sys.platform", "win32"):
+        _, vk_plus = manager._parse_combo("Ctrl+Plus")
+        _, vk_equal = manager._parse_combo("Ctrl+=")
+        _, vk_minus = manager._parse_combo("Ctrl+-")
+        _, vk_lbracket = manager._parse_combo("Ctrl+[")
+        _, vk_rbracket = manager._parse_combo("Ctrl+]")
+        _, vk_slash = manager._parse_combo("Ctrl+/")
+        _, vk_backslash = manager._parse_combo("Ctrl+\\")
+        _, vk_comma = manager._parse_combo("Ctrl+,")
+        _, vk_period = manager._parse_combo("Ctrl+.")
+        _, vk_semicolon = manager._parse_combo("Ctrl+;")
+        _, vk_quote = manager._parse_combo("Ctrl+'")
+        _, vk_tilde = manager._parse_combo("Ctrl+`")
+
+    assert vk_plus == 0xBB
+    assert vk_equal == 0xBB
+    assert vk_minus == 0xBD
+    assert vk_lbracket == 0xDB
+    assert vk_rbracket == 0xDD
+    assert vk_slash == 0xBF
+    assert vk_backslash == 0xDC
+    assert vk_comma == 0xBC
+    assert vk_period == 0xBE
+    assert vk_semicolon == 0xBA
+    assert vk_quote == 0xDE
+    assert vk_tilde == 0xC0
+
+
+def test_parse_combo_navigation_and_numpad(manager):
+    with patch("sys.platform", "win32"):
+        _, vk_home = manager._parse_combo("Ctrl+Home")
+        _, vk_end = manager._parse_combo("Ctrl+End")
+        _, vk_pgup = manager._parse_combo("Ctrl+PageUp")
+        _, vk_pgdn = manager._parse_combo("Ctrl+PageDown")
+        _, vk_ins = manager._parse_combo("Ctrl+Insert")
+        _, vk_num1 = manager._parse_combo("Ctrl+Numpad1")
+        _, vk_numadd = manager._parse_combo("Ctrl+Numpad_Add")
+
+    assert vk_home == 0x24
+    assert vk_end == 0x23
+    assert vk_pgup == 0x21
+    assert vk_pgdn == 0x22
+    assert vk_ins == 0x2D
+    assert vk_num1 == 0x61
+    assert vk_numadd == 0x6B
+
+
+def test_unregister_by_id_and_by_combo(manager):
+    with (
+        patch("sys.platform", "win32"),
+        patch.object(manager, "_start_message_loop"),
+        patch.object(manager, "_queue_ready") as mock_ready,
+        patch.object(manager, "_post_thread_msg") as mock_post,
+    ):
+        mock_ready.wait.return_value = True
+        manager._thread_id = 1234
+        manager._running = True
+
+        sid1 = manager.register("Ctrl+A", lambda: None)
+        sid2 = manager.register("Ctrl+B", lambda: None)
+
+        assert sid1 in manager.shortcuts
+        assert sid2 in manager.shortcuts
+
+        # Unregister by ID
+        res1 = manager.unregister(sid1)
+        assert res1 is True
+        assert manager.shortcuts[sid1].get("to_unregister") is True
+
+        # Unregister by Combo string
+        res2 = manager.unregister("Ctrl+B")
+        assert res2 is True
+        assert manager.shortcuts[sid2].get("to_unregister") is True
+
+        # Non-existent
+        res3 = manager.unregister("Ctrl+Z")
+        assert res3 is False
+
