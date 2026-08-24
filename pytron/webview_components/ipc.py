@@ -1,9 +1,8 @@
 import asyncio
 import inspect
-import json
 from typing import Any, Callable
 
-from ..serializer import pytron_serialize
+from ..serializer import _fast_loads, fast_ipc_dump
 from ..utils import com_thread_initializer
 from .base import WebviewComponent
 
@@ -37,8 +36,8 @@ class IPCComponent(WebviewComponent):
                     # Chrome/Servo Path: req is already a list of decoded Python objects
                     args = req
                 elif req is not None:
-                    # Native Path: req is a JSON string
-                    args = json.loads(req)
+                    # Native Path: req is a JSON string — use fast decoder
+                    args = _fast_loads(req)
                 else:
                     args = []
             except Exception:
@@ -48,13 +47,10 @@ class IPCComponent(WebviewComponent):
             if not name.startswith("inspector_") and name not in self._spammy_methods:
                 self.logger.debug(f"IPC Call: {name}({args})")
 
-            # Result serializer
-            def _serialize_result(res):
-                return pytron_serialize(res, vap_provider=self.webview.serve_data)
-
-            # Response Helper
+            # Response Helper — single-pass: fast_ipc_dump fuses VAP registration
+            # and JSON encoding into one traversal (Rust-speed via orjson when available).
             def _respond(status, result):
-                res_str = json.dumps(result)
+                res_str = fast_ipc_dump(result, vap_provider=self.webview.serve_data)
                 if self.native:
                     self.native.return_result(seq, status, res_str)
 
@@ -76,7 +72,7 @@ class IPCComponent(WebviewComponent):
                             target_func = app._exposed_functions[name]["func"]
 
                     res = target_func(*args)
-                    _respond(0, _serialize_result(res))
+                    _respond(0, res)
                 except Exception as e:
                     import traceback
 
@@ -105,7 +101,7 @@ class IPCComponent(WebviewComponent):
             async def _async_runner():
                 try:
                     res = await python_func(*args)
-                    _respond(0, _serialize_result(res))
+                    _respond(0, res)
                 except Exception as e:
                     import traceback
 
