@@ -345,7 +345,7 @@ pub fn tray_v2_poll_event(py: Python<'_>) -> PyResult<Option<(String, String)>> 
 
         loop {
             // 1. Drain pending menu events first
-            while let Ok(event) = m_recv.try_recv() {
+            if let Ok(event) = m_recv.try_recv() {
                 return Ok(Some(("menu".to_string(), event.id.0.clone())));
             }
 

@@ -1,9 +1,9 @@
-from concurrent.futures import ThreadPoolExecutor
 import ctypes
 import logging
 import queue
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, Optional, Union
 
 from .utils import resolve_native_bridge
@@ -426,7 +426,6 @@ class ShortcutManager:
             disp = self._xlib_display
             root = self._xlib_root
         if disp and root:
-            from Xlib import X
 
             keycode = data["xkeycode"]
             xmods = data["xmods"]

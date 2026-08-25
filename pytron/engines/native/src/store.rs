@@ -29,6 +29,12 @@ pub struct NativeState {
     proxies: Arc<Mutex<Vec<SendWrapper<EventLoopProxy<UserEvent>>>>>,
 }
 
+impl Default for NativeState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[pymethods]
 impl NativeState {
     #[new]

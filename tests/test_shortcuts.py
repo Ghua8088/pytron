@@ -503,7 +503,7 @@ def test_unregister_by_id_and_by_combo(manager):
         patch("sys.platform", "win32"),
         patch.object(manager, "_start_message_loop"),
         patch.object(manager, "_queue_ready") as mock_ready,
-        patch.object(manager, "_post_thread_msg") as mock_post,
+        patch.object(manager, "_post_thread_msg"),
     ):
         mock_ready.wait.return_value = True
         manager._thread_id = 1234

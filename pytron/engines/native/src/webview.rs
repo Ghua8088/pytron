@@ -59,20 +59,19 @@ static TAO_INIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::
 #[pymethods]
 impl NativeWebview {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(debug: bool, url_str: String, root_path: String, resizable: bool, frameless: bool, store: NativeState, initial_width: f64, initial_height: f64) -> PyResult<Self> {
     
         setup_panic_hook();
 
-        let safe_url = if url_str == "about:blank" {
-             url_str
-        } else if url_str.starts_with("pytron://") {
-             url_str
-        } else if url_str.starts_with("http") {
-             url_str
-        } else if url_str.starts_with("data:") {
-             url_str
+        let safe_url = if url_str == "about:blank"
+            || url_str.starts_with("pytron://")
+            || url_str.starts_with("http")
+            || url_str.starts_with("data:")
+        {
+            url_str
         } else {
-             format!("pytron://app/{}", url_str.trim_start_matches('/'))
+            format!("pytron://app/{}", url_str.trim_start_matches('/'))
         };
 
         println!("[PYTRON NATIVE] Init. Target: {} | Root: {}", safe_url, root_path);
@@ -342,7 +341,7 @@ impl NativeWebview {
                     let mut state_json = String::from("{}");
                     
                     // ACCESS RUST STORE DIRECTLY
-                    let _ = Python::with_gil(|py| {
+                    Python::with_gil(|py| {
                         if let Ok(dict) = store_for_ipc.to_dict(py) {
                             if let Ok(json_mod) = py.import("json") {
                                 if let Ok(res) = json_mod.call_method1("dumps", (dict,)) {

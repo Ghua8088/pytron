@@ -462,7 +462,7 @@ pub fn show_notification(
                 16,
                 LR_LOADFROMFILE,
             ) {
-                let hicon = windows::Win32::UI::WindowsAndMessaging::HICON(h.0 as isize);
+                let hicon = windows::Win32::UI::WindowsAndMessaging::HICON(h.0);
                 nid.hIcon = hicon;
                 h_icon_to_destroy = Some(hicon);
             }
