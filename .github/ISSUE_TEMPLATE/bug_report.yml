@@ -1,0 +1,53 @@
+name: Bug report
+description: Report a reproducible bug in Pytron Kit
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Pytron Kit.
+        Please include enough detail for someone else to reproduce the problem quickly.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Bug summary
+      description: What broke, and what did you expect to happen?
+      placeholder: When I run `pytron run --dev`, the app crashes with...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Share exact commands/steps.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, and whether you used native or chrome engine.
+      placeholder: Ubuntu 24.04, Python 3.11.8, `pytron run --dev --chrome`
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / traceback
+      description: Paste relevant terminal output or traceback.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched for existing issues before opening this report.
+          required: true
+        - label: I can reproduce this on the latest release of `pytron-kit`.
+          required: true
