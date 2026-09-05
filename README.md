@@ -163,6 +163,15 @@ Join the Pytron developer community on Discord! Whether you're building local AI
 
 Explore the detailed documentation and community resources:
 
+## Contributing
+
+Want to contribute? Start here:
+
+- **[Contributing Guide](CONTRIBUTING.md)** — local setup, validation commands, and PR workflow.
+- **[Good first issues](https://github.com/Ghua8088/pytron-kit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — beginner-friendly tasks labeled for first-time contributors.
+
+---
+
 * **[Official Website](https://pytron-kit.github.io)** — Official documentation, tutorials, and guides.
 * **[Usage Guide](USAGE.md)** — Comprehensive usage patterns, state management, and API examples.
 * **[Architecture Overview](ARCHITECTURE.md)** — Deep dive into Pytron's native IPC, engine adapters, and process isolation.
@@ -178,5 +187,4 @@ Explore the detailed documentation and community resources:
 ---
 
 Happy building with **Pytron Kit**!
-
 

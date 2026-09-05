@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Pytron Support Guide
+    url: https://github.com/Ghua8088/pytron-kit/blob/main/SUPPORT.md
+    about: Check troubleshooting steps and support channels first.
+  - name: Discord Community
+    url: https://discord.gg/m7J6ddwSs
+    about: Ask setup/debug questions in community chat.
+  - name: GitHub Discussions
+    url: https://github.com/Ghua8088/pytron-kit/discussions
+    about: Start broader feature/design discussions here.

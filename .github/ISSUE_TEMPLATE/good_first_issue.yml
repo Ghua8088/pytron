@@ -1,0 +1,64 @@
+name: Good first issue (maintainer template)
+description: Draft a beginner-friendly task with clear scope and acceptance criteria
+title: "good first issue: "
+labels:
+  - good first issue
+  - help wanted
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Maintainer checklist for newcomer-friendly tasks:
+        - Keep effort to ~1-3 hours
+        - Link concrete files
+        - Include exact verification steps
+        - Call out what is out of scope
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What problem exists and why this task matters.
+      placeholder: We currently...
+    validations:
+      required: true
+  - type: textarea
+    id: touchpoints
+    attributes:
+      label: Likely files/areas to touch
+      description: Be specific (paths, modules, test files).
+      placeholder: |
+        - pytron/... 
+        - tests/... 
+        - docs/...
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance checklist
+      description: List done criteria as checkboxes.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Test/verification steps
+      description: Commands maintainers/reviewers can run.
+      placeholder: |
+        - `pytest tests/test_x.py -k case_name`
+        - `ruff check path/to/file.py`
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: Explicitly prevent scope creep.
+      placeholder: |
+        - No refactor of unrelated modules
+        - No packaging/CI workflow changes
+    validations:
+      required: true
